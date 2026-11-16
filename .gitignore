@@ -1,0 +1,59 @@
+# Generated Android and Gradle files
+.gradle/
+.kotlin/
+**/build/
+.externalNativeBuild/
+.cxx/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.hprof
+
+# Per-computer IDE and SDK settings
+local.properties
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Credentials and signing material
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+key.properties
+keystore.properties
+secrets.properties
+credentials.json
+service-account*.json
+*-service-account.json
+google-services.json
+
+# Private data, exports and backup archives
+/backups/
+/backup/
+/exports/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.csv
+*.zip
+*.7z
+*.bak
+*.backup
+*.duitbackup
+*.log
+
+# Keep the Gradle wrapper and database schema source
+!gradle/wrapper/gradle-wrapper.jar
