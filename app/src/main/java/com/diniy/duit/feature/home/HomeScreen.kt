@@ -1,5 +1,50 @@
 package com.diniy.duit.feature.home
 
+import com.diniy.duit.core.ui.components.candyEntrance
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.Calculate
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.Savings
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.sp
+import com.diniy.duit.core.ui.components.CandyBubbleCard
+import com.diniy.duit.core.ui.components.CandyDateTile
+import com.diniy.duit.core.ui.components.CandyDecor
+import com.diniy.duit.core.ui.components.CandyIconBlob
+import com.diniy.duit.core.ui.components.CandyMoneyText
+import com.diniy.duit.core.ui.components.CandyPerforation
+import com.diniy.duit.core.ui.components.CandyProgressRing
+import com.diniy.duit.core.ui.components.CandySectionHeader
+import com.diniy.duit.core.ui.components.CandyStatusBadge
+import com.diniy.duit.core.ui.components.CandySticker
+import com.diniy.duit.core.ui.components.CandyTicketShape
+import com.diniy.duit.core.ui.components.CandyTone
+import com.diniy.duit.core.ui.components.SpatialGlassSurface
+import com.diniy.duit.core.ui.components.candyPressable
+import com.diniy.duit.core.ui.components.candyTone
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
@@ -215,16 +260,8 @@ fun HomeScreen(
                         }
 
                         // 4. Compact Pill Strip (Replaces oversized nested QuickActionsStrip card)
-                        DashboardSectionKey.QUICK_ACTIONS -> {
-                            item(key = "quick_actions", contentType = "actions") {
-                                SpatialQuickActionPillStrip(
-                                    onRecordExpense = { onOpenTransactionEditor(TransactionType.EXPENSE) },
-                                    onRecordIncome = { onOpenTransactionEditor(TransactionType.INCOME) },
-                                    onTransferFunds = { onOpenTransactionEditor(TransactionType.TRANSFER) },
-                                    onOpenCalculator = onOpenCommissionCalculator
-                                )
-                            }
-                        }
+                        // Quick actions now live in the floating + sheet.
+                        DashboardSectionKey.QUICK_ACTIONS -> Unit
 
                         // 5. Pending Commissions Notice
                         DashboardSectionKey.PENDING_COMMISSIONS -> {
@@ -350,10 +387,9 @@ private fun SpatialHomeHeader(
     onOpenNotifications: () -> Unit,
     onOpenSettingsHub: () -> Unit
 ) {
+    // Experiment 01: privacy lives in the hero, notifications in Settings. Callbacks stay wired.
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
-    val privacySettings = LocalPrivacySettings.current
-    val isMasked = privacySettings.isAnyMaskActive
 
     Row(
         modifier = Modifier
@@ -368,17 +404,16 @@ private fun SpatialHomeHeader(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "duit.",
-                    style = typography.screenHeading,
+                    text = buildAnnotatedString {
+                        append("duit")
+                        withStyle(SpanStyle(color = colors.coral)) { append(".") }
+                    },
+                    style = typography.screenHeading.copy(fontSize = 34.sp, lineHeight = 38.sp),
                     color = colors.primaryText,
                     modifier = Modifier.semantics { heading() }
                 )
                 if (isSamplePreview) {
-                    SpatialGlassPill(
-                        label = "Sample",
-                        selected = true,
-                        accentColor = colors.peach
-                    )
+                    CandySticker(text = "Sample", tone = CandyTone.Sunny, tilt = 4f)
                 }
             }
             Text(
@@ -390,42 +425,11 @@ private fun SpatialHomeHeader(
             )
         }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SpatialGlassIconButton(
-                icon = if (isMasked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                contentDescription = if (isMasked) "Show sensitive amounts" else "Hide sensitive amounts",
-                selected = isMasked,
-                accentTint = colors.lavender,
-                onClick = onToggleBalanceVisibility
-            )
-
-            Box {
-                SpatialGlassIconButton(
-                    icon = Icons.Rounded.Notifications,
-                    contentDescription = "Notification centre",
-                    onClick = onOpenNotifications
-                )
-                if (unreadNotificationCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 10.dp, end = 10.dp)
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(colors.peach)
-                    )
-                }
-            }
-
-            SpatialGlassIconButton(
-                icon = Icons.Rounded.Settings,
-                contentDescription = "Settings hub",
-                onClick = onOpenSettingsHub
-            )
-        }
+        SpatialGlassIconButton(
+            icon = Icons.Rounded.Settings,
+            contentDescription = "Settings hub",
+            onClick = onOpenSettingsHub
+        )
     }
 }
 
@@ -438,94 +442,146 @@ private fun SpatialSafeToSpendHeroCard(
 ) {
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
-    val spacing = SpatialTheme.spacing
     val privacySettings = LocalPrivacySettings.current
     val isMasked = privacySettings.isAnyMaskActive
-    val reducedMotion = rememberReducedMotionEnabled()
     val isTight = safeToSpendSen < 0L
-    // Candy Pop hero: solid grape sticker (bubblegum when overcommitted) with matching ink.
-    val heroFill = if (isTight) colors.bubblegum else colors.primaryAction
-    val heroInk = if (isTight) com.diniy.duit.core.ui.theme.PrismaticPalette.GrapeInk else colors.onPrimaryAction
+    val heroFill = if (isTight) colors.expenseContainer else colors.coral
+    val heroInk = if (isTight) colors.onExpenseContainer else colors.onCoral
+    val trayColor = if (isTight) heroInk.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.38f)
+    val sunny = colors.sunny
+    val stickerInk = colors.sticker
 
-    SpatialGlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        tier = SpatialGlassTier.Elevated,
-        containerColor = heroFill,
-        sticker = true,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(SpatialTheme.geometry.radiusXl),
-        contentPadding = spacing.cardPaddingHero
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    // Outer box lets the coin sticker break out of the card edge.
+    Box(modifier = Modifier.fillMaxWidth().candyEntrance("home_hero")) {
+        SpatialGlassSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, end = 4.dp),
+            containerColor = heroFill,
+            sticker = true,
+            shape = RoundedCornerShape(32.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Safe to Spend",
-                    style = typography.cardTitle,
-                    color = heroInk
-                )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .drawBehind {
+                        // Layered candy bubbles: big soft cream, small sunny drop.
+                        drawCircle(Color.White.copy(alpha = 0.20f), radius = size.width * 0.36f, center = Offset(size.width * 0.98f, size.height * 0.02f))
+                        drawCircle(Color.White.copy(alpha = 0.12f), radius = size.width * 0.16f, center = Offset(size.width * 0.66f, size.height * 0.10f))
+                        drawCircle(sunny.copy(alpha = 0.55f), radius = size.width * 0.09f, center = Offset(size.width * 0.04f, size.height * 0.98f))
+                    }
+            )
+            Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp)) {
+                Text(text = "Safe to spend", style = typography.cardTitle.copy(fontSize = 18.sp), color = heroInk)
                 Text(
                     text = activeReservePeriodLabel,
                     style = typography.caption,
-                    color = heroInk.copy(alpha = 0.85f),
+                    color = heroInk.copy(alpha = 0.82f),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(end = 56.dp)
                 )
-            }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SpatialGlassPill(
-                    label = if (isTight) "Overcommitted" else "Available",
-                    selected = true,
-                    accentColor = if (isTight) colors.peach else colors.aqua,
-                    containerColor = if (isTight) colors.warningContainer else colors.incomeContainer,
-                    contentColor = if (isTight) colors.onWarningContainer else colors.onIncomeContainer
+                Spacer(Modifier.height(12.dp))
+
+                SpatialAnimatedCounterText(
+                    amountSen = safeToSpendSen,
+                    accessibilityLabel = "Safe to Spend",
+                    style = typography.heroBalance.copy(fontSize = 50.sp, lineHeight = 56.sp, letterSpacing = (-1.5).sp),
+                    color = heroInk,
+                    splitMinorScale = 0.46f
                 )
-                Crossfade(
-                    targetState = isMasked,
-                    animationSpec = prismaticTween<Float>(reducedMotion, durationMillis = 180),
-                    label = "hero_privacy_eye"
-                ) { masked ->
-                    SpatialGlassIconButton(
-                        icon = if (masked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = if (masked) "Show sensitive amounts" else "Hide sensitive amounts",
-                        selected = masked,
-                        accentTint = colors.lavender,
-                        onClick = onToggleBalanceVisibility
+
+                Spacer(Modifier.height(8.dp))
+
+                CandySticker(
+                    text = if (isTight) "Overcommitted" else "Good to go",
+                    tone = if (isTight) CandyTone.Sunny else CandyTone.Mint,
+                    tilt = -3f,
+                    leadingIcon = if (isTight) Icons.Rounded.Warning else Icons.Rounded.CheckCircle
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(trayColor)
+                        .padding(start = 12.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Lock,
+                        contentDescription = null,
+                        tint = heroInk,
+                        modifier = Modifier.size(16.dp)
                     )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (upcomingUnreservedSen > 0L) {
+                            "${maskedBalance(upcomingUnreservedSen)} set aside for this cycle's bills. Savings protected."
+                        } else {
+                            "This cycle's bills are settled. Savings protected."
+                        },
+                        style = typography.caption,
+                        color = heroInk,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    // Hide/Show amount lives here (single control, synced with global privacy state).
+                    Row(
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(heroInk)
+                            .candyPressable(
+                                onClick = onToggleBalanceVisibility,
+                                onClickLabel = if (isMasked) "Show sensitive amounts" else "Hide sensitive amounts"
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isMasked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            contentDescription = null,
+                            tint = heroFill,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (isMasked) "Show" else "Hide",
+                            style = typography.caption,
+                            color = heroFill
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-
-        SpatialAnimatedCounterText(
-            amountSen = safeToSpendSen,
-            accessibilityLabel = "Safe to Spend",
-            style = typography.heroBalance,
-            color = heroInk
-        )
-
-        Spacer(Modifier.height(10.dp))
-
-        HorizontalDivider(color = heroInk.copy(alpha = 0.2f))
-
-        Spacer(Modifier.height(10.dp))
-
-        Text(
-            text = if (upcomingUnreservedSen > 0L) {
-                "Excludes Protected Savings and ${maskedBalance(upcomingUnreservedSen)} reserved for current-cycle obligations."
-            } else {
-                "Excludes Protected Savings. All current-cycle obligations are settled."
-            },
-            style = typography.supportingInfo,
-            color = heroInk.copy(alpha = 0.88f)
-        )
+        // Decorative coin sticker (hidden from TalkBack).
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 14.dp)
+                .size(58.dp)
+                .rotate(14f)
+                .clearAndSetSemantics { }
+                .drawBehind {
+                    translate(left = 3.dp.toPx(), top = 3.dp.toPx()) {
+                        drawCircle(stickerInk)
+                    }
+                }
+                .clip(CircleShape)
+                .background(sunny)
+                .border(BorderStroke(2.5.dp, stickerInk), CircleShape)
+                .drawBehind {
+                    drawCircle(stickerInk.copy(alpha = 0.25f), radius = size.minDimension * 0.34f, style = Stroke(width = 2.dp.toPx()))
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = "RM", style = typography.cardTitle.copy(fontSize = 15.sp), color = colors.onSunny)
+        }
     }
 }
 
@@ -545,111 +601,127 @@ private fun SpatialSecondaryFinancialBento(
     onOpenAllWallets: () -> Unit
 ) {
     val colors = SpatialTheme.colors
-    val spacing = SpatialTheme.spacing
+    val typography = SpatialTheme.typography
+    val privacy = LocalPrivacySettings.current
+    val walletCaption = if (walletCount == 1) "1 wallet" else "$walletCount wallets"
+    val goalFraction = if (savingsBalanceSen > 0L) {
+        (goalAllocatedSen.toFloat() / savingsBalanceSen.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val totalText = maskedBalance(totalBalanceSen)
+    val savingsText = maskedBalance(savingsBalanceSen)
 
-    val totalBalanceCaption = if (walletCount == 1) "1 included wallet" else "$walletCount included wallets"
-    val savingsCaption = when {
-        activeGoalsCount > 0 -> "$activeGoalsCount goal(s) · ${maskedBalance(goalAllocatedSen)} allocated"
-        else -> "Protected from Safe to Spend"
-    }
-    val reservedCaption = when {
-        upcomingFutureBillsSen > 0L ->
-            "Future cycle: ${maskedBalance(upcomingFutureBillsSen)} ($upcomingFutureCount unreserved)"
-        upcomingCount > 0 -> "$upcomingCount due in active cycle"
-        else -> "No unpaid bills in active cycle"
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(spacing.bentoGap)) {
-        SpatialBentoSummaryRow(
-            leftMetric = SpatialBentoMetricItem(
-                label = "Total Balance",
-                amountSen = totalBalanceSen,
-                caption = totalBalanceCaption,
-                accentColor = colors.skyBlue,
-                onClick = onOpenAllWallets
-            ),
-            rightMetric = SpatialBentoMetricItem(
-                label = "Protected Savings",
-                amountSen = savingsBalanceSen,
-                caption = savingsCaption,
-                accentColor = colors.aqua,
-                onClick = onOpenSavingsGoals
-            )
-        )
-
-        SpatialBentoMetricCard(
-            item = SpatialBentoMetricItem(
-                label = "Current Cycle Reserved",
-                amountSen = currentCycleReservedSen,
-                caption = reservedCaption,
-                accentColor = colors.peach,
-                onClick = onOpenCommitments
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
-@Composable
-private fun SpatialQuickActionPillStrip(
-    onRecordExpense: () -> Unit,
-    onRecordIncome: () -> Unit,
-    onTransferFunds: () -> Unit,
-    onOpenCalculator: () -> Unit
-) {
-    val colors = SpatialTheme.colors
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = Modifier.candyEntrance("home_summary"),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SpatialGlassPill(
-            label = "Expense",
-            accentColor = colors.expense,
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Rounded.ArrowUpward,
-                    contentDescription = null,
-                    tint = colors.expense,
-                    modifier = Modifier.size(15.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Max),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Wallet pocket: total balance across included wallets
+            CandyBubbleCard(
+                tone = CandyTone.Sky,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .privacySafeAmountSemantics("Total balance, $walletCaption", privacy.isAnyMaskActive, totalText),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 12.dp),
+                onClick = onOpenAllWallets,
+                onClickLabel = "View all wallets"
+            ) {
+                CandyIconBlob(Icons.Rounded.AccountBalanceWallet, CandyTone.Sky, size = 40.dp, tilt = -8f, solid = true)
+                Spacer(Modifier.height(12.dp))
+                Text("Total balance", style = typography.caption, color = colors.secondaryText)
+                CandyMoneyText(totalText, typography.cardBalance, colors.primaryText)
+                Spacer(Modifier.height(8.dp))
+                CandyStatusBadge(walletCaption, CandyTone.Sky)
+            }
+
+            // Savings jar: protected balance with goal-allocation ring
+            CandyBubbleCard(
+                tone = CandyTone.Sunny,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .privacySafeAmountSemantics("Protected savings", privacy.isAnyMaskActive, savingsText),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 12.dp, bottomEnd = 28.dp),
+                onClick = onOpenSavingsGoals,
+                onClickLabel = "Open savings goals"
+            ) {
+                CandyProgressRing(fraction = goalFraction, tone = CandyTone.Sunny, size = 40.dp, stroke = 5.dp) {
+                    Icon(Icons.Rounded.Savings, contentDescription = null, tint = candyTone(CandyTone.Sunny).ink, modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("Protected savings", style = typography.caption, color = colors.secondaryText)
+                CandyMoneyText(savingsText, typography.cardBalance, colors.primaryText)
+                Spacer(Modifier.height(8.dp))
+                CandyStatusBadge(
+                    if (activeGoalsCount > 0) "$activeGoalsCount goal(s) · ${(goalFraction * 100).toInt()}% set" else "Protected",
+                    CandyTone.Sunny
                 )
-            },
-            onClick = onRecordExpense
-        )
-        SpatialGlassPill(
-            label = "Income",
-            accentColor = colors.income,
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Rounded.ArrowDownward,
-                    contentDescription = null,
-                    tint = colors.income,
-                    modifier = Modifier.size(15.dp)
+            }
+        }
+
+        // Bill ticket: current-cycle reserve with a perforated next-cycle stub
+        val peach = candyTone(CandyTone.Peach)
+        val reservedText = maskedBalance(currentCycleReservedSen)
+        val futureText = maskedBalance(upcomingFutureBillsSen)
+        SpatialGlassSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .privacySafeAmountSemantics("Current cycle reserved", privacy.isAnyMaskActive, reservedText),
+            shape = CandyTicketShape(notchFraction = 0.66f),
+            containerColor = peach.container,
+            onClick = onOpenCommitments,
+            onClickLabel = "Open commitments"
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(0.66f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CandyIconBlob(Icons.AutoMirrored.Rounded.ReceiptLong, CandyTone.Peach, size = 32.dp, tilt = 6f, solid = true)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Reserved this cycle", style = typography.caption, color = colors.secondaryText, modifier = Modifier.weight(1f))
+                        if (upcomingCount > 0) {
+                            CandySticker(text = "$upcomingCount due", tone = CandyTone.Coral, tilt = 4f)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    CandyMoneyText(reservedText, typography.largeBalance.copy(fontSize = 26.sp), colors.primaryText)
+                    Text(
+                        text = if (upcomingCount > 0) "$upcomingCount bill(s) due this cycle" else "No unpaid bills this cycle",
+                        style = typography.caption,
+                        color = peach.ink
+                    )
+                }
+                CandyPerforation(
+                    color = peach.fill,
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 10.dp)
                 )
-            },
-            onClick = onRecordIncome
-        )
-        SpatialGlassPill(
-            label = "Transfer",
-            accentColor = colors.skyBlue,
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Rounded.SwapHoriz,
-                    contentDescription = null,
-                    tint = colors.skyBlue,
-                    modifier = Modifier.size(15.dp)
-                )
-            },
-            onClick = onTransferFunds
-        )
-        SpatialGlassPill(
-            label = "Commissions",
-            accentColor = colors.lavender,
-            onClick = onOpenCalculator
-        )
+                Column(
+                    modifier = Modifier.weight(0.34f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Next cycle", style = typography.caption, color = colors.secondaryText)
+                    CandyMoneyText(futureText, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
+                    Text(
+                        text = if (upcomingFutureCount > 0) "$upcomingFutureCount not reserved" else "Nothing yet",
+                        style = typography.caption,
+                        color = colors.secondaryText,
+                        maxLines = 2
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -659,15 +731,31 @@ private fun SpatialPendingCommissionsCard(
     onClick: () -> Unit
 ) {
     val colors = SpatialTheme.colors
+    val typography = SpatialTheme.typography
+    val privacy = LocalPrivacySettings.current
+    val amount = maskedBalance(pendingCommissionsSen)
 
-    SpatialCompactListRow(
-        title = "Pending Commissions",
-        subtitle = "Awaiting payout · Excluded from Safe to Spend",
-        trailingPrimaryText = maskedBalance(pendingCommissionsSen),
-        trailingPrimaryColor = colors.lavender,
-        leadingBadgeColor = colors.lavender,
-        onClick = onClick
-    )
+    CandyBubbleCard(
+        tone = CandyTone.Sunny,
+        decor = CandyDecor.Corner,
+        modifier = Modifier
+            .fillMaxWidth()
+            .privacySafeAmountSemantics("Pending commissions, awaiting payout", privacy.isAnyMaskActive, amount),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        onClick = onClick,
+        onClickLabel = "Open commissions"
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CandyIconBlob(Icons.Rounded.Payments, CandyTone.Sunny, size = 40.dp, tilt = 6f, solid = true)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Pending commissions", style = typography.transactionDescription, color = colors.primaryText)
+                Text("Awaiting payout · not in Safe to Spend", style = typography.caption, color = colors.secondaryText)
+            }
+            Spacer(Modifier.width(8.dp))
+            CandyMoneyText(amount, typography.transactionAmount, candyTone(CandyTone.Sunny).ink, minorScale = 0.72f)
+        }
+    }
 }
 
 @Composable
@@ -682,95 +770,101 @@ private fun SpatialUpcomingPaymentsPreviewSection(
     val privacy = LocalPrivacySettings.current
     val previewItems = commitments.take(4)
 
-    SpatialGlassSection(
-        title = if (isSamplePreview) "Upcoming Payments · Sample" else "Upcoming Payments",
-        subtitle = "Current-cycle bills are reserved; future-cycle bills are not deducted yet",
-        actionLabel = "Commitments",
-        onActionClick = onViewAllCommitments
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        CandySectionHeader(
+            title = if (isSamplePreview) "Coming up · Sample" else "Coming up",
+            count = commitments.size,
+            subtitle = "This cycle's bills are reserved; later ones aren't yet",
+            actionLabel = "All bills",
+            onAction = onViewAllCommitments
+        )
         SpatialGlassCard(
             modifier = Modifier.fillMaxWidth(),
             tier = SpatialGlassTier.Standard,
-            contentPadding = PaddingValues(vertical = 6.dp)
+            shape = RoundedCornerShape(28.dp),
+            contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
         ) {
-            previewItems.forEachIndexed { idx, commitment ->
-                if (idx > 0) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = colors.divider
+        previewItems.forEach { commitment ->
+            val isInCurrentCycle = ObligationCalculator.isDueWithinHorizon(
+                dueDateEpochDay = commitment.dueDateEpochDay,
+                activeCycle = activeCycle
+            )
+            val remainingSen = (commitment.amountSen - commitment.paidSen.coerceAtLeast(0L)).coerceAtLeast(0L)
+            val (badgeLabel, tone) = when {
+                commitment.status == CommitmentStatus.PAID -> "Paid" to CandyTone.Mint
+                isInCurrentCycle -> "This cycle" to CandyTone.Coral
+                else -> "Next cycle" to CandyTone.Sky
+            }
+            val dueSub = if (commitment.status == CommitmentStatus.PARTIALLY_PAID) {
+                "Due ${DateTimeFormatters.formatEpochDay(commitment.dueDateEpochDay)} · Paid ${maskedAmount(commitment.paidSen)}"
+            } else {
+                "Due ${DateTimeFormatters.formatEpochDay(commitment.dueDateEpochDay)}"
+            }
+            val formattedRemaining = maskedBalance(remainingSen)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .candyPressable(onClick = onViewAllCommitments, onClickLabel = "Open ${commitment.title}")
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .privacySafeAmountSemantics(
+                        label = "${commitment.title}, $dueSub, $badgeLabel",
+                        isMasked = privacy.isAnyMaskActive,
+                        visibleFormattedAmount = formattedRemaining
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CandyDateTile(epochDay = commitment.dueDateEpochDay, tone = tone)
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = commitment.title,
+                        style = typography.transactionDescription,
+                        color = colors.primaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = dueSub,
+                        style = typography.caption,
+                        color = colors.secondaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                val isInCurrentCycle = ObligationCalculator.isDueWithinHorizon(
-                    dueDateEpochDay = commitment.dueDateEpochDay,
-                    activeCycle = activeCycle
-                )
-                val remainingSen = (commitment.amountSen - commitment.paidSen.coerceAtLeast(0L)).coerceAtLeast(0L)
-                val cycleBadgeLabel = when {
-                    commitment.status == CommitmentStatus.PAID -> "Paid"
-                    isInCurrentCycle -> "Current cycle"
-                    else -> "Future cycle"
-                }
-                val dueSub = if (commitment.status == CommitmentStatus.PARTIALLY_PAID) {
-                    "Due ${DateTimeFormatters.formatEpochDay(commitment.dueDateEpochDay)} · Paid ${maskedAmount(commitment.paidSen)}"
-                } else {
-                    "Due ${DateTimeFormatters.formatEpochDay(commitment.dueDateEpochDay)}"
-                }
-                val formattedRemaining = maskedBalance(remainingSen)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            role = Role.Button,
-                            onClickLabel = "Open ${commitment.title}",
-                            onClick = onViewAllCommitments
-                        )
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .privacySafeAmountSemantics(
-                            label = "${commitment.title}, $dueSub, $cycleBadgeLabel",
-                            isMasked = privacy.isAnyMaskActive,
-                            visibleFormattedAmount = formattedRemaining
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = commitment.title,
-                            style = typography.transactionDescription,
-                            color = colors.primaryText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = dueSub,
-                            style = typography.caption,
-                            color = colors.secondaryText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = formattedRemaining,
-                            style = typography.transactionAmount,
-                            color = colors.primaryText
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        SpatialGlassPill(
-                            label = cycleBadgeLabel,
-                            selected = isInCurrentCycle,
-                            accentColor = if (isInCurrentCycle) colors.peach else colors.lavender,
-                            containerColor = if (isInCurrentCycle) colors.warningContainer else colors.selectedStateOverlay,
-                            contentColor = if (isInCurrentCycle) colors.onWarningContainer else colors.primaryText
-                        )
-                    }
+                Spacer(Modifier.width(8.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    CandyMoneyText(formattedRemaining, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
+                    Spacer(Modifier.height(4.dp))
+                    CandyStatusBadge(badgeLabel, tone)
                 }
             }
         }
+        }
     }
+}
+
+private fun walletTone(token: PrismaticAccentToken): CandyTone = when (token) {
+    PrismaticAccentToken.AQUA -> CandyTone.Mint
+    PrismaticAccentToken.LAVENDER -> CandyTone.Coral
+    PrismaticAccentToken.SKY_BLUE -> CandyTone.Sky
+    PrismaticAccentToken.PEACH -> CandyTone.Peach
+    PrismaticAccentToken.SLATE -> CandyTone.Sunny
+}
+
+private fun walletIcon(type: WalletType): ImageVector = when (type) {
+    WalletType.CASH -> Icons.Rounded.Payments
+    WalletType.BANK -> Icons.Rounded.AccountBalance
+    WalletType.EWALLET -> Icons.Rounded.Smartphone
+    WalletType.SAVINGS -> Icons.Rounded.Savings
+}
+
+private fun walletTags(wallet: Wallet): List<String> = buildList {
+    add(wallet.type.displayName)
+    if (!wallet.isIncludedInTotalBalance) add("Hidden")
+    else if (wallet.isExcludedFromSafeToSpend) add("Protected")
+    if (wallet.isArchived) add("Archived")
 }
 
 @Composable
@@ -784,26 +878,17 @@ private fun SpatialWalletsPreviewSection(
 ) {
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
-    val previewWallets = activeWallets.take(3)
+    val privacy = LocalPrivacySettings.current
     val totalWalletsCount = activeWallets.size + archivedCount
 
-    SpatialGlassSection(
-        title = if (isSamplePreview) "Wallets · Sample" else "Wallets",
-        subtitle = if (activeWallets.size > 3 || archivedCount > 0) {
-            "Showing ${previewWallets.size} of ${activeWallets.size} active" +
-                if (archivedCount > 0) " · $archivedCount archived" else ""
-        } else null,
-        actionLabel = if (totalWalletsCount > 3 || archivedCount > 0) {
-            "View All ($totalWalletsCount)"
-        } else if (!isSamplePreview) {
-            "+ Add"
-        } else null,
-        onActionClick = if (totalWalletsCount > 3 || archivedCount > 0) {
-            onViewAllWallets
-        } else {
-            onAddWallet
-        }
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        CandySectionHeader(
+            title = if (isSamplePreview) "Wallets · Sample" else "Wallets",
+            count = activeWallets.size,
+            subtitle = if (archivedCount > 0) "$archivedCount archived" else null,
+            actionLabel = if (totalWalletsCount > 0) "View all" else null,
+            onAction = onViewAllWallets
+        )
         if (activeWallets.isEmpty()) {
             SpatialCompactListRow(
                 title = "All wallets are archived",
@@ -813,53 +898,62 @@ private fun SpatialWalletsPreviewSection(
                 onClick = onViewAllWallets
             )
         } else {
-            SpatialGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                tier = SpatialGlassTier.Standard,
-                contentPadding = PaddingValues(vertical = 6.dp)
+            // Wallet "pockets": a swipeable row of distinct candy cards.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                previewWallets.forEachIndexed { idx, wallet ->
-                    if (idx > 0) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = colors.divider
-                        )
-                    }
-                    CompactWalletRowItem(
-                        wallet = wallet,
-                        onClick = { onSelectWallet(wallet) }
-                    )
-                }
-
-                if (!isSamplePreview && (totalWalletsCount > 3 || archivedCount > 0)) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = colors.divider
-                    )
-                    Row(
+                activeWallets.take(6).forEachIndexed { idx, wallet ->
+                    val tone = walletTone(wallet.accentToken)
+                    val tags = walletTags(wallet)
+                    val balance = maskedBalance(wallet.balanceSen)
+                    CandyBubbleCard(
+                        tone = tone,
+                        decor = CandyDecor.Corner,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                role = Role.Button,
-                                onClickLabel = "Add wallet",
-                                onClick = onAddWallet
-                            )
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                            .width(156.dp)
+                            .fillMaxHeight()
+                            .privacySafeAmountSemantics("${wallet.name}, ${tags.joinToString(", ")}", privacy.isAnyMaskActive, balance),
+                        contentPadding = PaddingValues(14.dp),
+                        onClick = { onSelectWallet(wallet) },
+                        onClickLabel = "Manage ${wallet.name}"
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = null,
-                            tint = colors.primaryAction,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "Add Wallet",
-                            style = typography.buttonLabel,
-                            color = colors.primaryAction
-                        )
+                        CandyIconBlob(walletIcon(wallet.type), tone, size = 36.dp, tilt = if (idx % 2 == 0) -7f else 6f, solid = true)
+                        Spacer(Modifier.height(12.dp))
+                        Text(wallet.name, style = typography.transactionDescription, color = colors.primaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(tags.joinToString(" · "), style = typography.caption, color = colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(8.dp))
+                        CandyMoneyText(balance, typography.cardBalance.copy(fontSize = 18.sp), colors.primaryText)
+                    }
+                }
+                if (!isSamplePreview) {
+                    val dash = colors.secondaryText.copy(alpha = 0.45f)
+                    Column(
+                        modifier = Modifier
+                            .width(112.dp)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(26.dp))
+                            .drawBehind {
+                                drawRoundRect(
+                                    color = dash,
+                                    cornerRadius = CornerRadius(26.dp.toPx()),
+                                    style = Stroke(
+                                        width = 2.dp.toPx(),
+                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()))
+                                    )
+                                )
+                            }
+                            .candyPressable(onClick = onAddWallet, onClickLabel = "Add wallet")
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CandyIconBlob(Icons.Rounded.Add, CandyTone.Coral, size = 40.dp, solid = true)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Add wallet", style = typography.caption, color = colors.primaryText)
                     }
                 }
             }
@@ -875,72 +969,30 @@ private fun CompactWalletRowItem(
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
     val privacy = LocalPrivacySettings.current
-    val accentColor = when (wallet.accentToken) {
-        PrismaticAccentToken.AQUA -> colors.aqua
-        PrismaticAccentToken.LAVENDER -> colors.lavender
-        PrismaticAccentToken.SKY_BLUE -> colors.skyBlue
-        PrismaticAccentToken.PEACH -> colors.peach
-        PrismaticAccentToken.SLATE -> colors.slate
-    }
-    val tags = buildList {
-        add(wallet.type.displayName)
-        if (!wallet.isIncludedInTotalBalance) add("Hidden")
-        else if (wallet.isExcludedFromSafeToSpend) add("Protected")
-        if (wallet.isArchived) add("Archived")
-    }
+    val tone = walletTone(wallet.accentToken)
+    val tags = walletTags(wallet)
     val formattedBalance = maskedBalance(wallet.balanceSen)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                role = Role.Button,
-                onClickLabel = "Manage ${wallet.name}",
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .candyPressable(onClick = onClick, onClickLabel = "Manage ${wallet.name}")
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .privacySafeAmountSemantics(
                 label = "${wallet.name}, ${tags.joinToString(", ")}",
                 isMasked = privacy.isAnyMaskActive,
                 visibleFormattedAmount = formattedBalance
             ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(accentColor)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = wallet.name,
-                    style = typography.transactionDescription,
-                    color = colors.primaryText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = tags.joinToString(" · "),
-                    style = typography.caption,
-                    color = colors.secondaryText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+        CandyIconBlob(walletIcon(wallet.type), tone, size = 38.dp, tilt = -5f, solid = true)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(wallet.name, style = typography.transactionDescription, color = colors.primaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(tags.joinToString(" · "), style = typography.caption, color = colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(12.dp))
-        Text(
-            text = formattedBalance,
-            style = typography.transactionAmount,
-            color = colors.primaryText
-        )
+        CandyMoneyText(formattedBalance, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
     }
 }
 
@@ -956,30 +1008,26 @@ private fun SpatialRecentTransactionsPreviewSection(
     val typography = SpatialTheme.typography
     val privacy = LocalPrivacySettings.current
 
-    SpatialGlassSection(
-        title = if (isSamplePreview) "Recent Transactions · Sample" else "Recent Transactions",
-        actionLabel = "View All",
-        onActionClick = onViewAllActivity
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        CandySectionHeader(
+            title = if (isSamplePreview) "Recent activity · Sample" else "Recent activity",
+            actionLabel = "View all",
+            onAction = onViewAllActivity
+        )
         SpatialGlassCard(
             modifier = Modifier.fillMaxWidth(),
             tier = SpatialGlassTier.Standard,
-            contentPadding = PaddingValues(vertical = 6.dp)
+            shape = RoundedCornerShape(28.dp),
+            contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
         ) {
             transactions.forEachIndexed { idx, tx ->
-                if (idx > 0) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = colors.divider
-                    )
-                }
                 val walletName = walletsById[tx.walletId]?.name ?: "Wallet"
                 val targetName = tx.targetWalletId?.let { walletsById[it]?.name }
                 val iconKey = CategoryIconMapper.inferIconKeyFromName(tx.category, tx.type)
-                val (badgeBg, badgeFg) = when (tx.type) {
-                    TransactionType.INCOME -> colors.incomeContainer to colors.onIncomeContainer
-                    TransactionType.EXPENSE -> colors.expenseContainer to colors.onExpenseContainer
-                    TransactionType.TRANSFER -> colors.savingsContainer to colors.onSavingsContainer
+                val tone = when (tx.type) {
+                    TransactionType.INCOME -> CandyTone.Mint
+                    TransactionType.EXPENSE -> CandyTone.Coral
+                    TransactionType.TRANSFER -> CandyTone.Sunny
                 }
                 val amountColor = when (tx.type) {
                     TransactionType.INCOME -> colors.income
@@ -996,70 +1044,41 @@ private fun SpatialRecentTransactionsPreviewSection(
                     }
                 }
                 val subtitle = if (tx.type == TransactionType.TRANSFER && targetName != null) {
-                    "$walletName -> $targetName · ${DateTimeFormatters.formatDateOnly(tx.occurredAtEpochMs)}"
+                    "$walletName → $targetName"
                 } else {
-                    "${tx.category} · $walletName · ${DateTimeFormatters.formatDateOnly(tx.occurredAtEpochMs)}"
+                    "${tx.category} · $walletName"
                 }
+                val dateLabel = DateTimeFormatters.formatDateOnly(tx.occurredAtEpochMs)
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(
-                            role = Role.Button,
-                            onClickLabel = "Inspect ${tx.title}",
-                            onClick = { onSelectTransaction(tx) }
-                        )
-                        .padding(horizontal = 16.dp, vertical = 11.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .candyPressable(onClick = { onSelectTransaction(tx) }, onClickLabel = "Inspect ${tx.title}")
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                         .privacySafeAmountSemantics(
-                            label = "${tx.title}, $subtitle",
+                            label = "${tx.title}, $subtitle, $dateLabel",
                             isMasked = privacy.isAnyMaskActive,
                             visibleFormattedAmount = formattedAmount
                         ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(badgeBg),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = CategoryIconMapper.iconFor(iconKey, tx.type),
-                                contentDescription = null,
-                                tint = badgeFg,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = tx.title,
-                                style = typography.transactionDescription,
-                                color = colors.primaryText,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = subtitle,
-                                style = typography.caption,
-                                color = colors.secondaryText,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = formattedAmount,
-                        style = typography.transactionAmount,
-                        color = amountColor
+                    CandyIconBlob(
+                        icon = CategoryIconMapper.iconFor(iconKey, tx.type),
+                        tone = tone,
+                        size = 44.dp,
+                        tilt = if (idx % 2 == 0) -6f else 5f
                     )
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(tx.title, style = typography.transactionDescription, color = colors.primaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(subtitle, style = typography.caption, color = colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        CandyMoneyText(formattedAmount, typography.transactionAmount.copy(fontSize = 16.sp), amountColor, minorScale = 0.72f)
+                        Text(dateLabel, style = typography.caption, color = colors.secondaryText, maxLines = 1)
+                    }
                 }
             }
         }

@@ -1,5 +1,39 @@
 package com.diniy.duit.feature.insights
 
+import com.diniy.duit.core.ui.components.rememberCandyReveal
+import com.diniy.duit.core.ui.components.candyEntrance
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.sp
+import com.diniy.duit.core.ui.theme.SpatialTheme
+import com.diniy.duit.domain.model.TransactionType
+import com.diniy.duit.feature.transactions.CategoryIconMapper
+import kotlin.math.roundToInt
+import com.diniy.duit.core.ui.components.CandyBubbleCard
+import com.diniy.duit.core.ui.components.CandyDecor
+import com.diniy.duit.core.ui.components.CandyIconBlob
+import com.diniy.duit.core.ui.components.CandyMoneyText
+import com.diniy.duit.core.ui.components.CandyProgressRing
+import com.diniy.duit.core.ui.components.CandyStatusBadge
+import com.diniy.duit.core.ui.components.CandySticker
+import com.diniy.duit.core.ui.components.CandyTone
+import com.diniy.duit.core.ui.components.SpatialGlassCard
+import com.diniy.duit.core.ui.components.SpatialGlassSurface
+import com.diniy.duit.core.ui.components.candyPressable
+import com.diniy.duit.core.ui.components.candyTone
+import com.diniy.duit.core.ui.components.rememberDuitHaptic
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -90,118 +124,193 @@ fun FinancialOverviewHeroCard(
     overview: InsightsFinancialOverview,
     isSamplePreview: Boolean
 ) {
-    val glass = LocalPrismaticGlass.current
+    val colors = SpatialTheme.colors
+    val type = SpatialTheme.typography
+    val masked = LocalPrivacySettings.current.isAnyMaskActive
     val resolved = overview.resolvedPeriod
+    val net = overview.netCashFlowSen
+    val heroFill = if (net >= 0L) colors.aqua else colors.coral
+    val heroInk = colors.onCoral
+    val income = overview.totalIncomeSen.coerceAtLeast(0L)
+    val expense = overview.totalExpenseSen.coerceAtLeast(0L)
+    val flowTotal = income + expense
+    val inShare = if (flowTotal > 0L) income.toFloat() / flowTotal.toFloat() else 0f
+    val savingsFraction = if (income > 0L) ((income - expense).toFloat() / income.toFloat()).coerceIn(0f, 1f) else 0f
 
-    PrismaticGlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        tier = GlassCardTier.Elevated,
-        accentTint = glass.aquaAccent
+    Column(
+        modifier = Modifier.candyEntrance("insights_overview_${resolved.startEpochDay}_${resolved.endEpochDayInclusive}"),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
+        // Net cash-flow hero: sticker card with an in/out flow meter
+        SpatialGlassSurface(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            containerColor = heroFill,
+            sticker = true,
+            shape = RoundedCornerShape(30.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Financial Overview",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .drawBehind {
+                        drawCircle(Color.White.copy(alpha = 0.22f), radius = size.width * 0.30f, center = Offset(size.width * 0.96f, size.height * 0.06f))
+                        drawCircle(Color.White.copy(alpha = 0.14f), radius = size.width * 0.12f, center = Offset(size.width * 0.06f, size.height * 0.96f))
+                    }
+            )
+            Column(Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Net cash flow", style = type.cardTitle.copy(fontSize = 18.sp), color = heroInk)
+                        Text(
+                            text = "${DateTimeFormatters.formatEpochDay(resolved.startEpochDay)} – ${DateTimeFormatters.formatEpochDay(resolved.endEpochDayInclusive)}",
+                            style = type.caption,
+                            color = heroInk.copy(alpha = 0.82f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    CandySticker(text = if (isSamplePreview) "Sample" else resolved.preset.label, tone = CandyTone.Sunny, tilt = 4f)
+                }
+                Spacer(Modifier.height(10.dp))
+                CandyMoneyText(
+                    maskedBalance(net, includePlusSign = true),
+                    type.heroBalance.copy(fontSize = 40.sp, lineHeight = 46.sp),
+                    heroInk,
+                    minorScale = 0.5f
                 )
-                Text(
-                    text = "${resolved.periodLabel} · ${DateTimeFormatters.formatEpochDay(resolved.startEpochDay)} – ${DateTimeFormatters.formatEpochDay(resolved.endEpochDayInclusive)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Spacer(Modifier.height(12.dp))
+                // Flow meter: share of money in vs out this period (real totals)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.45f))
+                ) {
+                    if (flowTotal > 0L) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(inShare.coerceIn(0.02f, 1f))
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(50))
+                                .background(heroInk)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        if (flowTotal == 0L) "No income or spending yet" else if (masked) "In ••%" else "In ${(inShare * 100).roundToInt()}%",
+                        style = type.caption,
+                        color = heroInk
+                    )
+                    if (flowTotal > 0L) {
+                        Text(if (masked) "Out ••%" else "Out ${100 - (inShare * 100).roundToInt()}%", style = type.caption, color = heroInk)
+                    }
+                }
             }
-            Spacer(Modifier.width(8.dp))
-            PrismaticBadge(
-                label = if (isSamplePreview) "Sample" else resolved.preset.label,
-                containerColor = glass.aquaContainer,
-                contentColor = glass.onAquaContainer
-            )
         }
 
-        Spacer(Modifier.height(14.dp))
-
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Max),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            MetricTile(
-                label = "Total Income",
+            InsightStatBubble(
+                label = "Income",
                 value = maskedBalance(overview.totalIncomeSen),
-                valueColor = glass.positiveText,
-                modifier = Modifier.weight(1f)
+                valueColor = colors.income,
+                icon = Icons.Rounded.ArrowDownward,
+                tone = CandyTone.Mint,
+                tilt = -6f,
+                modifier = Modifier.weight(1f).fillMaxHeight()
             )
-            MetricTile(
-                label = "Total Expenses",
+            InsightStatBubble(
+                label = "Expenses",
                 value = maskedBalance(overview.totalExpenseSen),
-                valueColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
+                valueColor = colors.primaryText,
+                icon = Icons.Rounded.ArrowUpward,
+                tone = CandyTone.Coral,
+                tilt = 6f,
+                modifier = Modifier.weight(1f).fillMaxHeight()
             )
         }
 
-        Spacer(Modifier.height(10.dp))
-
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(26.dp))
+                .background(colors.glassSurface)
+                .padding(vertical = 14.dp, horizontal = 8.dp)
+                .height(IntrinsicSize.Max),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            MetricTile(
-                label = "Net Cash Flow",
-                value = maskedBalance(overview.netCashFlowSen, includePlusSign = true),
-                valueColor = when {
-                    overview.netCashFlowSen > 0L -> glass.positiveText
-                    overview.netCashFlowSen < 0L -> glass.cautionText
-                    else -> MaterialTheme.colorScheme.onSurface
-                },
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                CandyProgressRing(fraction = savingsFraction, tone = CandyTone.Sunny, size = 46.dp, stroke = 6.dp) {
+                    Text(if (masked) "••" else overview.savingsRateDisplay, style = type.caption.copy(fontSize = 12.sp), color = colors.primaryText, maxLines = 1)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text("Savings rate", style = type.caption, color = colors.secondaryText, maxLines = 1)
+            }
+            InsightMiniStat(
+                label = "Avg / day",
+                value = if (resolved.elapsedDays > 0L) maskedBalance(overview.avgDailySpendingSen) else "—",
+                color = colors.primaryText,
                 modifier = Modifier.weight(1f)
             )
-            MetricTile(
-                label = "Savings Rate",
-                value = if (LocalPrivacySettings.current.isAnyMaskActive) "••%" else overview.savingsRateDisplay,
-                valueColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            MetricTile(
-                label = "Avg Daily Spend",
-                value = if (resolved.elapsedDays > 0L) "${maskedBalance(overview.avgDailySpendingSen)}/d" else "—",
-                valueColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "Available Safe to Spend",
+            InsightMiniStat(
+                label = "Safe to spend",
                 value = maskedBalance(overview.safeToSpendSen),
-                valueColor = if (overview.safeToSpendSen < 0L) glass.cautionText else glass.positiveText,
+                color = if (overview.safeToSpendSen < 0L) colors.warning else colors.income,
                 modifier = Modifier.weight(1f)
             )
         }
 
         if (overview.transferCountExcluded > 0) {
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider(color = glass.glassBorderSubtle)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Excluded ${overview.transferCountExcluded} internal transfer(s) totaling ${maskedBalance(overview.transferTotalExcludedSen)} from income and expenses.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(candyTone(CandyTone.Sky).container)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.SwapHoriz, contentDescription = null, tint = candyTone(CandyTone.Sky).ink, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "${overview.transferCountExcluded} internal transfer(s) (${maskedBalance(overview.transferTotalExcludedSen)}) aren't counted as income or spending.",
+                    style = type.caption,
+                    color = candyTone(CandyTone.Sky).ink
+                )
+            }
         }
     }
 }
 
+@Composable
+private fun InsightStatBubble(
+    label: String,
+    value: String,
+    valueColor: Color,
+    icon: ImageVector,
+    tone: CandyTone,
+    tilt: Float,
+    modifier: Modifier = Modifier
+) {
+    val type = SpatialTheme.typography
+    CandyBubbleCard(tone = tone, decor = CandyDecor.Corner, modifier = modifier, contentPadding = PaddingValues(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CandyIconBlob(icon, tone, size = 34.dp, tilt = tilt, solid = true)
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = type.caption, color = SpatialTheme.colors.secondaryText)
+        }
+        Spacer(Modifier.height(10.dp))
+        CandyMoneyText(value, type.cardBalance, valueColor)
+    }
+}
+
+/** Candy stat tile shared by the analytics cards (label + split money value). */
 @Composable
 private fun MetricTile(
     label: String,
@@ -209,29 +318,26 @@ private fun MetricTile(
     valueColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val glass = LocalPrismaticGlass.current
+    val type = SpatialTheme.typography
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(glass.glassSurfaceMuted)
+            .clip(RoundedCornerShape(20.dp))
+            .background(SpatialTheme.colors.glassSurfaceSubtle)
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.height(3.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = valueColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Text(label, style = type.caption, color = SpatialTheme.colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(4.dp))
+        CandyMoneyText(value, type.transactionAmount.copy(fontSize = 16.sp), valueColor, minorScale = 0.7f)
+    }
+}
+
+@Composable
+private fun InsightMiniStat(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    val type = SpatialTheme.typography
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        CandyMoneyText(value, type.transactionAmount.copy(fontSize = 16.sp), color, minorScale = 0.7f)
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = type.caption, color = SpatialTheme.colors.secondaryText, maxLines = 1)
     }
 }
 
@@ -341,204 +447,162 @@ fun IncomeVsExpensesChartCard(
     horizonMonths: Int,
     onSelectHorizon: (Int) -> Unit
 ) {
-    val glass = LocalPrismaticGlass.current
+    val colors = SpatialTheme.colors
+    val type = SpatialTheme.typography
     val reducedMotion = rememberReducedMotionEnabled()
+    val haptic = rememberDuitHaptic()
     var selectedMonthIdx by remember(monthlyTrends) {
         mutableStateOf((monthlyTrends.size - 1).coerceAtLeast(0))
     }
-
     val maxSen = remember(monthlyTrends) {
         monthlyTrends.maxOfOrNull { maxOf(it.incomeSen, it.expenseSen) } ?: 0L
     }
     val hasAnyActivity = maxSen > 0L
-    val chartProgress by animateFloatAsState(
-        targetValue = if (hasAnyActivity) 1f else 0f,
-        animationSpec = tween(durationMillis = if (reducedMotion) 0 else 420),
-        label = "incomeExpenseChartProgress"
-    )
+    // Bars grow from the baseline once per data set (not on scroll or recomposition).
+    val chartReveal = rememberCandyReveal(monthlyTrends.map { it.incomeSen to it.expenseSen } to horizonMonths)
 
-    PrismaticGlassCard(
+    SpatialGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        tier = GlassCardTier.Standard,
-        accentTint = glass.aquaAccent
+        shape = RoundedCornerShape(30.dp),
+        contentPadding = PaddingValues(18.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Income vs Expenses",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Monthly cashflow trends (transfers excluded)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        Text("Income vs expenses", style = type.sectionHeading, color = colors.primaryText)
+        Text("Monthly cashflow · transfers excluded", style = type.caption, color = colors.secondaryText)
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
 
+        // Candy segmented horizon picker (3M / 6M / 12M)
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(50))
+                .background(colors.baseSurface)
+                .padding(4.dp)
         ) {
             listOf(3, 6, 12).forEach { months ->
-                FilterChip(
-                    selected = horizonMonths == months,
-                    onClick = { onSelectHorizon(months) },
-                    label = { Text("${months}M") },
-                    modifier = Modifier.heightIn(min = 40.dp)
-                )
+                val selected = horizonMonths == months
+                val bg by animateColorAsState(if (selected) colors.coral else Color.Transparent, label = "horizon_bg")
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(bg)
+                        .candyPressable(onClick = { onSelectHorizon(months) }, onClickLabel = "Show $months months")
+                        .semantics { this.selected = selected },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("${months}M", style = type.buttonLabel, color = if (selected) colors.onCoral else colors.secondaryText)
+                }
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
 
-        // Legend + scale cap
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                LegendDot(color = glass.aquaAccent, label = "Income")
-                LegendDot(color = glass.peachAccent, label = "Expenses")
-            }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            CandyStatusBadge("Income", CandyTone.Mint)
+            Spacer(Modifier.width(6.dp))
+            CandyStatusBadge("Expenses", CandyTone.Coral)
+            Spacer(Modifier.weight(1f))
             Text(
                 text = if (hasAnyActivity) "Peak ${maskedAmount(maxSen)}" else "No records",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = type.caption,
+                color = colors.secondaryText
             )
         }
 
         Spacer(Modifier.height(12.dp))
 
         if (!hasAnyActivity) {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(110.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(glass.glassSurfaceMuted),
-                contentAlignment = Alignment.Center
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(colors.glassSurfaceSubtle)
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                CandyIconBlob(Icons.Rounded.BarChart, CandyTone.Sunny, size = 44.dp, tilt = -6f, solid = true)
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "No income or expenses recorded across the last $horizonMonths months.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp)
+                    text = "No income or expenses in the last $horizonMonths months yet.",
+                    style = type.supportingInfo,
+                    color = colors.secondaryText
                 )
             }
         } else {
-            val incomeColor = glass.aquaAccent
-            val expenseColor = glass.peachAccent
-            val gridColor = glass.glassBorderSubtle
-            val highlightBg = glass.glassSurfaceElevated
+            val incomeColor = colors.aqua
+            val expenseColor = colors.coral
+            val gridColor = colors.divider
+            val highlight = candyTone(CandyTone.Peach).container
+            val ink = colors.sticker
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
+                    .height(168.dp)
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val count = monthlyTrends.size.coerceAtLeast(1)
                     val slotWidth = size.width / count
-                    val bottomPad = 6.dp.toPx()
-                    val usableHeight = (size.height - bottomPad).coerceAtLeast(1f)
-
-                    // Subtle horizontal baseline & midpoint grid lines
-                    drawLine(
-                        color = gridColor,
-                        start = Offset(0f, usableHeight),
-                        end = Offset(size.width, usableHeight),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                    drawLine(
-                        color = gridColor.copy(alpha = 0.45f),
-                        start = Offset(0f, usableHeight * 0.5f),
-                        end = Offset(size.width, usableHeight * 0.5f),
-                        strokeWidth = 1.dp.toPx()
-                    )
+                    val usableHeight = (size.height - 4.dp.toPx()).coerceAtLeast(1f)
+                    val dash = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 5.dp.toPx()))
+                    listOf(0.5f, 1f).forEach { f ->
+                        drawLine(gridColor, Offset(0f, usableHeight * (1f - f) + 1f), Offset(size.width, usableHeight * (1f - f) + 1f), strokeWidth = 1.dp.toPx(), pathEffect = dash)
+                    }
+                    drawLine(gridColor, Offset(0f, usableHeight), Offset(size.width, usableHeight), strokeWidth = 1.5.dp.toPx())
 
                     monthlyTrends.forEachIndexed { idx, point ->
                         val slotLeft = idx * slotWidth
-                        if (idx == selectedMonthIdx) {
+                        val isSelected = idx == selectedMonthIdx
+                        if (isSelected) {
                             drawRoundRect(
-                                color = highlightBg.copy(alpha = 0.5f),
+                                color = highlight,
                                 topLeft = Offset(slotLeft + 2.dp.toPx(), 0f),
                                 size = Size((slotWidth - 4.dp.toPx()).coerceAtLeast(4f), usableHeight),
-                                cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
+                                cornerRadius = CornerRadius(14.dp.toPx())
                             )
                         }
-                        val barWidth = (slotWidth * if (count >= 12) 0.28f else 0.24f).coerceIn(4.dp.toPx(), 16.dp.toPx())
-                        val gap = (barWidth * 0.35f).coerceAtLeast(2.dp.toPx())
-                        val groupWidth = barWidth * 2f + gap
-                        val groupStart = slotLeft + (slotWidth - groupWidth) / 2f
-
-                        val inHeight = if (point.incomeSen > 0L) {
-                            ((point.incomeSen.toFloat() / maxSen.toFloat()) * usableHeight * chartProgress)
-                                .coerceAtLeast(4.dp.toPx())
-                        } else {
-                            0f
+                        val barWidth = (slotWidth * if (count >= 12) 0.30f else 0.26f).coerceIn(5.dp.toPx(), 20.dp.toPx())
+                        val gap = (barWidth * 0.25f).coerceAtLeast(2.dp.toPx())
+                        val groupStart = slotLeft + (slotWidth - (barWidth * 2f + gap)) / 2f
+                        val fade = if (isSelected) 1f else 0.7f
+                        fun bar(value: Long, x: Float, color: Color) {
+                            if (value <= 0L) return
+                            val h = ((value.toFloat() / maxSen.toFloat()) * usableHeight * chartReveal.value).coerceAtLeast(barWidth * chartReveal.value)
+                            val topLeft = Offset(x, usableHeight - h)
+                            val sz = Size(barWidth, h)
+                            val r = CornerRadius(barWidth / 2f)
+                            drawRoundRect(color.copy(alpha = fade), topLeft, sz, r)
+                            if (isSelected) {
+                                drawRoundRect(ink, topLeft, sz, r, style = Stroke(width = 2.dp.toPx()))
+                            }
                         }
-                        val outHeight = if (point.expenseSen > 0L) {
-                            ((point.expenseSen.toFloat() / maxSen.toFloat()) * usableHeight * chartProgress)
-                                .coerceAtLeast(4.dp.toPx())
-                        } else {
-                            0f
-                        }
-
-                        if (inHeight > 0f) {
-                            drawRoundRect(
-                                color = incomeColor,
-                                topLeft = Offset(groupStart, usableHeight - inHeight),
-                                size = Size(barWidth, inHeight),
-                                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                            )
-                        }
-                        if (outHeight > 0f) {
-                            drawRoundRect(
-                                color = expenseColor,
-                                topLeft = Offset(groupStart + barWidth + gap, usableHeight - outHeight),
-                                size = Size(barWidth, outHeight),
-                                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                            )
-                        }
+                        bar(point.incomeSen, groupStart, incomeColor)
+                        bar(point.expenseSen, groupStart + barWidth + gap, expenseColor)
                     }
                 }
 
-                // Transparent interactive touch columns per month for tap-to-inspect & TalkBack
+                // Touch columns for tap-to-inspect & TalkBack
                 Row(modifier = Modifier.fillMaxSize()) {
                     monthlyTrends.forEachIndexed { idx, point ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clickable(
-                                    role = Role.Button,
-                                    onClickLabel = "Inspect ${point.shortLabel}"
-                                ) { selectedMonthIdx = idx }
+                                .clickable(role = Role.Button, onClickLabel = "Inspect ${point.shortLabel}") {
+                                    if (idx != selectedMonthIdx) haptic(HapticFeedbackType.TextHandleMove)
+                                    selectedMonthIdx = idx
+                                }
                         )
                     }
                 }
             }
 
-            // X-axis month labels
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                 val step = if (monthlyTrends.size >= 12) 2 else 1
                 monthlyTrends.forEachIndexed { idx, point ->
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         if (idx % step == 0 || idx == selectedMonthIdx || idx == monthlyTrends.lastIndex) {
                             Text(
                                 text = if (monthlyTrends.size >= 12) {
@@ -546,9 +610,9 @@ fun IncomeVsExpensesChartCard(
                                 } else {
                                     point.shortLabel
                                 },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (idx == selectedMonthIdx) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = if (idx == selectedMonthIdx) FontWeight.Bold else FontWeight.Normal,
+                                style = type.caption,
+                                color = if (idx == selectedMonthIdx) colors.primaryText else colors.secondaryText,
+                                fontWeight = if (idx == selectedMonthIdx) FontWeight.Black else FontWeight.SemiBold,
                                 maxLines = 1
                             )
                         }
@@ -558,33 +622,29 @@ fun IncomeVsExpensesChartCard(
 
             val inspected = monthlyTrends.getOrNull(selectedMonthIdx)
             if (inspected != null) {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(glass.glassSurfaceMuted)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(highlight)
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${inspected.yearMonth.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} ${inspected.yearMonth.year}",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                    CandySticker(
+                        text = "${inspected.yearMonth.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} ${inspected.yearMonth.year % 100}",
+                        tone = CandyTone.Coral,
+                        tilt = -4f
                     )
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "In ${maskedAmount(inspected.incomeSen)} · Out ${maskedAmount(inspected.expenseSen)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "Net ${maskedAmount(inspected.netSen, includePlusSign = true)}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (inspected.netSen >= 0L) glass.positiveText else glass.cautionText
-                        )
-                    }
+                    Spacer(Modifier.width(10.dp))
+                    MonthFigure("In", maskedAmount(inspected.incomeSen), colors.income, Modifier.weight(1f))
+                    MonthFigure("Out", maskedAmount(inspected.expenseSen), colors.primaryText, Modifier.weight(1f))
+                    MonthFigure(
+                        "Net",
+                        maskedAmount(inspected.netSen, includePlusSign = true),
+                        if (inspected.netSen >= 0L) colors.income else colors.warning,
+                        Modifier.weight(1f)
+                    )
                 }
             }
         }
@@ -592,22 +652,10 @@ fun IncomeVsExpensesChartCard(
 }
 
 @Composable
-private fun LegendDot(color: Color, label: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+private fun MonthFigure(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.End) {
+        Text(label, style = SpatialTheme.typography.caption, color = SpatialTheme.colors.secondaryText)
+        CandyMoneyText(value, SpatialTheme.typography.transactionAmount.copy(fontSize = 14.sp), color, minorScale = 0.72f)
     }
 }
 
@@ -618,192 +666,157 @@ fun SpendingBreakdownDonutCard(
     categories: List<CategorySpendingItem>,
     onInspectCategory: (String) -> Unit
 ) {
-    val glass = LocalPrismaticGlass.current
+    val colors = SpatialTheme.colors
+    val type = SpatialTheme.typography
     val reducedMotion = rememberReducedMotionEnabled()
-    val palette = listOf(
-        glass.aquaAccent,
-        glass.skyBlueAccent,
-        glass.lavenderAccent,
-        glass.peachAccent,
-        glass.positiveText,
-        glass.cautionText
-    )
+    // Readable candy palette, distinct in both themes.
+    val palette = listOf(colors.coral, colors.aqua, colors.sunny, colors.skyBlue, colors.peach, colors.expense)
+    val hasData = totalExpenseSen > 0L && categories.isNotEmpty()
+    // Segments sweep in once per data set; proportions are always the real ones.
+    val donutReveal = rememberCandyReveal(categories.map { it.categoryName to it.amountSen } to totalExpenseSen, durationMs = 750)
+    val sweepFactor = if (hasData) donutReveal.value else 0f
+    val topCategory = categories.maxByOrNull { it.amountSen }
 
-    val sweepFactor by animateFloatAsState(
-        targetValue = if (totalExpenseSen > 0L && categories.isNotEmpty()) 1f else 0f,
-        animationSpec = tween(durationMillis = if (reducedMotion) 0 else 480),
-        label = "donutSweep"
-    )
-
-    PrismaticGlassCard(
+    SpatialGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        tier = GlassCardTier.Standard,
-        accentTint = glass.skyBlueAccent
+        shape = RoundedCornerShape(30.dp),
+        contentPadding = PaddingValues(18.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Spending Breakdown",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "$periodLabel · Tap a category for transactions",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        Text("Spending breakdown", style = type.sectionHeading, color = colors.primaryText)
+        Text("$periodLabel · tap a category for its transactions", style = type.caption, color = colors.secondaryText)
 
         Spacer(Modifier.height(14.dp))
 
-        if (totalExpenseSen <= 0L || categories.isEmpty()) {
-            Text(
-                text = "Category proportions and interactive donut chart will appear after your first expense in this period.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(12.dp))
-            Box(
+        if (!hasData) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(glass.glassSurfaceMuted)
-            )
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(colors.glassSurfaceSubtle)
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CandyIconBlob(Icons.Rounded.PieChart, CandyTone.Coral, size = 44.dp, tilt = 6f, solid = true)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Your spending donut appears after the first expense in this period.",
+                    style = type.supportingInfo,
+                    color = colors.secondaryText
+                )
+            }
         } else {
-            // Centered Donut Chart matching Prismatic Glass aesthetic
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(168.dp),
+                    .height(212.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val trackColor = glass.glassSurfaceMuted
-                Canvas(modifier = Modifier.size(148.dp)) {
-                    val strokePx = 22.dp.toPx()
-                    val diameter = size.minDimension - strokePx
-                    val topLeft = Offset(strokePx / 2f, strokePx / 2f)
-                    val arcSize = Size(diameter, diameter)
+                val track = colors.baseSurface
+                val bubble = colors.glassSurfaceSubtle
+                Canvas(modifier = Modifier.size(200.dp)) {
+                    val stroke = 30.dp.toPx()
+                    val radius = (size.minDimension - stroke) / 2f
+                    val topLeft = Offset(stroke / 2f, stroke / 2f)
+                    val arcSize = Size(radius * 2f, radius * 2f)
+                    // Soft inner bubble + track
+                    drawCircle(bubble, radius = radius - stroke / 2f - 6.dp.toPx())
+                    drawArc(track, 0f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
 
-                    drawArc(
-                        color = trackColor,
-                        startAngle = 0f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = strokePx)
-                    )
-
-                    var startAngle = -90f
-                    val gapDegrees = if (categories.size > 1) 2.5f else 0f
+                    val gapDeg = if (categories.size > 1) 4f else 0f
+                    val capDeg = Math.toDegrees((stroke / 2f / radius).toDouble()).toFloat()
+                    var start = -90f
                     categories.forEach { item ->
-                        val rawSweep = (item.amountSen.toFloat() / totalExpenseSen.toFloat()) * 360f * sweepFactor
-                        val drawSweep = (rawSweep - gapDegrees).coerceAtLeast(1.5f)
+                        val raw = (item.amountSen.toFloat() / totalExpenseSen.toFloat()) * 360f * sweepFactor
                         val color = palette[item.colorSlot % palette.size]
-                        drawArc(
-                            color = color,
-                            startAngle = startAngle,
-                            sweepAngle = drawSweep,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = arcSize,
-                            style = Stroke(width = strokePx, cap = StrokeCap.Butt)
-                        )
-                        startAngle += rawSweep
+                        if (categories.size == 1) {
+                            drawArc(color, start, raw, false, topLeft, arcSize, style = Stroke(stroke))
+                        } else {
+                            // Round caps extend past the arc; trim them so gaps stay visible.
+                            // Tiny slices collapse to a round dot so they stay identifiable.
+                            val sweep = (raw - gapDeg - 2f * capDeg).coerceAtLeast(0.01f)
+                            drawArc(color, start + gapDeg / 2f + capDeg, sweep, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                        }
+                        start += raw
                     }
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(120.dp)) {
+                    Text("Spent", style = type.caption, color = colors.secondaryText)
+                    CandyMoneyText(maskedBalance(totalExpenseSen), type.cardBalance, colors.primaryText, minorScale = 0.55f)
                     Text(
-                        text = "Expenses",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = maskedBalance(totalExpenseSen),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        "${categories.size} categor${if (categories.size == 1) "y" else "ies"}",
+                        style = type.caption,
+                        color = colors.secondaryText
                     )
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 categories.forEach { item ->
-                    val sliceColor = palette[item.colorSlot % palette.size]
-                    Column(
+                    val slice = palette[item.colorSlot % palette.size]
+                    val iconKey = CategoryIconMapper.inferIconKeyFromName(item.categoryName, TransactionType.EXPENSE)
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(
-                                role = Role.Button,
-                                onClickLabel = "View ${item.categoryName} transactions"
-                            ) { onInspectCategory(item.categoryName) }
-                            .padding(vertical = 4.dp, horizontal = 4.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .candyPressable(onClick = { onInspectCategory(item.categoryName) }, onClickLabel = "View ${item.categoryName} transactions")
+                            .padding(horizontal = 6.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Box(
+                            Modifier
+                                .size(42.dp)
+                                .rotate(if (item.colorSlot % 2 == 0) -6f else 5f)
+                                .clip(RoundedCornerShape(15.dp))
+                                .background(slice.copy(alpha = if (colors.isDark) 0.30f else 0.28f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Icon(
+                                CategoryIconMapper.iconFor(iconKey, TransactionType.EXPENSE),
+                                contentDescription = null,
+                                tint = colors.readableOn(slice),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    item.categoryName,
+                                    style = type.transactionDescription,
+                                    color = colors.primaryText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                if (item == topCategory && categories.size > 1) {
+                                    Spacer(Modifier.width(6.dp))
+                                    CandySticker("Top", CandyTone.Sunny, tilt = 6f)
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(colors.baseSurface)
                             ) {
                                 Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(sliceColor)
-                                )
-                                Text(
-                                    text = item.categoryName,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "(${item.transactionCount})",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = item.percentageDisplay,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = maskedAmount(item.amountSen),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    Modifier
+                                        .fillMaxWidth((item.fraction * sweepFactor).coerceIn(0.02f, 1f))
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(50))
+                                        .background(slice)
                                 )
                             }
                         }
-                        Spacer(Modifier.height(5.dp))
-                        LinearProgressIndicator(
-                            progress = { item.fraction },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(10.dp)
-                                .clip(RoundedCornerShape(50)),
-                            color = sliceColor,
-                            trackColor = glass.glassSurfaceMuted,
-                            strokeCap = StrokeCap.Round
-                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(horizontalAlignment = Alignment.End) {
+                            CandyMoneyText(maskedAmount(item.amountSen), type.transactionAmount, colors.primaryText, minorScale = 0.72f)
+                            Text("${item.percentageDisplay} · ${item.transactionCount} tx", style = type.caption, color = colors.secondaryText, maxLines = 1)
+                        }
                     }
                 }
             }

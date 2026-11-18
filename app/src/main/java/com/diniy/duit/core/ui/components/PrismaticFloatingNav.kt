@@ -155,7 +155,7 @@ fun PrismaticFloatingBottomBar(
                 animatedSlot.animateTo(
                     targetValue = targetVisualSlot,
                     animationSpec = spring(
-                        dampingRatio = 0.6f,
+                        dampingRatio = 0.8f,
                         stiffness = Spring.StiffnessMediumLow
                     )
                 )
@@ -184,15 +184,15 @@ fun PrismaticFloatingBottomBar(
             modifier = Modifier
                 .widthIn(max = geometry.maxFloatingNavWidth)
                 .fillMaxWidth()
-                .shadow(
-                    elevation = if (colors.isDark) geometry.elevationFloatingDark else geometry.elevationFloatingLight,
-                    shape = pillShape,
-                    ambientColor = colors.glassShadowAmbient,
-                    spotColor = colors.glassShadowSpot
-                )
+                // Candy Bubble nav: sticker capsule (outline + hard offset shadow)
+                .drawBehind {
+                    val o = 3.dp.toPx()
+                    val outline = pillShape.createOutline(size, layoutDirection, this)
+                    translate(left = 0f, top = o) { drawOutline(outline, colors.sticker) }
+                }
                 .clip(pillShape)
                 .background(colors.floatingNavSurface)
-                .border(BorderStroke(geometry.borderHairline, colors.glassBorder), pillShape)
+                .border(BorderStroke(2.dp, colors.sticker), pillShape)
                 .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
             val totalWidthPx = with(density) { maxWidth.toPx() }
@@ -238,7 +238,7 @@ fun PrismaticFloatingBottomBar(
                                     animatedSlot.animateTo(
                                         targetValue = targetVisualSlot,
                                         animationSpec = spring(
-                                            dampingRatio = 0.6f,
+                                            dampingRatio = 0.8f,
                                             stiffness = Spring.StiffnessMediumLow
                                         )
                                     )
@@ -266,7 +266,7 @@ fun PrismaticFloatingBottomBar(
                         .width(slotWidthDp)
                         .height(indicatorHeightDp)
                         .clip(activeIndicatorShape)
-                        .background(colors.floatingNavActivePill)
+                        .background(colors.coral)
                 )
 
                 Row(
@@ -287,7 +287,7 @@ fun PrismaticFloatingBottomBar(
                                 reducedMotion = reducedMotion,
                                 onClick = {
                                     if (idx != selectedIndex) {
-                                        performHaptic(HapticFeedbackType.TextHandleMove)
+                                        performHaptic(HapticFeedbackType.SegmentTick)
                                         onSelect(item)
                                     }
                                 },
@@ -315,7 +315,7 @@ fun PrismaticFloatingBottomBar(
                                 reducedMotion = reducedMotion,
                                 onClick = {
                                     if (idx != selectedIndex) {
-                                        performHaptic(HapticFeedbackType.TextHandleMove)
+                                        performHaptic(HapticFeedbackType.SegmentTick)
                                         onSelect(item)
                                     }
                                 },
@@ -330,7 +330,7 @@ fun PrismaticFloatingBottomBar(
                                 reducedMotion = reducedMotion,
                                 onClick = {
                                     if (index != selectedIndex) {
-                                        performHaptic(HapticFeedbackType.TextHandleMove)
+                                        performHaptic(HapticFeedbackType.SegmentTick)
                                         onSelect(item)
                                     }
                                 },
@@ -344,10 +344,32 @@ fun PrismaticFloatingBottomBar(
     }
 }
 
+/**
+ * Experiment 01: stand-alone floating quick action (bottom-right, above the nav bar).
+ * Coral sticker, 60dp (>= 48dp touch target), subtle press sink + squash; opens the existing
+ * quick-action sheet via [onClick]. Reduce Motion disables the press motion.
+ */
+@Composable
+fun DuitQuickActionFab(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val performHaptic = rememberDuitHaptic()
+    SpatialQuickAddCenterButton(
+        onClick = {
+            performHaptic(HapticFeedbackType.ContextClick)
+            onClick()
+        },
+        modifier = modifier,
+        buttonSize = 60.dp
+    )
+}
+
 @Composable
 private fun SpatialQuickAddCenterButton(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buttonSize: androidx.compose.ui.unit.Dp = 52.dp
 ) {
     val colors = SpatialTheme.colors
     val motion = SpatialTheme.motion
@@ -357,7 +379,7 @@ private fun SpatialQuickAddCenterButton(
 
     val geometry = SpatialTheme.geometry
     val shift by animateDpAsState(
-        targetValue = if (isPressed && !reducedMotion) 3.dp else 0.dp,
+        targetValue = if (isPressed && !reducedMotion) 2.dp else 0.dp,
         animationSpec = prismaticSpring(
             reducedMotion = reducedMotion,
             dampingRatio = motion.pressDampingRatio,
@@ -365,7 +387,7 @@ private fun SpatialQuickAddCenterButton(
         ),
         label = "quick_add_center_shift"
     )
-    val buttonShape = RoundedCornerShape(18.dp)
+    val buttonShape = RoundedCornerShape(buttonSize * 0.36f)
     val stickerInk = colors.sticker
     val press by animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
@@ -380,7 +402,7 @@ private fun SpatialQuickAddCenterButton(
 
     Box(
         modifier = modifier
-            .size(52.dp)
+            .size(buttonSize)
             .graphicsLayer {
                 scaleX = squashX
                 scaleY = squashY
@@ -392,7 +414,7 @@ private fun SpatialQuickAddCenterButton(
             }
             .offset(x = shift, y = shift)
             .clip(buttonShape)
-            .background(colors.bubblegum)
+            .background(colors.coral)
             .border(BorderStroke(geometry.stickerBorder, stickerInk), buttonShape)
             .semantics {
                 contentDescription = "Quick add transaction or action"
@@ -409,7 +431,7 @@ private fun SpatialQuickAddCenterButton(
         Icon(
             imageVector = Icons.Rounded.Add,
             contentDescription = null,
-            tint = com.diniy.duit.core.ui.theme.PrismaticPalette.GrapeInk,
+            tint = colors.onCoral,
             modifier = Modifier
                 .size(26.dp)
                 .graphicsLayer { rotationZ = if (reducedMotion) 0f else 90f * press }
@@ -429,13 +451,13 @@ private fun FloatingNavTabItem(
     val interactionSource = remember { MutableInteractionSource() }
 
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected) colors.primaryText else colors.secondaryText,
+        targetValue = if (isSelected) colors.onCoral else colors.secondaryText,
         animationSpec = prismaticTween(reducedMotion = reducedMotion, durationMillis = 180),
         label = "nav_item_tint"
     )
 
     val iconTint by animateColorAsState(
-        targetValue = if (isSelected) colors.primaryAction else colors.secondaryText,
+        targetValue = if (isSelected) colors.onCoral else colors.secondaryText,
         animationSpec = prismaticTween(reducedMotion = reducedMotion, durationMillis = 180),
         label = "nav_icon_tint"
     )
@@ -579,10 +601,24 @@ fun SpatialQuickAddSheet(
     val colors = SpatialTheme.colors
     val spacing = SpatialTheme.spacing
 
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+    // Slide the sheet away first, then run exactly one action.
+    fun closeThen(action: () -> Unit) {
+        if (closing) return
+        closing = true
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            onDismiss()
+            action()
+        }
+    }
+
     SpatialGlassBottomSheetSurface(
         title = "Quick Action",
         subtitle = "Record a transaction or open financial tools",
-        onDismissRequest = onDismiss
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
             Row(
@@ -601,8 +637,7 @@ fun SpatialQuickAddSheet(
                         )
                     },
                     onClick = {
-                        onDismiss()
-                        onSelectTransactionType(TransactionType.EXPENSE)
+                        closeThen { onSelectTransactionType(TransactionType.EXPENSE) }
                     },
                     modifier = Modifier.weight(1f)
                 )
@@ -618,8 +653,7 @@ fun SpatialQuickAddSheet(
                         )
                     },
                     onClick = {
-                        onDismiss()
-                        onSelectTransactionType(TransactionType.INCOME)
+                        closeThen { onSelectTransactionType(TransactionType.INCOME) }
                     },
                     modifier = Modifier.weight(1f)
                 )
@@ -641,14 +675,13 @@ fun SpatialQuickAddSheet(
                         )
                     },
                     onClick = {
-                        onDismiss()
-                        onSelectTransactionType(TransactionType.TRANSFER)
+                        closeThen { onSelectTransactionType(TransactionType.TRANSFER) }
                     },
                     modifier = Modifier.weight(1f)
                 )
                 QuickAddTile(
-                    title = "Commissions",
-                    subtitle = "Sales & payout",
+                    title = "Commission",
+                    subtitle = "Income · sales, GP & payout",
                     accentColor = colors.lavender,
                     icon = {
                         Icon(
@@ -658,8 +691,7 @@ fun SpatialQuickAddSheet(
                         )
                     },
                     onClick = {
-                        onDismiss()
-                        onOpenCommissionTools()
+                        closeThen { onOpenCommissionTools() }
                     },
                     modifier = Modifier.weight(1f)
                 )
@@ -678,8 +710,7 @@ fun SpatialQuickAddSheet(
                     )
                 },
                 onClick = {
-                    onDismiss()
-                    onOpenCategories()
+                    closeThen { onOpenCategories() }
                 }
             )
         }

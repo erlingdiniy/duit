@@ -1,5 +1,12 @@
 package com.diniy.duit.feature.activity
 
+import com.diniy.duit.core.ui.components.CandyIconBlob
+import com.diniy.duit.core.ui.components.CandyMoneyText
+import com.diniy.duit.core.ui.components.CandyStatusBadge
+import com.diniy.duit.core.ui.components.CandyTone
+import com.diniy.duit.core.ui.components.candyPressable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -167,11 +174,7 @@ fun ActivityScreen(
                     )
                 },
                 leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Rounded.Search,
-                        contentDescription = null,
-                        tint = colors.secondaryText
-                    )
+                    CandyIconBlob(Icons.Rounded.Search, CandyTone.Coral, size = 34.dp, tilt = -6f, solid = true)
                 },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
@@ -184,12 +187,12 @@ fun ActivityScreen(
                         }
                     }
                 },
-                shape = RoundedCornerShape(geometry.radiusMd),
+                shape = RoundedCornerShape(50),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = colors.glassSurfaceElevated,
                     unfocusedContainerColor = colors.glassSurface,
-                    focusedBorderColor = colors.primaryAction,
-                    unfocusedBorderColor = colors.glassBorder
+                    focusedBorderColor = colors.coral,
+                    unfocusedBorderColor = Color.Transparent
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -300,37 +303,37 @@ private fun SpatialDateTransactionGroup(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 6.dp, bottom = 6.dp, start = 4.dp, end = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(top = 6.dp, bottom = 8.dp, start = 4.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = section.headerLabel,
-                style = typography.caption,
-                color = colors.secondaryText,
-                modifier = Modifier.semantics { heading() }
+                style = typography.cardTitle.copy(fontSize = 17.sp),
+                color = colors.primaryText,
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { heading() }
             )
-            Text(
-                text = "${section.transactions.size} item(s)",
-                style = typography.caption,
-                color = colors.secondaryText
-            )
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(colors.coral)
+                    .padding(horizontal = 10.dp, vertical = 2.dp)
+            ) {
+                Text("${section.transactions.size}", style = typography.caption, color = colors.onCoral)
+            }
         }
 
         SpatialGlassCard(
             modifier = Modifier.fillMaxWidth(),
             tier = SpatialGlassTier.Standard,
-            contentPadding = PaddingValues(vertical = 4.dp)
+            shape = RoundedCornerShape(28.dp),
+            contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
         ) {
             section.transactions.forEachIndexed { idx, transaction ->
-                if (idx > 0) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = colors.divider
-                    )
-                }
                 SpatialCompactTransactionRow(
                     transaction = transaction,
+                    index = idx,
                     walletsById = walletsById,
                     categoriesById = categoriesById,
                     onClick = { onSelectTransaction(transaction) }
@@ -343,13 +346,13 @@ private fun SpatialDateTransactionGroup(
 @Composable
 private fun SpatialCompactTransactionRow(
     transaction: FinanceTransaction,
+    index: Int,
     walletsById: Map<Long, Wallet>,
     categoriesById: Map<Long, Category>,
     onClick: () -> Unit
 ) {
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
-    val geometry = SpatialTheme.geometry
     val privacy = LocalPrivacySettings.current
 
     val sourceWalletName = walletsById[transaction.walletId]?.name ?: "Wallet"
@@ -359,10 +362,10 @@ private fun SpatialCompactTransactionRow(
     val iconKey = matchedCategory?.iconKey
         ?: CategoryIconMapper.inferIconKeyFromName(transaction.category, transaction.type)
 
-    val (iconBg, iconFg) = when (transaction.type) {
-        TransactionType.INCOME -> colors.incomeContainer to colors.onIncomeContainer
-        TransactionType.EXPENSE -> colors.expenseContainer to colors.onExpenseContainer
-        TransactionType.TRANSFER -> colors.savingsContainer to colors.onSavingsContainer
+    val tone = when (transaction.type) {
+        TransactionType.INCOME -> CandyTone.Mint
+        TransactionType.EXPENSE -> CandyTone.Coral
+        TransactionType.TRANSFER -> CandyTone.Sunny
     }
 
     val amountText = if (privacy.isAnyMaskActive) {
@@ -382,82 +385,56 @@ private fun SpatialCompactTransactionRow(
     }
 
     val subtitle = if (transaction.type == TransactionType.TRANSFER && targetWalletName != null) {
-        "$sourceWalletName -> $targetWalletName · ${DateTimeFormatters.formatTimeOnly(transaction.occurredAtEpochMs)}"
+        "$sourceWalletName → $targetWalletName"
     } else {
-        "${transaction.category} · $sourceWalletName · ${DateTimeFormatters.formatTimeOnly(transaction.occurredAtEpochMs)}"
+        "${transaction.category} · $sourceWalletName"
     }
+    val timeLabel = DateTimeFormatters.formatTimeOnly(transaction.occurredAtEpochMs)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                role = Role.Button,
-                onClickLabel = "Inspect ${transaction.title}",
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .candyPressable(onClick = onClick, onClickLabel = "Inspect ${transaction.title}")
+            .padding(horizontal = 12.dp, vertical = 10.dp)
             .privacySafeAmountSemantics(
-                label = "${transaction.title}, $subtitle",
+                label = "${transaction.title}, $subtitle, $timeLabel",
                 isMasked = privacy.isAnyMaskActive,
                 visibleFormattedAmount = amountText
             ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(geometry.radiusSm))
-                    .background(iconBg),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = CategoryIconMapper.iconFor(iconKey, transaction.type),
-                    contentDescription = null,
-                    tint = iconFg,
-                    modifier = Modifier.size(19.dp)
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = transaction.title,
-                    style = typography.transactionDescription,
-                    color = colors.primaryText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = typography.caption,
-                    color = colors.secondaryText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        CandyIconBlob(
+            icon = CategoryIconMapper.iconFor(iconKey, transaction.type),
+            tone = tone,
+            size = 44.dp,
+            tilt = if (index % 2 == 0) -6f else 5f
+        )
         Spacer(Modifier.width(12.dp))
-        Column(horizontalAlignment = Alignment.End) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = amountText,
-                style = typography.transactionAmount,
-                color = amountColor,
-                maxLines = 1
+                text = transaction.title,
+                style = typography.transactionDescription,
+                color = colors.primaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+            Text(
+                text = subtitle,
+                style = typography.caption,
+                color = colors.secondaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            CandyMoneyText(amountText, typography.transactionAmount.copy(fontSize = 16.sp), amountColor, minorScale = 0.72f)
             if (transaction.type == TransactionType.TRANSFER) {
                 Spacer(Modifier.height(3.dp))
-                SpatialGlassPill(
-                    label = "Transfer",
-                    selected = false,
-                    accentColor = colors.skyBlue,
-                    containerColor = colors.savingsContainer,
-                    contentColor = colors.onSavingsContainer
-                )
+                CandyStatusBadge("Transfer", CandyTone.Sunny)
+            } else {
+                Text(timeLabel, style = typography.caption, color = colors.secondaryText, maxLines = 1)
             }
         }
     }

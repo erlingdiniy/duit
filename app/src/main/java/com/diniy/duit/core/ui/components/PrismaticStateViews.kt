@@ -1,5 +1,6 @@
 package com.diniy.duit.core.ui.components
 
+import androidx.compose.ui.draw.rotate
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -107,23 +108,27 @@ fun PrismaticEmptyStateCard(
 ) {
     val glass = LocalPrismaticGlass.current
 
-    PrismaticGlassCard(
+    CandyBubbleCard(
+        tone = CandyTone.Peach,
         modifier = modifier.fillMaxWidth(),
-        tier = GlassCardTier.Standard
+        contentPadding = PaddingValues(18.dp)
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(glass.lavenderContainer),
+                    .size(48.dp)
+                    .rotate(-8f)
+                    .clip(RoundedCornerShape(17.dp))
+                    .background(glass.lavenderAccent),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     painter = painterResource(id = iconRes),
                     contentDescription = null,
-                    tint = glass.onLavenderContainer,
-                    modifier = Modifier.size(22.dp)
+                    tint = com.diniy.duit.core.ui.theme.SpatialTheme.colors.onCoral,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .rotate(8f)
                 )
             }
             Spacer(Modifier.width(14.dp))

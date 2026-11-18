@@ -1,5 +1,6 @@
 package com.diniy.duit.core.ui.components
 
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -34,7 +35,7 @@ fun PrismaticTextField(
     errorText: String? = null,
     singleLine: Boolean = true,
     enabled: Boolean = true,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardOptions: KeyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
     val glass = LocalPrismaticGlass.current
@@ -69,15 +70,15 @@ fun PrismaticTextField(
                     )
                 }
             },
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             textStyle = MaterialTheme.typography.bodyLarge,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = glass.glassSurfaceElevated,
                 unfocusedContainerColor = glass.glassSurface,
                 disabledContainerColor = glass.glassSurfaceMuted,
                 errorContainerColor = glass.glassSurfaceElevated,
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = glass.glassBorderSubtle,
+                focusedBorderColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.coral,
+                unfocusedBorderColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.divider,
                 errorBorderColor = MaterialTheme.colorScheme.error
             ),
             keyboardOptions = keyboardOptions,

@@ -1,5 +1,8 @@
 package com.diniy.duit.feature.settings
 
+import com.diniy.duit.core.ui.components.candyPressable
+import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.shape.CircleShape
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings as AndroidSettings
@@ -34,6 +37,7 @@ import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DashboardCustomize
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Shield
@@ -97,6 +101,7 @@ fun SettingsHubContainerScreen(
     onOpenNotifications: () -> Unit,
     onOpenSecurity: () -> Unit,
     onOpenSalaryCycles: () -> Unit,
+    onOpenNotificationCentre: () -> Unit = {},
     onOpenCategories: () -> Unit,
     onVerifyPin: suspend (String) -> Boolean,
     viewModel: SettingsViewModel
@@ -107,6 +112,7 @@ fun SettingsHubContainerScreen(
             onBack = onBackToApp,
             onSelectRoute = onNavigateRoute,
             onOpenNotifications = onOpenNotifications,
+            onOpenNotificationCentre = onOpenNotificationCentre,
             onOpenSecurity = onOpenSecurity,
             onSelectTheme = viewModel::setThemeMode,
             onSelectGlassIntensity = viewModel::setGlassIntensity
@@ -115,26 +121,30 @@ fun SettingsHubContainerScreen(
             uiState = uiState,
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
             onSelectTheme = viewModel::setThemeMode,
-            onSelectGlassIntensity = viewModel::setGlassIntensity
+            onSelectGlassIntensity = viewModel::setGlassIntensity,
+            onOpenMotion = { onNavigateRoute(SettingsHubRoute.MOTION_HAPTICS) },
+            onOpenHomeLayout = { onNavigateRoute(SettingsHubRoute.DASHBOARD) }
         )
+        // Motion and Home layout are reached from Appearance, so Back returns there.
         SettingsHubRoute.MOTION_HAPTICS -> MotionHapticsSettingsScreen(
             uiState = uiState,
-            onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onBack = { onNavigateRoute(SettingsHubRoute.APPEARANCE) },
             onSetHaptics = viewModel::setHapticFeedbackEnabled,
             onSetReduceMotion = viewModel::setReduceMotion,
             onSetAnimationIntensity = viewModel::setAnimationIntensity
         )
         SettingsHubRoute.DASHBOARD -> DashboardCustomizationScreen(
             uiState = uiState,
-            onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onBack = { onNavigateRoute(SettingsHubRoute.APPEARANCE) },
             onSetVisible = viewModel::setDashboardSectionVisible,
             onMove = viewModel::moveDashboardSection,
             onRestoreDefault = viewModel::restoreDefaultDashboardLayout,
             onClearFeedback = viewModel::clearFeedback
         )
+        // Money preferences are opened from Planning; Back returns to the app.
         SettingsHubRoute.FINANCIAL -> FinancialPreferencesScreen(
             uiState = uiState,
-            onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onBack = onBackToApp,
             onSetDefaultWallet = viewModel::setDefaultWalletId,
             onSetBudgetPeriod = viewModel::setDefaultBudgetPeriodType,
             onSetAutoAdvanceRecurring = viewModel::setAutoAdvanceRecurringCommitments,
@@ -167,6 +177,7 @@ private fun SettingsHubOverviewScreen(
     onBack: () -> Unit,
     onSelectRoute: (SettingsHubRoute) -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenNotificationCentre: () -> Unit,
     onOpenSecurity: () -> Unit,
     onSelectTheme: (ThemeMode) -> Unit,
     onSelectGlassIntensity: (GlassIntensity) -> Unit
@@ -185,116 +196,23 @@ private fun SettingsHubOverviewScreen(
         errorMessage = uiState.errorMessage,
         onClearFeedback = {}
     ) {
-        // Inline Quick Appearance Controls (no extra navigation layer required for frequent toggles)
-        item(key = "quick_appearance_bar") {
-            com.diniy.duit.core.ui.components.SpatialGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Quick Theme",
-                        style = typography.cardTitle,
-                        color = colors.primaryText
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ThemeMode.entries.forEach { mode ->
-                            com.diniy.duit.core.ui.components.SpatialGlassPill(
-                                label = mode.label,
-                                selected = app.themeMode == mode,
-                                accentColor = colors.lavender,
-                                onClick = { onSelectTheme(mode) }
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                HorizontalDivider(color = colors.divider)
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Glass Surface",
-                        style = typography.cardTitle,
-                        color = colors.primaryText
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        GlassIntensity.entries.forEach { intensity ->
-                            com.diniy.duit.core.ui.components.SpatialGlassPill(
-                                label = intensity.label,
-                                selected = app.glassIntensity == intensity,
-                                accentColor = colors.aqua,
-                                onClick = { onSelectGlassIntensity(intensity) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Group 1: Visual & Layout
-        item(key = "group_visual") {
-            com.diniy.duit.core.ui.components.SpatialGlassSection(
-                title = "Display & Layout"
-            ) {
+        // Phase 7A: exactly six destinations. Motion, Home layout live in Appearance;
+        // Notification Centre in Notifications; money preferences in Planning.
+        item(key = "group_personal") {
+            com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Make it yours") {
                 com.diniy.duit.core.ui.components.SpatialGlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
-                    contentPadding = PaddingValues(vertical = 4.dp)
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
                 ) {
                     SettingsGroupedRowItem(
                         icon = Icons.Rounded.Palette,
-                        accent = colors.lavender,
+                        accent = colors.coral,
                         title = "Appearance",
-                        subtitle = "${app.themeMode.label} · ${app.glassIntensity.label} glass",
+                        subtitle = "${app.themeMode.label} · ${app.glassIntensity.label} depth · ${if (app.reduceMotion) "Reduce motion" else app.animationIntensity.label + " motion"}",
                         onClick = { onSelectRoute(SettingsHubRoute.APPEARANCE) }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = colors.divider)
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.Animation,
-                        accent = colors.skyBlue,
-                        title = "Motion & Haptics",
-                        subtitle = "${if (app.hapticFeedbackEnabled) "Haptics on" else "Haptics off"} · ${if (app.reduceMotion) "Reduce motion" else app.animationIntensity.label}",
-                        onClick = { onSelectRoute(SettingsHubRoute.MOTION_HAPTICS) }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = colors.divider)
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.DashboardCustomize,
-                        accent = colors.aqua,
-                        title = "Dashboard Customization",
-                        subtitle = "$visibleCount/${DashboardSectionKey.entries.size} Home sections shown · Safe to Spend pinned",
-                        onClick = { onSelectRoute(SettingsHubRoute.DASHBOARD) }
-                    )
-                }
-            }
-        }
-
-        // Group 2: Finance, Notifications & Privacy
-        item(key = "group_finance_security") {
-            com.diniy.duit.core.ui.components.SpatialGlassSection(
-                title = "Finance, Alerts & Security"
-            ) {
-                com.diniy.duit.core.ui.components.SpatialGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
-                    contentPadding = PaddingValues(vertical = 4.dp)
-                ) {
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.AccountBalanceWallet,
-                        accent = colors.peach,
-                        title = "Financial Preferences",
-                        subtitle = "MYR · Default: $defaultWalletName · ${app.defaultBudgetPeriodType.label}",
-                        onClick = { onSelectRoute(SettingsHubRoute.FINANCIAL) }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = colors.divider)
                     SettingsGroupedRowItem(
                         icon = Icons.Rounded.Notifications,
                         accent = colors.aqua,
@@ -306,15 +224,14 @@ private fun SettingsHubOverviewScreen(
                         },
                         onClick = onOpenNotifications
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = colors.divider)
                     SettingsGroupedRowItem(
                         icon = Icons.Rounded.Shield,
-                        accent = colors.lavender,
-                        title = "Security & Privacy",
+                        accent = colors.sunny,
+                        title = "Security",
                         subtitle = buildString {
-                            append(if (uiState.securityState.isAppLockEnabled) "App Lock ON" else "App Lock OFF")
+                            append(if (uiState.securityState.isAppLockEnabled) "PIN lock on" else "PIN lock off")
                             append(" · ")
-                            append(if (uiState.securityState.privacySettings.isAnyMaskActive) "Amounts masked" else "Amounts visible")
+                            append(if (uiState.securityState.privacySettings.isAnyMaskActive) "Amounts hidden" else "Amounts visible")
                         },
                         onClick = onOpenSecurity
                     )
@@ -322,37 +239,33 @@ private fun SettingsHubOverviewScreen(
             }
         }
 
-        // Group 3: Backup, Data & About
-        item(key = "group_data_about") {
-            com.diniy.duit.core.ui.components.SpatialGlassSection(
-                title = "Backup, Storage & About"
-            ) {
+        item(key = "group_data") {
+            com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Your data") {
                 com.diniy.duit.core.ui.components.SpatialGlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
-                    contentPadding = PaddingValues(vertical = 4.dp)
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
                 ) {
                     SettingsGroupedRowItem(
                         icon = Icons.Rounded.Backup,
                         accent = colors.skyBlue,
                         title = "Backup & Restore",
-                        subtitle = "Encrypted AES-256-GCM local backup, safe restore & CSV export",
+                        subtitle = "Encrypted local backup and safe restore",
                         onClick = { onSelectRoute(SettingsHubRoute.BACKUP_RESTORE) }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = colors.divider)
                     SettingsGroupedRowItem(
                         icon = Icons.Rounded.Storage,
                         accent = colors.peach,
                         title = "Data Management",
-                        subtitle = "${uiState.storageSummary.totalFinancialRecords} local financial records stored offline",
+                        subtitle = "${uiState.storageSummary.totalFinancialRecords} records on this device · export and tools",
                         onClick = { onSelectRoute(SettingsHubRoute.DATA_MANAGEMENT) }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = colors.divider)
                     SettingsGroupedRowItem(
                         icon = Icons.Rounded.Info,
-                        accent = colors.skyBlue,
+                        accent = colors.aqua,
                         title = "About duit.",
-                        subtitle = "Version info, offline-first guarantee & open-source notices",
+                        subtitle = "Version and app information",
                         onClick = { onSelectRoute(SettingsHubRoute.ABOUT) }
                     )
                 }
@@ -367,14 +280,18 @@ private fun AppearanceSettingsScreen(
     uiState: SettingsHubUiState,
     onBack: () -> Unit,
     onSelectTheme: (ThemeMode) -> Unit,
-    onSelectGlassIntensity: (GlassIntensity) -> Unit
+    onSelectGlassIntensity: (GlassIntensity) -> Unit,
+    onOpenMotion: () -> Unit = {},
+    onOpenHomeLayout: () -> Unit = {}
 ) {
     val glass = LocalPrismaticGlass.current
     val settings = uiState.appSettings
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val visibleCount = DashboardSectionKey.entries.size - settings.hiddenDashboardSections.size
 
     SettingsPageScaffold(
         title = "Appearance",
-        subtitle = "Theme mode and Prismatic Glass surface density",
+        subtitle = "Theme, card depth, motion and Home layout",
         onBack = onBack
     ) {
         item(key = "theme_mode") {
@@ -382,7 +299,7 @@ private fun AppearanceSettingsScreen(
                 Text("Theme Mode", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Applies immediately across the app and Phase 5C home screen widgets.",
+                    text = "Applies immediately across the app and home screen widgets.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -402,10 +319,10 @@ private fun AppearanceSettingsScreen(
 
         item(key = "glass_intensity") {
             PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Standard, accentTint = glass.aquaAccent) {
-                Text("Glass Surface Intensity", style = MaterialTheme.typography.titleMedium)
+                Text("Card depth", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Adjusts translucent card opacity now. Dynamic GPU blur & refraction effects are scheduled for Phase 6.",
+                    text = "How much soft shadow candy cards have.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -425,6 +342,29 @@ private fun AppearanceSettingsScreen(
                     text = settings.glassIntensity.summary,
                     style = MaterialTheme.typography.bodySmall,
                     color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.readableOn(glass.aquaAccent)
+                )
+            }
+        }
+
+        item(key = "appearance_more") {
+            com.diniy.duit.core.ui.components.SpatialGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
+            ) {
+                SettingsGroupedRowItem(
+                    icon = Icons.Rounded.Animation,
+                    accent = colors.skyBlue,
+                    title = "Motion & Haptics",
+                    subtitle = "${if (settings.hapticFeedbackEnabled) "Haptics on" else "Haptics off"} · ${if (settings.reduceMotion) "Reduce motion" else settings.animationIntensity.label}",
+                    onClick = onOpenMotion
+                )
+                SettingsGroupedRowItem(
+                    icon = Icons.Rounded.DashboardCustomize,
+                    accent = colors.aqua,
+                    title = "Home layout",
+                    subtitle = "$visibleCount/${DashboardSectionKey.entries.size} Home sections shown · Safe to Spend pinned",
+                    onClick = onOpenHomeLayout
                 )
             }
         }
@@ -929,28 +869,29 @@ private fun SettingsGroupedRowItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 54.dp)
-            .clickable(
-                role = Role.Button,
-                onClickLabel = "Open $title",
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 11.dp),
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .candyPressable(onClick = onClick, onClickLabel = "Open $title")
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Candy icon blob: solid accent squircle, slightly tilted, dark ink icon (readable in both modes)
         Box(
             modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(geometry.radiusSm))
-                .background(accent.copy(alpha = if (colors.isDark) 0.22f else 0.14f)),
+                .size(40.dp)
+                .rotate(-6f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(accent),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(19.dp)
+                tint = colors.onCoral,
+                modifier = Modifier
+                    .size(20.dp)
+                    .rotate(6f)
             )
         }
         Column(modifier = Modifier.weight(1f)) {
@@ -965,11 +906,20 @@ private fun SettingsGroupedRowItem(
                 color = colors.secondaryText
             )
         }
-        Icon(
-            imageVector = Icons.Rounded.ChevronRight,
-            contentDescription = null,
-            tint = colors.secondaryText
-        )
+        Box(
+            Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(colors.baseSurface),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = colors.primaryText,
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 
@@ -980,16 +930,29 @@ internal fun SettingsSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            val type = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+            Text(title, style = type.transactionDescription, color = colors.primaryText)
             Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(subtitle, style = type.caption, color = colors.secondaryText)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                checkedTrackColor = colors.coral,
+                checkedThumbColor = Color.White,
+                checkedBorderColor = colors.sticker,
+                uncheckedTrackColor = colors.baseSurface,
+                uncheckedThumbColor = colors.secondaryText,
+                uncheckedBorderColor = Color.Transparent
+            )
+        )
     }
 }

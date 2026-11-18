@@ -1,5 +1,17 @@
 package com.diniy.duit.feature.budgets
 
+import com.diniy.duit.core.ui.components.CandyBubbleCard
+import com.diniy.duit.core.ui.components.CandyDecor
+import com.diniy.duit.core.ui.components.CandyIconBlob
+import com.diniy.duit.core.ui.components.CandyStatusBadge
+import com.diniy.duit.core.ui.components.CandySticker
+import com.diniy.duit.core.ui.components.CandyTone
+import com.diniy.duit.core.ui.components.candyTone
+import com.diniy.duit.core.ui.components.candyToneFor
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -64,7 +76,7 @@ import java.time.YearMonth
 enum class PlanningSectionTab(val label: String) {
     GOALS("Goals"),
     BUDGETS("Budgets"),
-    COMMITMENTS("Commitments")
+    COMMITMENTS("Bills")
 }
 
 @Composable
@@ -393,134 +405,103 @@ fun BudgetProgressCard(
     showPeriodTag: Boolean,
     onClick: () -> Unit
 ) {
-    val glass = LocalPrismaticGlass.current
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val type = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+    val reduced = com.diniy.duit.core.ui.components.rememberReducedMotionEnabled()
     val budget = progress.budget
     val category = budget.categoryId?.let { id -> categories.firstOrNull { it.id == id } }
-    val (accentColor, badgeBg, badgeFg) = SavingsIconMapper.accentColors(budget.accentToken)
-
-    val statusColor = when (progress.warningLevel) {
-        BudgetWarningLevel.SAFE -> accentColor
-        BudgetWarningLevel.APPROACHING_80 -> glass.peachAccent
-        BudgetWarningLevel.AT_LIMIT_100, BudgetWarningLevel.EXCEEDED -> MaterialTheme.colorScheme.error
+    // Healthy = mint, approaching = sunny, at/over limit = coral. Thresholds come from progress.warningLevel.
+    val stateTone = when (progress.warningLevel) {
+        BudgetWarningLevel.SAFE -> CandyTone.Mint
+        BudgetWarningLevel.APPROACHING_80 -> CandyTone.Sunny
+        BudgetWarningLevel.AT_LIMIT_100, BudgetWarningLevel.EXCEEDED -> CandyTone.Coral
     }
+    val st = candyTone(stateTone)
+    val fill by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = progress.progressFraction.coerceIn(0f, 1f),
+        animationSpec = com.diniy.duit.core.ui.components.prismaticSpring(
+            reduced,
+            com.diniy.duit.core.ui.theme.SpatialTheme.motion.spatialDampingRatio,
+            androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "budget_fill"
+    )
+    val track = colors.glassSurfaceElevated
+    val marker = colors.sticker.copy(alpha = 0.35f)
 
-    PrismaticGlassCard(
+    CandyBubbleCard(
+        tone = stateTone,
+        decor = if (budget.isArchived) CandyDecor.None else CandyDecor.Corner,
+        containerColor = if (budget.isArchived) colors.glassSurfaceSubtle else null,
         modifier = Modifier.fillMaxWidth(),
-        tier = if (budget.isArchived) GlassCardTier.Muted else GlassCardTier.Standard,
-        accentTint = statusColor,
+        shape = RoundedCornerShape(28.dp),
         onClick = onClick,
-        onClickLabel = "Inspect ${budget.name} budget",
-        contentPadding = PaddingValues(16.dp)
+        onClickLabel = "Inspect ${budget.name} budget"
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(badgeBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (budget.scope == BudgetScope.OVERALL) {
-                            Icons.Rounded.AccountBalanceWallet
-                        } else {
-                            CategoryIconMapper.iconFor(category?.iconKey, TransactionType.EXPENSE)
-                        },
-                        contentDescription = null,
-                        tint = badgeFg,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = budget.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    val meta = buildString {
-                        append("${maskedAmount(progress.spentSen)} / ${maskedAmount(progress.limitSen)}")
-                        if (showPeriodTag) append(" · ${progress.periodLabel}")
-                    }
-                    Text(
-                        text = meta,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(8.dp))
-            PrismaticBadge(
-                label = if (budget.isArchived) "Archived · ${progress.usedPercentDisplay}" else progress.usedPercentDisplay,
-                containerColor = when (progress.warningLevel) {
-                    BudgetWarningLevel.SAFE -> badgeBg
-                    BudgetWarningLevel.APPROACHING_80 -> glass.peachContainer
-                    BudgetWarningLevel.AT_LIMIT_100, BudgetWarningLevel.EXCEEDED -> MaterialTheme.colorScheme.errorContainer
-                },
-                contentColor = when (progress.warningLevel) {
-                    BudgetWarningLevel.SAFE -> badgeFg
-                    BudgetWarningLevel.APPROACHING_80 -> glass.onPeachContainer
-                    BudgetWarningLevel.AT_LIMIT_100, BudgetWarningLevel.EXCEEDED -> MaterialTheme.colorScheme.onErrorContainer
-                }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            CandyIconBlob(
+                icon = if (budget.scope == BudgetScope.OVERALL) Icons.Rounded.AccountBalanceWallet
+                else CategoryIconMapper.iconFor(category?.iconKey, TransactionType.EXPENSE),
+                tone = candyToneFor(budget.accentToken),
+                size = 42.dp,
+                tilt = -6f,
+                solid = true
             )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(budget.name, style = type.cardTitle, color = colors.primaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val meta = buildString {
+                    append("${maskedAmount(progress.spentSen)} of ${maskedAmount(progress.limitSen)}")
+                    if (showPeriodTag) append(" · ${progress.periodLabel}")
+                }
+                Text(meta, style = type.caption, color = colors.secondaryText, maxLines = 2)
+            }
+            Spacer(Modifier.width(8.dp))
+            val pct = if (budget.isArchived) "Archived · ${progress.usedPercentDisplay}" else progress.usedPercentDisplay
+            if (progress.warningLevel == BudgetWarningLevel.SAFE || budget.isArchived) {
+                CandyStatusBadge(pct, stateTone)
+            } else {
+                CandySticker(pct, stateTone, tilt = 5f)
+            }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
 
-        LinearProgressIndicator(
-            progress = { progress.progressFraction },
-            modifier = Modifier
+        // Candy tube gauge with an 80% warning notch
+        Canvas(
+            Modifier
                 .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(50)),
-            color = statusColor,
-            trackColor = glass.glassSurfaceMuted,
-            strokeCap = StrokeCap.Round
-        )
+                .height(18.dp)
+        ) {
+            val r = CornerRadius(size.height / 2f)
+            drawRoundRect(track, cornerRadius = r)
+            if (fill > 0f) {
+                drawRoundRect(st.fill, size = Size((size.width * fill).coerceAtLeast(size.height), size.height), cornerRadius = r)
+            }
+            val x = size.width * 0.8f
+            drawLine(marker, Offset(x, 3.dp.toPx()), Offset(x, size.height - 3.dp.toPx()), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+        }
 
         Spacer(Modifier.height(8.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = when (progress.warningLevel) {
-                    BudgetWarningLevel.EXCEEDED ->
-                        "Over budget by ${maskedAmount(progress.overspentSen)}"
-                    BudgetWarningLevel.AT_LIMIT_100 ->
-                        "100% reached · ${maskedAmount(0L)} left"
-                    BudgetWarningLevel.APPROACHING_80 ->
-                        "${maskedAmount(progress.remainingSen)} left · 80%+ warning"
-                    BudgetWarningLevel.SAFE ->
-                        "${maskedAmount(progress.remainingSen)} left"
+                    BudgetWarningLevel.EXCEEDED -> "Over budget by ${maskedAmount(progress.overspentSen)}"
+                    BudgetWarningLevel.AT_LIMIT_100 -> "100% reached · ${maskedAmount(0L)} left"
+                    BudgetWarningLevel.APPROACHING_80 -> "${maskedAmount(progress.remainingSen)} left · 80%+ warning"
+                    BudgetWarningLevel.SAFE -> "${maskedAmount(progress.remainingSen)} left"
                 },
-                style = MaterialTheme.typography.bodySmall,
+                style = type.supportingInfo,
                 color = when (progress.warningLevel) {
-                    BudgetWarningLevel.EXCEEDED -> MaterialTheme.colorScheme.error
-                    BudgetWarningLevel.AT_LIMIT_100, BudgetWarningLevel.APPROACHING_80 -> glass.cautionText
-                    BudgetWarningLevel.SAFE -> MaterialTheme.colorScheme.onSurfaceVariant
+                    BudgetWarningLevel.EXCEEDED -> colors.error
+                    BudgetWarningLevel.AT_LIMIT_100, BudgetWarningLevel.APPROACHING_80 -> colors.warning
+                    BudgetWarningLevel.SAFE -> st.ink
                 },
                 modifier = Modifier.weight(1f)
             )
             if (budget.scope == BudgetScope.OVERALL) {
-                PrismaticBadge(
-                    label = "Overall Cap",
-                    containerColor = glass.glassSurfaceMuted,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                CandyStatusBadge("Overall cap", CandyTone.Neutral)
             }
         }
     }

@@ -73,8 +73,10 @@ data class SpatialColorTokens(
     // Candy Pop extras
     val sticker: Color = PrismaticPalette.LightStickerInk,
     val sunny: Color = PrismaticPalette.Sunny,
-    val onSunny: Color = PrismaticPalette.GrapeInk,
-    val bubblegum: Color = PrismaticPalette.Bubblegum
+    val onSunny: Color = PrismaticPalette.DeepTeal,
+    /** Bright coral fill (hero, quick action). Text on it must be [onCoral]. */
+    val coral: Color = PrismaticPalette.Coral,
+    val onCoral: Color = PrismaticPalette.DeepTeal
 ) {
     /**
      * Candy accents (mint, sky, bubblegum…) are too light to be text. This mixes an accent
@@ -107,15 +109,15 @@ val LightSpatialColors = SpatialColorTokens(
     glassSurface = PrismaticPalette.LightGlassBase,
     glassSurfaceElevated = PrismaticPalette.LightGlassBase,
     glassSurfaceSubtle = PrismaticPalette.LightGlassSubtle,
-    glassBorder = PrismaticPalette.Grape.copy(alpha = 0.10f),
+    glassBorder = PrismaticPalette.DeepTeal.copy(alpha = 0.10f),
     glassHighlight = Color.Transparent,
     glassInnerGlow = Color.Transparent,
-    glassShadowAmbient = PrismaticPalette.Grape.copy(alpha = 0.14f),
-    glassShadowSpot = PrismaticPalette.Grape.copy(alpha = 0.16f),
+    glassShadowAmbient = PrismaticPalette.DeepTeal.copy(alpha = 0.12f),
+    glassShadowSpot = PrismaticPalette.DeepTeal.copy(alpha = 0.14f),
     floatingNavSurface = Color.White,
     floatingNavActivePill = PrismaticPalette.LightSurfaceSubtle,
     bottomSheetSurface = PrismaticPalette.LightSheetSurface,
-    scrim = PrismaticPalette.GrapeInk.copy(alpha = 0.30f),
+    scrim = PrismaticPalette.DeepTeal.copy(alpha = 0.34f),
     primaryText = PrismaticPalette.LightInk,
     secondaryText = PrismaticPalette.LightInkMuted,
     disabledText = PrismaticPalette.LightInkDisabled,
@@ -139,9 +141,9 @@ val LightSpatialColors = SpatialColorTokens(
     success = PrismaticPalette.LightSuccess,
     successContainer = PrismaticPalette.LightSuccessContainer,
     onSuccessContainer = PrismaticPalette.LightOnSuccessContainer,
-    divider = PrismaticPalette.Grape.copy(alpha = 0.10f),
-    pressedStateOverlay = PrismaticPalette.Grape.copy(alpha = 0.08f),
-    selectedStateOverlay = PrismaticPalette.Grape.copy(alpha = 0.14f)
+    divider = PrismaticPalette.DeepTeal.copy(alpha = 0.10f),
+    pressedStateOverlay = PrismaticPalette.DeepTeal.copy(alpha = 0.08f),
+    selectedStateOverlay = PrismaticPalette.Coral.copy(alpha = 0.16f)
 )
 
 val DarkSpatialColors = SpatialColorTokens(
@@ -186,11 +188,12 @@ val DarkSpatialColors = SpatialColorTokens(
     onSuccessContainer = PrismaticPalette.DarkOnSuccessContainer,
     divider = Color.White.copy(alpha = 0.09f),
     pressedStateOverlay = Color.White.copy(alpha = 0.08f),
-    selectedStateOverlay = PrismaticPalette.DarkPrimary.copy(alpha = 0.22f),
+    selectedStateOverlay = PrismaticPalette.Coral.copy(alpha = 0.22f),
     sticker = PrismaticPalette.DarkStickerInk,
-    sunny = Color(0xFFFFE07A),
-    onSunny = Color(0xFF3D2A00),
-    bubblegum = PrismaticPalette.DarkExpense
+    sunny = PrismaticPalette.DarkSavings,
+    onSunny = PrismaticPalette.DarkTertiaryInk,
+    coral = PrismaticPalette.Coral,
+    onCoral = PrismaticPalette.DarkPrimaryInk
 )
 
 /**
@@ -263,23 +266,23 @@ data class SpatialGeometryTokens(
 @Immutable
 data class SpatialMotionTokens(
     val durationInstantMs: Int = 0,
-    val durationFastMs: Int = 140,
-    val durationStandardMs: Int = 220,
+    val durationFastMs: Int = 150, // quick interaction
+    val durationStandardMs: Int = 250, // standard transition
     val durationEmphasizedMs: Int = 320,
     val durationCounterMs: Int = 420,
     // Candy Pop: bouncy springs with visible overshoot (squash and stretch on press/release)
-    val pressDampingRatio: Float = 0.45f,
+    val pressDampingRatio: Float = 0.7f, // controlled return, no wobble
     val pressStiffness: Float = Spring.StiffnessMedium,
-    val spatialDampingRatio: Float = 0.62f,
+    val spatialDampingRatio: Float = 0.8f, // gentle spring for selection
     val spatialStiffness: Float = Spring.StiffnessMediumLow,
-    val morphDampingRatio: Float = 0.7f,
+    val morphDampingRatio: Float = 0.82f,
     val morphStiffness: Float = Spring.StiffnessLow,
-    val pressedScaleCard: Float = 0.96f,
-    val pressedScaleButton: Float = 0.92f,
-    val selectedScaleIcon: Float = 1.15f,
+    val pressedScaleCard: Float = 0.97f,
+    val pressedScaleButton: Float = 0.96f,
+    val selectedScaleIcon: Float = 1.08f,
     // Squash & stretch targets for press (prep for the Phase 6C animation pass)
-    val squashScaleX: Float = 1.08f,
-    val squashScaleY: Float = 0.90f
+    val squashScaleX: Float = 1.04f,
+    val squashScaleY: Float = 0.94f
 ) {
     /** Press squash for sticker buttons; returns (scaleX, scaleY). Identity under Reduce Motion. */
     fun resolveSquash(pressFraction: Float, reduceMotion: Boolean): Pair<Float, Float> {

@@ -119,11 +119,13 @@ class MainActivity : FragmentActivity() {
                         hapticFeedbackEnabled = appSettings.hapticFeedbackEnabled
                     )
                 ) {
+                    com.diniy.duit.core.ui.components.CandySuccessHost {
                     DuitAppShell(
                         container = container,
                         appLockState = appLockState,
                         onTriggerBiometric = triggerBiometricPrompt
                     )
+                    }
                 }
             }
         }

@@ -79,7 +79,9 @@ fun SpatialAnimatedCounterText(
     style: TextStyle = SpatialTheme.typography.heroBalance,
     color: Color = SpatialTheme.colors.primaryText,
     isBalanceMask: Boolean = true,
-    includePlusSign: Boolean = false
+    includePlusSign: Boolean = false,
+    /** When set, renders "RM" and sen at this fraction of the size (Candy Bubble money type). */
+    splitMinorScale: Float? = null
 ) {
     val privacySettings = LocalPrivacySettings.current
     val reducedMotion = rememberReducedMotionEnabled()
@@ -114,13 +116,19 @@ fun SpatialAnimatedCounterText(
         }
     }
 
-    val displaySen = if (isMasked || reducedMotion) amountSen else animatedSen.value.roundToLong()
+    // Phase 8B: money is shown at its real value immediately (no counting through
+    // intermediate, misleading amounts). The entrance motion lives on the card instead.
+    val displaySen = amountSen
     val visibleFormatted = MyrFormatter.format(displaySen, includePlusSign = includePlusSign)
     val finalFormattedTarget = MyrFormatter.format(amountSen, includePlusSign = includePlusSign)
     val renderedText = if (isMasked) PrivacyMask.MASKED_MYR else visibleFormatted
 
     Text(
-        text = renderedText,
+        text = if (splitMinorScale != null) {
+            candyMoneyAnnotated(renderedText, splitMinorScale, style.fontSize)
+        } else {
+            androidx.compose.ui.text.AnnotatedString(renderedText)
+        },
         style = style,
         color = color,
         maxLines = 1,

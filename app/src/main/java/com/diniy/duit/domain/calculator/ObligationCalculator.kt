@@ -105,7 +105,9 @@ object ObligationCalculator {
         activeCycle: SalaryCycle?,
         today: LocalDate = LocalDate.now()
     ): Long {
-        if (activeCycle == null) {
+        // BUG-9A-001: a closed cycle that has already ended is no longer "current" (the DAO picks
+        // the active cycle by flag, not by date), so use the calendar-month fallback instead.
+        if (activeCycle == null || isEndedCycle(activeCycle, today)) {
             return YearMonth.from(today).atEndOfMonth().toEpochDay()
         }
         return if (!activeCycle.isOpenEnded && activeCycle.endDateEpochDay < Long.MAX_VALUE) {
@@ -121,10 +123,14 @@ object ObligationCalculator {
         activeCycle: SalaryCycle?,
         today: LocalDate = LocalDate.now()
     ): String {
-        if (activeCycle != null) return activeCycle.label
+        if (activeCycle != null && !isEndedCycle(activeCycle, today)) return activeCycle.label
         val ym = YearMonth.from(today)
         return "${ym.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} ${ym.year}"
     }
+
+    /** A closed cycle whose last day is before [today]. Open-ended cycles never "end" here. */
+    fun isEndedCycle(cycle: SalaryCycle, today: LocalDate = LocalDate.now()): Boolean =
+        !cycle.isOpenEnded && cycle.endDateEpochDay < today.toEpochDay()
 
     fun isDueWithinHorizon(
         dueDateEpochDay: Long,

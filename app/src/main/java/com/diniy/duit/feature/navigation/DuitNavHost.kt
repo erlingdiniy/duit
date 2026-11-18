@@ -1,5 +1,17 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.diniy.duit.feature.navigation
 
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
@@ -14,6 +26,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.Scaffold
@@ -44,6 +57,7 @@ import androidx.navigation.compose.rememberNavController
 import com.diniy.duit.DuitContainer
 import com.diniy.duit.R
 import com.diniy.duit.core.ui.components.PrismaticBackground
+import com.diniy.duit.core.ui.components.DuitQuickActionFab
 import com.diniy.duit.core.ui.components.PrismaticFloatingBottomBar
 import com.diniy.duit.core.ui.components.PrismaticLoadingCard
 import com.diniy.duit.core.ui.components.PrismaticNavItem
@@ -125,6 +139,18 @@ fun DuitAppShell(
     var showNotificationSettings by rememberSaveable { mutableStateOf(false) }
     var activePinFlowMode by rememberSaveable { mutableStateOf<PinFlowMode?>(null) }
     var requestedPlanningTab by rememberSaveable { mutableStateOf<PlanningSectionTab?>(null) }
+    var requestCommissionSection by rememberSaveable { mutableStateOf(false) }
+    val celebrate = com.diniy.duit.core.ui.components.LocalCandyCelebrate.current
+    // Floating + hides while the user scrolls down (so it never covers rows) and returns on scroll up.
+    var fabVisible by remember { mutableStateOf(true) }
+    val fabScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < -4f) fabVisible = false else if (available.y > 4f) fabVisible = true
+                return Offset.Zero
+            }
+        }
+    }
 
     val pendingDeepLink by container.pendingNotificationDeepLink.collectAsStateWithLifecycle()
     val pendingWidgetDeepLink by container.pendingWidgetDeepLink.collectAsStateWithLifecycle()
@@ -197,7 +223,8 @@ fun DuitAppShell(
             onSetReminderTime = notificationViewModel::setReminderTime,
             onSetHideLockScreenAmounts = notificationViewModel::setHideLockScreenAmounts,
             onPermissionUpdated = notificationViewModel::refreshPermissionAndSync,
-            onSendTestNotification = notificationViewModel::sendTestNotification
+            onSendTestNotification = notificationViewModel::sendTestNotification,
+            onOpenNotificationCentre = { showNotificationCentre = true }
         )
         return
     }
@@ -254,6 +281,7 @@ fun DuitAppShell(
                 showSettingsHub = false
             },
             onOpenNotifications = { showNotificationSettings = true },
+            onOpenNotificationCentre = { showNotificationCentre = true },
             onOpenSecurity = { showSecuritySettings = true },
             onOpenSalaryCycles = {
                 showSettingsHub = false
@@ -473,13 +501,33 @@ fun DuitAppShell(
                             items = navItems,
                             currentRoute = currentRoute,
                             onSelect = { navigateToRoute(it.route) },
-                            onQuickAddClick = { showQuickAddSheet = true }
+                            // Experiment 01: quick action lives in the FAB, so the bar shows 4 even tabs.
+                            onQuickAddClick = null
                         )
+                    }
+                },
+                floatingActionButton = {
+                    if (!useNavigationRail) {
+                        val reduced = com.diniy.duit.core.ui.components.rememberReducedMotionEnabled()
+                        // A new tab starts with the quick action visible again.
+                        androidx.compose.runtime.LaunchedEffect(currentRoute) { fabVisible = true }
+                        AnimatedVisibility(
+                            visible = fabVisible && !WindowInsets.isImeVisible,
+                            enter = if (reduced) EnterTransition.None else scaleIn() + fadeIn(),
+                            exit = if (reduced) ExitTransition.None else scaleOut() + fadeOut()
+                        ) {
+                            DuitQuickActionFab(
+                                onClick = { showQuickAddSheet = true },
+                                modifier = Modifier.padding(end = 4.dp, bottom = 4.dp)
+                            )
+                        }
                     }
                 }
             ) { innerPadding ->
                 val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-                val baseBottom = innerPadding.calculateBottomPadding() + 20.dp
+                // Extra clearance so the last list item can scroll above the floating quick action.
+                val fabClearance = if (useNavigationRail) 0.dp else 80.dp
+                val baseBottom = innerPadding.calculateBottomPadding() + 20.dp + fabClearance
                 val screenPadding = PaddingValues(
                     start = if (useNavigationRail) 12.dp else innerPadding.calculateStartPadding(layoutDirection) + 16.dp,
                     end = innerPadding.calculateEndPadding(layoutDirection) + 16.dp,
@@ -497,25 +545,39 @@ fun DuitAppShell(
                         )
                     }
 
-                    Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .nestedScroll(fabScrollConnection)
+                    ) {
                         NavHost(
                             navController = navController,
                             startDestination = DuitRoute.HOME,
+                            // Tabs slide a little toward the tab you picked (left/right by order) and fade.
                             enterTransition = {
                                 if (reducedMotion) EnterTransition.None
-                                else fadeIn(animationSpec = tween(200))
+                                else fadeIn(tween(220)) + slideInHorizontally(tween(260)) {
+                                    tabDirection(initialState.destination.route, targetState.destination.route) * it / 12
+                                }
                             },
                             exitTransition = {
                                 if (reducedMotion) ExitTransition.None
-                                else fadeOut(animationSpec = tween(160))
+                                else fadeOut(tween(160)) + slideOutHorizontally(tween(260)) {
+                                    -tabDirection(initialState.destination.route, targetState.destination.route) * it / 12
+                                }
                             },
                             popEnterTransition = {
                                 if (reducedMotion) EnterTransition.None
-                                else fadeIn(animationSpec = tween(200))
+                                else fadeIn(tween(220)) + slideInHorizontally(tween(260)) {
+                                    tabDirection(initialState.destination.route, targetState.destination.route) * it / 12
+                                }
                             },
                             popExitTransition = {
                                 if (reducedMotion) ExitTransition.None
-                                else fadeOut(animationSpec = tween(160))
+                                else fadeOut(tween(160)) + slideOutHorizontally(tween(260)) {
+                                    -tabDirection(initialState.destination.route, targetState.destination.route) * it / 12
+                                }
                             },
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -533,7 +595,7 @@ fun DuitAppShell(
                                     onOpenTransactionEditor = openNewTransaction,
                                     onDismissError = homeViewModel::dismissError,
                                     onOpenCommissionCalculator = {
-                                        requestedPlanningTab = PlanningSectionTab.COMMITMENTS
+                                        requestCommissionSection = true
                                         navigateToRoute(DuitRoute.PLANNING)
                                     },
                                     onOpenSavingsGoals = {
@@ -584,6 +646,11 @@ fun DuitAppShell(
                                     uiState = planningState,
                                     contentPadding = screenPadding,
                                     onShiftMonth = planningViewModel::shiftMonth,
+                                    onOpenFinancialPreferences = {
+                                        settingsHubRoute = SettingsHubRoute.FINANCIAL
+                                        settingsViewModel.refreshStorageSummary()
+                                        showSettingsHub = true
+                                    },
                                     onSelectPeriodMode = planningViewModel::selectPeriodMode,
                                     onSaveSalaryCycle = planningViewModel::saveSalaryCycle,
                                     onDeleteSalaryCycle = planningViewModel::deleteSalaryCycle,
@@ -633,7 +700,9 @@ fun DuitAppShell(
                                     onExitPreview = planningViewModel::exitSamplePreview,
                                     onDismissError = planningViewModel::dismissError,
                                     requestedSectionTab = requestedPlanningTab,
-                                    onConsumeRequestedSectionTab = { requestedPlanningTab = null }
+                                    onConsumeRequestedSectionTab = { requestedPlanningTab = null },
+                                    requestCommissionSection = requestCommissionSection,
+                                    onConsumeCommissionSection = { requestCommissionSection = false }
                                 )
                             }
                             composable(DuitRoute.INSIGHTS) {
@@ -662,7 +731,7 @@ fun DuitAppShell(
             onDismiss = { showQuickAddSheet = false },
             onSelectTransactionType = openNewTransaction,
             onOpenCommissionTools = {
-                requestedPlanningTab = PlanningSectionTab.COMMITMENTS
+                requestCommissionSection = true
                 navigateToRoute(DuitRoute.PLANNING)
             },
             onOpenCategories = {
@@ -695,6 +764,7 @@ fun DuitAppShell(
                     onSuccess = {
                         showTransactionEditor = false
                         editingTransactionId = null
+                        celebrate("Transaction saved")
                     },
                     onError = onError
                 )
@@ -818,4 +888,14 @@ fun DuitAppShell(
             onDismiss = { showCategorySheet = false }
         )
     }
+}
+
+
+private val TabOrder = listOf(DuitRoute.HOME, DuitRoute.ACTIVITY, DuitRoute.PLANNING, DuitRoute.INSIGHTS)
+
+/** +1 when moving to a tab on the right, -1 to the left, 0 otherwise. */
+private fun tabDirection(from: String?, to: String?): Int {
+    val a = TabOrder.indexOf(from)
+    val b = TabOrder.indexOf(to)
+    return if (a < 0 || b < 0 || a == b) 0 else if (b > a) 1 else -1
 }

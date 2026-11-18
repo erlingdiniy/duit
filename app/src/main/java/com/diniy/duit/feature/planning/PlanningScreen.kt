@@ -1,5 +1,18 @@
 package com.diniy.duit.feature.planning
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.ui.text.style.TextOverflow
+import com.diniy.duit.core.ui.components.candyToneFor
+import com.diniy.duit.core.ui.components.candyTone
+import com.diniy.duit.core.ui.components.CandyTone
+import com.diniy.duit.core.ui.components.CandyMoneyText
+import com.diniy.duit.core.ui.components.CandyStatusBadge
+import com.diniy.duit.core.ui.components.CandySticker
+import com.diniy.duit.core.ui.components.CandyProgressRing
+import com.diniy.duit.core.ui.components.CandyDecor
+import com.diniy.duit.core.ui.components.CandyBubbleCard
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -158,6 +171,9 @@ fun PlanningScreen(
     onDeleteDebt: (Long, () -> Unit, (String) -> Unit) -> Unit,
     onRecordDebtSettlement: (Long, Long, Long, String, Long, String, () -> Unit, (String) -> Unit) -> Unit,
     onOpenCategories: () -> Unit,
+    onOpenFinancialPreferences: () -> Unit = {},
+    requestCommissionSection: Boolean = false,
+    onConsumeCommissionSection: () -> Unit = {},
     onEnablePreview: () -> Unit,
     onExitPreview: () -> Unit,
     onDismissError: () -> Unit,
@@ -174,6 +190,16 @@ fun PlanningScreen(
         }
     }
     var showCycleSheet by rememberSaveable { mutableStateOf(false) }
+    val celebrate = com.diniy.duit.core.ui.components.LocalCandyCelebrate.current
+    // Phase 7B: one Bills & Commitments section visible at a time (less scrolling).
+    var billsSection by rememberSaveable { mutableStateOf(BillsSection.BILLS) }
+    androidx.compose.runtime.LaunchedEffect(requestCommissionSection) {
+        if (requestCommissionSection) {
+            selectedSectionTab = PlanningSectionTab.COMMITMENTS
+            billsSection = BillsSection.INCOME
+            onConsumeCommissionSection()
+        }
+    }
     var showDailySalesSheet by rememberSaveable { mutableStateOf(false) }
     var showRuleEditorSheet by rememberSaveable { mutableStateOf(false) }
     var showSourcesSheet by rememberSaveable { mutableStateOf(false) }
@@ -240,6 +266,11 @@ fun PlanningScreen(
                         label = "Categories",
                         accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.lavender,
                         onClick = onOpenCategories
+                    )
+                    com.diniy.duit.core.ui.components.SpatialGlassIconButton(
+                        icon = androidx.compose.material.icons.Icons.Rounded.Tune,
+                        contentDescription = "Money preferences",
+                        onClick = onOpenFinancialPreferences
                     )
                 }
             }
@@ -520,6 +551,25 @@ fun PlanningScreen(
                         ObligationsOverviewGrid(overview = uiState.obligationsOverview)
                     }
 
+                    item(key = "bills_sections", contentType = "filter_chips") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            BillsSection.entries.forEach { section ->
+                                com.diniy.duit.core.ui.components.SpatialGlassPill(
+                                    label = section.label,
+                                    selected = billsSection == section,
+                                    onClick = { billsSection = section }
+                                )
+                            }
+                        }
+                    }
+
+                    if (billsSection == BillsSection.BILLS) {
+
                     // 2. Monthly & Fixed Commitments
                     item(key = "commitments_title", contentType = "section_heading") {
                         Row(
@@ -600,6 +650,9 @@ fun PlanningScreen(
                         }
                     }
 
+                    }
+
+                    if (billsSection == BillsSection.PAYLATER) {
                     // 3. PayLater & Instalments
                     item(key = "paylater_title", contentType = "section_heading") {
                         Row(
@@ -680,6 +733,9 @@ fun PlanningScreen(
                         }
                     }
 
+                    }
+
+                    if (billsSection == BillsSection.DEBTS) {
                     // 4. Debt Tracker (I Owe & Owed to Me)
                     item(key = "debts_title", contentType = "section_heading") {
                         Row(
@@ -785,6 +841,9 @@ fun PlanningScreen(
                         }
                     }
 
+                    }
+
+                    if (billsSection == BillsSection.INCOME) {
                     // 5. Salary Cycle & Commission Tools (Moved out of Goals; kept accessible in Commitments)
                     item(key = "salary_cycle_card", contentType = "salary_cycle") {
                         SmartSalaryCycleCard(
@@ -912,39 +971,6 @@ fun PlanningScreen(
                         }
                     }
 
-                    // Categories Shortcut
-                    item(key = "categories_shortcut", contentType = "categories") {
-                        PrismaticGlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            tier = GlassCardTier.Standard,
-                            onClick = onOpenCategories,
-                            onClickLabel = "Manage income and expense categories"
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Transaction Categories",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "Create, rename, or archive Income and Expense categories",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(Modifier.width(10.dp))
-                                PrismaticBadge(
-                                    label = "Manage",
-                                    containerColor = glass.lavenderContainer,
-                                    contentColor = glass.onLavenderContainer
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -1127,7 +1153,10 @@ fun PlanningScreen(
                     amountSen,
                     note,
                     submissionId,
-                    { actionSheetMode = null },
+                    {
+                        actionSheetMode = null
+                        celebrate("Added to your goal")
+                    },
                     onError
                 )
             },
@@ -1139,7 +1168,10 @@ fun PlanningScreen(
                     amountSen,
                     note,
                     submissionId,
-                    { actionSheetMode = null },
+                    {
+                        actionSheetMode = null
+                        celebrate("Added to your goal")
+                    },
                     onError
                 )
             },
@@ -1267,7 +1299,10 @@ fun PlanningScreen(
                 },
                 isPreview = uiState.isSamplePreview,
                 onRecordPayment = { id, wId, amt, note, paidAt, subId, onError ->
-                    onRecordCommitmentPayment(id, wId, amt, note, paidAt, subId, { inspectedCommitmentId = null }, onError)
+                    onRecordCommitmentPayment(id, wId, amt, note, paidAt, subId, {
+                        inspectedCommitmentId = null
+                        celebrate("Payment recorded")
+                    }, onError)
                 },
                 onOpenNextOccurrence = { id, onError ->
                     onOpenNextCommitmentOccurrence(id, { inspectedCommitmentId = null }, onError)
@@ -1447,82 +1482,62 @@ private fun SavingsGoalCard(
     onInspect: () -> Unit,
     onQuickAdd: (() -> Unit)?
 ) {
-    val glass = LocalPrismaticGlass.current
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val goal = progress.goal
-    val (accentColor, badgeBg, badgeFg) = SavingsIconMapper.accentColors(goal.accentToken)
+    val tone = candyToneFor(goal.accentToken)
+    val t = candyTone(tone)
 
-    PrismaticGlassCard(
+    // Candy Bubble goal card: progress ring around the goal icon + percent sticker.
+    CandyBubbleCard(
+        tone = tone,
+        decor = CandyDecor.Corner,
         modifier = Modifier.fillMaxWidth(),
-        tier = GlassCardTier.Standard,
-        accentTint = accentColor,
+        shape = RoundedCornerShape(28.dp),
         onClick = onInspect,
-        onClickLabel = "Inspect ${goal.name}",
-        contentPadding = PaddingValues(16.dp)
+        onClickLabel = "Inspect ${goal.name}"
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(badgeBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = SavingsIconMapper.iconFor(goal.iconKey),
-                        contentDescription = null,
-                        tint = badgeFg,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = goal.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "${maskedBalance(progress.savedSen)} of ${maskedBalance(goal.targetAmountSen)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            CandyProgressRing(fraction = progress.progressFraction, tone = tone, size = 58.dp, stroke = 7.dp) {
+                Icon(
+                    imageVector = SavingsIconMapper.iconFor(goal.iconKey),
+                    contentDescription = null,
+                    tint = t.ink,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = goal.name,
+                    style = typography.cardTitle,
+                    color = colors.primaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                CandyMoneyText(maskedBalance(progress.savedSen), typography.cardBalance, colors.primaryText)
+                Text(
+                    text = "of ${maskedBalance(goal.targetAmountSen)}",
+                    style = typography.caption,
+                    color = colors.secondaryText
+                )
             }
             Spacer(Modifier.width(8.dp))
-            PrismaticBadge(
-                label = when (goal.status) {
-                    SavingsGoalStatus.ACTIVE ->
-                        if (progress.overfundedSen > 0L) "${progress.progressPercentDisplay} +" else progress.progressPercentDisplay
-                    SavingsGoalStatus.COMPLETED -> "Completed"
-                    SavingsGoalStatus.ARCHIVED -> "Archived"
-                },
-                containerColor = badgeBg,
-                contentColor = badgeFg
-            )
+            when (goal.status) {
+                SavingsGoalStatus.ACTIVE -> CandySticker(
+                    text = if (progress.overfundedSen > 0L) "${progress.progressPercentDisplay} +" else progress.progressPercentDisplay,
+                    tone = tone,
+                    tilt = 5f
+                )
+                SavingsGoalStatus.COMPLETED -> CandySticker(text = "Completed", tone = CandyTone.Mint, tilt = 5f)
+                SavingsGoalStatus.ARCHIVED -> CandyStatusBadge("Archived", CandyTone.Neutral)
+            }
         }
 
-        Spacer(Modifier.height(10.dp))
-
-        LinearProgressIndicator(
-            progress = { progress.progressFraction },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(50)),
-            color = accentColor,
-            trackColor = glass.glassSurfaceMuted,
-            strokeCap = StrokeCap.Round
-        )
-
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1545,8 +1560,8 @@ private fun SavingsGoalCard(
             }
             Text(
                 text = statusSubtext,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = typography.supportingInfo,
+                color = t.ink,
                 modifier = Modifier.weight(1f)
             )
             if (!isPreview && onQuickAdd != null && goal.status == SavingsGoalStatus.ACTIVE) {
@@ -1554,7 +1569,7 @@ private fun SavingsGoalCard(
                 PrismaticButton(
                     text = "Add Funds",
                     onClick = onQuickAdd,
-                    variant = PrismaticButtonVariant.Ghost
+                    variant = PrismaticButtonVariant.Secondary
                 )
             }
         }
@@ -2015,4 +2030,12 @@ private fun MultiSourceCommissionCard(
             }
         }
     }
+}
+
+/** Phase 7B: sub-sections of the Bills & Commitments tab. */
+private enum class BillsSection(val label: String) {
+    BILLS("Bills"),
+    PAYLATER("PayLater"),
+    DEBTS("Debts"),
+    INCOME("Salary & commission")
 }

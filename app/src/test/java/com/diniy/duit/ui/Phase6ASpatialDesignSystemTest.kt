@@ -37,17 +37,17 @@ class Phase6ASpatialDesignSystemTest {
     }
 
     @Test
-    fun brandPalette_matchesCandyPopSpecificationExactly() {
-        // Phase 6C Candy Pop brand
-        assertEquals(Color(0xFF7B3CFF), PrismaticPalette.Grape)
-        assertEquals(Color(0xFFFF5C8A), PrismaticPalette.Bubblegum)
-        assertEquals(Color(0xFFFFD84D), PrismaticPalette.Sunny)
-        assertEquals(Color(0xFF5EE0C1), PrismaticPalette.Mint)
-        assertEquals(Color(0xFF2A1650), PrismaticPalette.GrapeInk)
-        assertEquals(Color(0xFFF3ECFF), PrismaticPalette.LightCanvas)
-        // Legacy accent names persisted by wallets/goals still resolve to candy colours
+    fun brandPalette_matchesExperiment01SpecificationExactly() {
+        assertEquals(Color(0xFFFFF4E9), PrismaticPalette.Cream)
+        assertEquals(Color(0xFFFF836B), PrismaticPalette.Coral)
+        assertEquals(Color(0xFFFFB84D), PrismaticPalette.Sunny)
+        assertEquals(Color(0xFF79DCC6), PrismaticPalette.Mint)
+        assertEquals(Color(0xFF263B43), PrismaticPalette.DeepTeal)
+        assertEquals(PrismaticPalette.Cream, PrismaticPalette.LightCanvas)
+        assertEquals(PrismaticPalette.DeepTeal, PrismaticPalette.LightInk)
+        // Legacy accent names persisted by wallets/goals still resolve, with no purple identity
         assertEquals(PrismaticPalette.Mint, PrismaticPalette.Aqua)
-        assertEquals(PrismaticPalette.Bubblegum, PrismaticPalette.Peach)
+        assertEquals(PrismaticPalette.Coral, PrismaticPalette.Lavender)
         assertEquals(PrismaticPalette.Sunny, PrismaticPalette.Slate)
     }
 
@@ -63,9 +63,11 @@ class Phase6ASpatialDesignSystemTest {
                 assertTrue("$mode $name on canvas ($onCanvas) must be >= 4.5:1", onCanvas >= 4.5)
                 assertTrue("$mode $name on card ($onCard) must be >= 4.5:1", onCard >= 4.5)
             }
-            val onOvercommittedHero = contrastRatio(PrismaticPalette.GrapeInk, c.bubblegum)
-            assertTrue("$mode ink on bubblegum hero ($onOvercommittedHero) must be >= 4.5:1", onOvercommittedHero >= 4.5)
-            for (accent in listOf(c.aqua, c.lavender, c.skyBlue, c.peach, c.sunny, c.bubblegum)) {
+            val onCoralHero = contrastRatio(c.onCoral, c.coral)
+            assertTrue("$mode ink on coral hero/quick action ($onCoralHero) must be >= 4.5:1", onCoralHero >= 4.5)
+            val onTightHero = contrastRatio(c.onExpenseContainer, c.expenseContainer)
+            assertTrue("$mode ink on overcommitted hero ($onTightHero) must be >= 4.5:1", onTightHero >= 4.5)
+            for (accent in listOf(c.aqua, c.lavender, c.skyBlue, c.peach, c.sunny, c.coral)) {
                 // worst case: accent text on its own 22% tint over the card
                 val tint = androidx.compose.ui.graphics.lerp(c.glassSurface, accent, 0.22f)
                 val r = contrastRatio(c.readableOn(accent), tint)

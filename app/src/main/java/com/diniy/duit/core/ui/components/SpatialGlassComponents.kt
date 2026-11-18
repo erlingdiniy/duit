@@ -1,5 +1,8 @@
 package com.diniy.duit.core.ui.components
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.drawOutline
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
@@ -361,6 +364,7 @@ fun SpatialGlassButton(
 
     val shape = RoundedCornerShape(geometry.radiusMd)
     val isSticker = variant == SpatialButtonVariant.Primary && isInteractive
+    val lastClickAt = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     val stickerShift by animateDpAsState(
         targetValue = if (isSticker && isPressed) geometry.stickerOffset - 1.dp else 0.dp,
         animationSpec = prismaticSpring(
@@ -406,9 +410,8 @@ fun SpatialGlassButton(
         modifier = modifier
             .heightIn(min = geometry.minTouchTarget)
             .graphicsLayer {
-                val s = if (isSticker) 1f else scale
-                scaleX = s
-                scaleY = s
+                scaleX = scale
+                scaleY = scale
             }
             .then(
                 if (isSticker) {
@@ -431,8 +434,16 @@ fun SpatialGlassButton(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = {
-                    performHaptic(HapticFeedbackType.TextHandleMove)
-                    onClick()
+                    // Ignore rapid repeat taps so a Save can't fire twice.
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - lastClickAt.longValue >= 600L) {
+                        lastClickAt.longValue = now
+                        performHaptic(
+                            if (variant == SpatialButtonVariant.Primary) HapticFeedbackType.Confirm
+                            else HapticFeedbackType.TextHandleMove
+                        )
+                        onClick()
+                    }
                 }
             )
             .padding(horizontal = 20.dp, vertical = 12.dp)
@@ -548,7 +559,7 @@ fun SpatialGlassPill(
     }
     val resolvedContent = contentColor ?: when {
         selected && accentColor == null -> colors.onPrimaryAction
-        selected -> com.diniy.duit.core.ui.theme.PrismaticPalette.GrapeInk // accents are bright candy in both modes
+        selected -> com.diniy.duit.core.ui.theme.PrismaticPalette.DeepTeal // accents are bright candy in both modes
         else -> colors.secondaryText
     }
     val pillBorder = if (selected) {
@@ -558,7 +569,8 @@ fun SpatialGlassPill(
     }
 
     val pillModifier = modifier
-        .heightIn(min = if (onClick != null) 38.dp else geometry.pillHeight)
+        .heightIn(min = if (onClick != null) 44.dp else geometry.pillHeight)
+        .then(if (onClick != null) Modifier.minimumInteractiveComponentSize() else Modifier)
         .clip(shape)
         .background(resolvedContainer)
         .border(pillBorder, shape)
@@ -684,17 +696,17 @@ fun SpatialGlassBottomSheetSurface(
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = geometry.radiusXl, topEnd = geometry.radiusXl),
+        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
         containerColor = colors.bottomSheetSurface,
         contentColor = colors.primaryText,
         scrimColor = colors.scrim,
         dragHandle = {
             Box(
                 modifier = Modifier
-                    .padding(top = 12.dp, bottom = 6.dp)
-                    .size(width = 42.dp, height = 4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(colors.secondaryText.copy(alpha = 0.38f))
+                    .padding(top = 12.dp, bottom = 10.dp)
+                    .size(width = 48.dp, height = 6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(colors.coral.copy(alpha = 0.7f))
             )
         },
         modifier = modifier.semantics { paneTitle = title }
@@ -708,11 +720,13 @@ fun SpatialGlassBottomSheetSurface(
                 .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(top = 8.dp, bottom = 24.dp)
+                .padding(top = 4.dp, bottom = 28.dp)
+                // Conditional fields (transfer target, cycle label…) grow in instead of jumping.
+                .animateContentSize(animationSpec = prismaticSpring(rememberReducedMotionEnabled(), 0.85f, androidx.compose.animation.core.Spring.StiffnessMediumLow))
         ) {
             Text(
                 text = title,
-                style = typography.cardBalance,
+                style = typography.screenHeading.copy(fontSize = 24.sp, lineHeight = 30.sp),
                 color = colors.primaryText,
                 modifier = Modifier.semantics { heading() }
             )

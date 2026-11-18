@@ -1,5 +1,9 @@
 package com.diniy.duit.feature.transactions
 
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.text.input.ImeAction
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -238,6 +242,11 @@ fun TransactionEditorSheet(
             val walletHint = selectedWallet?.let {
                 "Balance in ${it.name}: ${MyrFormatter.format(it.balanceSen)}"
             }
+            val amountFocus = remember { FocusRequester() }
+            // New entries start on Amount (the only field always required) to save a tap.
+            LaunchedEffect(Unit) {
+                if (amountInput.isBlank()) runCatching { amountFocus.requestFocus() }
+            }
             PrismaticMoneyField(
                 value = amountInput,
                 onValueChange = {
@@ -246,7 +255,9 @@ fun TransactionEditorSheet(
                 },
                 label = "Amount",
                 supportingText = walletHint,
-                errorText = displayError
+                errorText = displayError,
+                imeAction = ImeAction.Next,
+                modifier = Modifier.focusRequester(amountFocus)
             )
 
             // Title Field

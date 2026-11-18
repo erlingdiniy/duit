@@ -1,5 +1,17 @@
 package com.diniy.duit.feature.obligations
 
+import androidx.compose.foundation.layout.padding
+import com.diniy.duit.core.ui.components.CandyDateTile
+import com.diniy.duit.core.ui.components.CandyMoneyText
+import com.diniy.duit.core.ui.components.CandyPerforation
+import com.diniy.duit.core.ui.components.CandyStatusBadge
+import com.diniy.duit.core.ui.components.CandySticker
+import com.diniy.duit.core.ui.components.CandyTicketShape
+import com.diniy.duit.core.ui.components.CandyTone
+import com.diniy.duit.core.ui.components.SpatialGlassSurface
+import com.diniy.duit.core.ui.components.candyTone
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -213,146 +225,87 @@ fun CommitmentObligationCard(
     summary: CommitmentSummary,
     onClick: () -> Unit
 ) {
-    val glass = LocalPrismaticGlass.current
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val type = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val c = summary.commitment
-    val (badgeBg, badgeFg, note) = when (summary.displayState) {
-        CommitmentDisplayState.OVERDUE -> Triple(
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer,
-            "Overdue · Reserved in Safe to Spend"
-        )
-        CommitmentDisplayState.DUE_TODAY -> Triple(
-            glass.peachContainer,
-            glass.onPeachContainer,
-            "Due today · Reserved in Safe to Spend"
-        )
+    val (tone, note) = when (summary.displayState) {
+        CommitmentDisplayState.OVERDUE -> CandyTone.Coral to "Overdue · Reserved in Safe to Spend"
+        CommitmentDisplayState.DUE_TODAY -> CandyTone.Sunny to "Due today · Reserved in Safe to Spend"
         CommitmentDisplayState.PARTIALLY_PAID -> if (summary.isWithinCurrentCycle) {
-            Triple(
-                glass.skyBlueContainer,
-                glass.onSkyBlueContainer,
-                "Paid ${maskedAmount(c.paidSen)} · ${maskedBalance(summary.remainingSen)} reserved in cycle"
-            )
+            CandyTone.Sky to "Paid ${maskedAmount(c.paidSen)} · ${maskedBalance(summary.remainingSen)} reserved in cycle"
         } else {
-            Triple(
-                glass.lavenderContainer,
-                glass.onLavenderContainer,
-                "Paid ${maskedAmount(c.paidSen)} · Next cycle · Not reserved"
-            )
+            CandyTone.Sky to "Paid ${maskedAmount(c.paidSen)} · Next cycle · Not reserved"
         }
         CommitmentDisplayState.UPCOMING -> if (summary.isWithinCurrentCycle) {
-            Triple(
-                glass.peachContainer,
-                glass.onPeachContainer,
-                "Reserved in cycle · Deducted from Safe to Spend"
-            )
+            CandyTone.Peach to "Reserved in cycle · Deducted from Safe to Spend"
         } else {
-            Triple(
-                glass.lavenderContainer,
-                glass.onLavenderContainer,
-                "Next cycle · Not reserved"
-            )
+            CandyTone.Sky to "Next cycle · Not reserved"
         }
-        CommitmentDisplayState.RESERVED -> Triple(
-            glass.skyBlueContainer,
-            glass.onSkyBlueContainer,
-            "Reserved · Not double-counted"
-        )
-        CommitmentDisplayState.PAID -> Triple(
-            glass.aquaContainer,
-            glass.onAquaContainer,
-            c.nextDueDateEpochDay?.let {
-                "Paid · Next due ${DateTimeFormatters.formatEpochDay(it)}"
-            } ?: "Paid · Excluded from upcoming reserve"
-        )
+        CommitmentDisplayState.RESERVED -> CandyTone.Sky to "Reserved · Not double-counted"
+        CommitmentDisplayState.PAID -> CandyTone.Mint to (
+            c.nextDueDateEpochDay?.let { "Paid · Next due ${DateTimeFormatters.formatEpochDay(it)}" }
+                ?: "Paid · Excluded from upcoming reserve"
+            )
     }
+    val t = candyTone(tone)
+    val urgent = summary.displayState == CommitmentDisplayState.OVERDUE || summary.displayState == CommitmentDisplayState.DUE_TODAY
 
-    PrismaticGlassCard(
+    // Bill ticket: date + details on the left, perforated amount stub on the right.
+    SpatialGlassSurface(
         modifier = Modifier.fillMaxWidth(),
-        tier = if (c.isArchived) GlassCardTier.Muted else GlassCardTier.Standard,
-        accentTint = when (summary.displayState) {
-            CommitmentDisplayState.OVERDUE -> MaterialTheme.colorScheme.error
-            CommitmentDisplayState.PAID -> glass.aquaAccent
-            else -> glass.peachAccent
-        },
+        shape = CandyTicketShape(cornerRadius = 24.dp, notchRadius = 10.dp, notchFraction = 0.70f),
+        containerColor = if (c.isArchived) colors.glassSurfaceSubtle else t.container,
         onClick = onClick,
-        onClickLabel = "Inspect ${c.title}",
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+        onClickLabel = "Inspect ${c.title}"
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Column {
             Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(badgeBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ReceiptLong,
-                        contentDescription = null,
-                        tint = badgeFg,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = c.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${DateTimeFormatters.formatEpochDay(c.dueDateEpochDay)} · ${summary.frequencyLabel} · ${c.category}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = note,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (summary.displayState == CommitmentDisplayState.OVERDUE) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = maskedBalance(c.amountSen),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(4.dp))
-                PrismaticBadge(
-                    label = if (c.isArchived) "Archived" else summary.displayState.label,
-                    containerColor = badgeBg,
-                    contentColor = badgeFg
-                )
-            }
-        }
-        if (c.paidSen > 0L && summary.displayState == CommitmentDisplayState.PARTIALLY_PAID) {
-            Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = { summary.progressFraction },
-                modifier = Modifier
+                Modifier
                     .fillMaxWidth()
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(50)),
-                color = glass.skyBlueAccent,
-                trackColor = glass.glassSurfaceMuted,
-                strokeCap = StrokeCap.Round
-            )
+                    .height(IntrinsicSize.Min)
+                    .padding(start = 14.dp, end = 12.dp, top = 14.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(Modifier.weight(0.70f), verticalAlignment = Alignment.CenterVertically) {
+                    CandyDateTile(epochDay = c.dueDateEpochDay, tone = tone)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(c.title, style = type.cardTitle, color = colors.primaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${summary.frequencyLabel} · ${c.category}", style = type.caption, color = colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            note,
+                            style = type.caption,
+                            color = if (summary.displayState == CommitmentDisplayState.OVERDUE) colors.error else t.ink,
+                            maxLines = 2
+                        )
+                    }
+                }
+                CandyPerforation(t.fill, Modifier.fillMaxHeight().padding(horizontal = 8.dp))
+                Column(Modifier.weight(0.30f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    CandyMoneyText(maskedBalance(c.amountSen), type.transactionAmount, colors.primaryText, minorScale = 0.7f)
+                    Spacer(Modifier.height(6.dp))
+                    val label = if (c.isArchived) "Archived" else summary.displayState.label
+                    if (urgent && !c.isArchived) CandySticker(label, tone, tilt = -4f) else CandyStatusBadge(label, tone)
+                }
+            }
+            if (c.paidSen > 0L && summary.displayState == CommitmentDisplayState.PARTIALLY_PAID) {
+                Box(
+                    Modifier
+                        .padding(start = 14.dp, end = 14.dp, bottom = 14.dp)
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(colors.glassSurfaceElevated)
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(summary.progressFraction.coerceIn(0.02f, 1f))
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(50))
+                            .background(t.fill)
+                    )
+                }
+            }
         }
     }
 }

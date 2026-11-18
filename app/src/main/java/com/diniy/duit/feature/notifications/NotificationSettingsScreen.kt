@@ -69,7 +69,8 @@ fun NotificationSettingsScreen(
     onSetReminderTime: (Int, Int) -> Unit,
     onSetHideLockScreenAmounts: (Boolean) -> Unit,
     onPermissionUpdated: () -> Unit,
-    onSendTestNotification: () -> Unit
+    onSendTestNotification: () -> Unit,
+    onOpenNotificationCentre: (() -> Unit)? = null
 ) {
     val glass = LocalPrismaticGlass.current
     var showTimePicker by rememberSaveable { mutableStateOf(false) }
@@ -111,6 +112,18 @@ fun NotificationSettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+            }
+
+            if (onOpenNotificationCentre != null) {
+                item(key = "centre_link") {
+                    com.diniy.duit.core.ui.components.SpatialCompactListRow(
+                        title = "Notification Centre",
+                        subtitle = "Recent reminders and alerts",
+                        trailingPrimaryText = "Open",
+                        trailingPrimaryColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.primaryAction,
+                        onClick = onOpenNotificationCentre
+                    )
                 }
             }
 
