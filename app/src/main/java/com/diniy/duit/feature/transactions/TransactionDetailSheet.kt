@@ -1,5 +1,6 @@
 package com.diniy.duit.feature.transactions
 
+import com.diniy.duit.core.ui.state.maskedBalance
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -90,9 +91,9 @@ fun TransactionDetailSheet(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = when (transaction.type) {
-                        TransactionType.INCOME -> MyrFormatter.format(transaction.amountSen, includePlusSign = true)
-                        TransactionType.EXPENSE -> MyrFormatter.format(-transaction.amountSen)
-                        TransactionType.TRANSFER -> MyrFormatter.format(transaction.amountSen)
+                        TransactionType.INCOME -> maskedBalance(transaction.amountSen, includePlusSign = true)
+                        TransactionType.EXPENSE -> maskedBalance(-transaction.amountSen)
+                        TransactionType.TRANSFER -> maskedBalance(transaction.amountSen)
                     },
                     style = MaterialTheme.typography.displaySmall,
                     color = if (transaction.type == TransactionType.INCOME) {
@@ -161,7 +162,7 @@ fun TransactionDetailSheet(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete Transaction?") },
             text = {
-                Text("Deleting \"${transaction.title}\" will reverse ${MyrFormatter.format(transaction.amountSen)} on the affected wallet balance(s).")
+                Text("Deleting \"${transaction.title}\" will reverse ${maskedBalance(transaction.amountSen)} on the affected wallet balance(s).")
             },
             confirmButton = {
                 TextButton(

@@ -1546,14 +1546,14 @@ private fun SavingsGoalCard(
         ) {
             val statusSubtext = buildString {
                 if (progress.overfundedSen > 0L) {
-                    append("Overfunded by ${MyrFormatter.format(progress.overfundedSen)}")
+                    append("Overfunded by ${maskedBalance(progress.overfundedSen)}")
                 } else if (progress.remainingSen == 0L) {
                     append("Goal reached")
                 } else {
-                    append("${MyrFormatter.format(progress.remainingSen)} left")
+                    append("${maskedBalance(progress.remainingSen)} left")
                 }
                 if (progress.suggestedMonthlySen != null && progress.suggestedMonthlySen > 0L) {
-                    append(" · ${MyrFormatter.format(progress.suggestedMonthlySen)}/mo")
+                    append(" · ${maskedBalance(progress.suggestedMonthlySen)}/mo")
                 } else if (goal.targetDateEpochDay == null) {
                     append(" · Flexible deadline")
                 }
@@ -1774,7 +1774,7 @@ private fun DailySalesSummaryCard(
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Minimum target: ${MyrFormatter.format(estimate.ruleVersion.minMonthlySalesSen)}",
+            text = "Minimum target: ${maskedBalance(estimate.ruleVersion.minMonthlySalesSen)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1846,8 +1846,8 @@ private fun CompanyCommissionMemoCard(
         Spacer(Modifier.height(4.dp))
         Text(
             text = buildString {
-                append("Salary Cost ${MyrFormatter.format(estimate.salaryCostSen)}")
-                append(" · Baseline ${MyrFormatter.format(estimate.baselineSen)}")
+                append("Salary Cost ${maskedBalance(estimate.salaryCostSen)}")
+                append(" · Baseline ${maskedBalance(estimate.baselineSen)}")
                 if (estimate.appliedRateBps > 0) {
                     append(" · Rate ${MyrFormatter.formatBpsAsPercent(estimate.appliedRateBps)}")
                 }
@@ -1881,7 +1881,7 @@ private fun CompanyCommissionMemoCard(
             Column {
                 Text("Actual Gross", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    text = if (actualGrossSen > 0L) MyrFormatter.format(actualGrossSen) else "Not received",
+                    text = if (actualGrossSen > 0L) maskedBalance(actualGrossSen) else "Not received",
                     style = MaterialTheme.typography.titleSmall
                 )
             }
@@ -1890,8 +1890,8 @@ private fun CompanyCommissionMemoCard(
                 Text(
                     text = when {
                         actualNetSen <= 0L -> "Unavailable"
-                        !deductionsEntered -> "${MyrFormatter.format(actualNetSen)} (no ded.)"
-                        else -> MyrFormatter.format(actualNetSen)
+                        !deductionsEntered -> "${maskedBalance(actualNetSen)} (no ded.)"
+                        else -> maskedBalance(actualNetSen)
                     },
                     style = MaterialTheme.typography.titleSmall
                 )
@@ -1899,7 +1899,7 @@ private fun CompanyCommissionMemoCard(
             Column(horizontalAlignment = Alignment.End) {
                 Text("Difference", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    text = if (actualGrossSen > 0L) MyrFormatter.format(differenceSen, includePlusSign = true) else "—",
+                    text = if (actualGrossSen > 0L) maskedBalance(differenceSen, includePlusSign = true) else "—",
                     style = MaterialTheme.typography.titleSmall
                 )
             }
@@ -1907,7 +1907,7 @@ private fun CompanyCommissionMemoCard(
         if (deductionsEntered) {
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Payslip deductions · EPF ${MyrFormatter.format(epfSen)} · SOCSO ${MyrFormatter.format(socsoSen)} · EIS ${MyrFormatter.format(eisSen)}",
+                text = "Payslip deductions · EPF ${maskedBalance(epfSen)} · SOCSO ${maskedBalance(socsoSen)} · EIS ${maskedBalance(eisSen)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1979,21 +1979,21 @@ private fun MultiSourceCommissionCard(
                 Text("Expected/Est.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val expected = record.estimatedGrossSen ?: record.amountSen
                 Text(
-                    text = if (expected > 0L) MyrFormatter.format(expected) else "Variable",
+                    text = if (expected > 0L) maskedBalance(expected) else "Variable",
                     style = MaterialTheme.typography.titleSmall
                 )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Actual Gross", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    text = MyrFormatter.format(record.actualGrossSen),
+                    text = maskedBalance(record.actualGrossSen),
                     style = MaterialTheme.typography.titleSmall
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("Net Received", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    text = MyrFormatter.format(record.receivedNetSen),
+                    text = maskedBalance(record.receivedNetSen),
                     style = MaterialTheme.typography.titleSmall,
                     color = if (record.receivedNetSen > 0L) glass.positiveText else MaterialTheme.colorScheme.onSurface
                 )

@@ -94,27 +94,7 @@ fun SpatialAnimatedCounterText(
         privacySettings.privacyModeEnabled
     }
 
-    val animatedSen = remember { Animatable(amountSen.toFloat()) }
-
-    LaunchedEffect(amountSen, isMasked, reducedMotion, motionPrefs.animationIntensity) {
-        if (isMasked || reducedMotion) {
-            animatedSen.snapTo(amountSen.toFloat())
-        } else {
-            val duration = motionTokens.resolveDurationMs(
-                baseDurationMs = motionTokens.durationCounterMs,
-                reduceMotion = false,
-                intensity = motionPrefs.animationIntensity
-            )
-            animatedSen.animateTo(
-                targetValue = amountSen.toFloat(),
-                animationSpec = prismaticTween(
-                    reducedMotion = false,
-                    durationMillis = duration,
-                    intensity = motionPrefs.animationIntensity
-                )
-            )
-        }
-    }
+    // Phase 9C: the counting Animatable was removed (Phase 8B shows real values only).
 
     // Phase 8B: money is shown at its real value immediately (no counting through
     // intermediate, misleading amounts). The entrance motion lives on the card instead.

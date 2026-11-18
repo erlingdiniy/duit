@@ -169,9 +169,9 @@ fun WalletDetailSheet(
                         val isIncomingTransfer = tx.type == TransactionType.TRANSFER && tx.targetWalletId == wallet.id
                         val signedDisplay = when {
                             tx.type == TransactionType.INCOME || isIncomingTransfer ->
-                                MyrFormatter.format(tx.amountSen, includePlusSign = true)
+                                maskedBalance(tx.amountSen, includePlusSign = true)
                             else ->
-                                MyrFormatter.format(-tx.amountSen)
+                                maskedBalance(-tx.amountSen)
                         }
                         val amountColor = if (tx.type == TransactionType.INCOME || isIncomingTransfer) {
                             glass.positiveText

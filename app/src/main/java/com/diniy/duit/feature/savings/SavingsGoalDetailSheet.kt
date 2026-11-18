@@ -1,5 +1,6 @@
 package com.diniy.duit.feature.savings
 
+import com.diniy.duit.core.ui.state.maskedBalance
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -121,12 +122,12 @@ fun SavingsGoalDetailSheet(
                     }
                     Column {
                         Text(
-                            text = MyrFormatter.format(progress.savedSen),
+                            text = maskedBalance(progress.savedSen),
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "of ${MyrFormatter.format(goal.targetAmountSen)}",
+                            text = "of ${maskedBalance(goal.targetAmountSen)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -165,11 +166,11 @@ fun SavingsGoalDetailSheet(
             ) {
                 Text(
                     text = if (progress.overfundedSen > 0L) {
-                        "Overfunded by ${MyrFormatter.format(progress.overfundedSen)}"
+                        "Overfunded by ${maskedBalance(progress.overfundedSen)}"
                     } else if (progress.remainingSen == 0L) {
                         "Target reached"
                     } else {
-                        "Remaining ${MyrFormatter.format(progress.remainingSen)}"
+                        "Remaining ${maskedBalance(progress.remainingSen)}"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (progress.overfundedSen > 0L || progress.remainingSen == 0L) {
@@ -190,7 +191,7 @@ fun SavingsGoalDetailSheet(
             if (progress.suggestedMonthlySen != null && progress.suggestedMonthlySen > 0L) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "Suggested pace: ${MyrFormatter.format(progress.suggestedMonthlySen)} / month",
+                    text = "Suggested pace: ${maskedBalance(progress.suggestedMonthlySen)} / month",
                     style = MaterialTheme.typography.labelMedium,
                     color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.readableOn(accentColor)
                 )
@@ -272,7 +273,7 @@ fun SavingsGoalDetailSheet(
                                 )
                             }
                             Text(
-                                text = MyrFormatter.format(alloc.allocatedSen),
+                                text = maskedBalance(alloc.allocatedSen),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = glass.positiveText
                             )
@@ -353,7 +354,7 @@ fun SavingsGoalDetailSheet(
                                 move.type == SavingsMovementType.TRANSFER_TO_SPENDING) ||
                                 (move.type == SavingsMovementType.REASSIGN && move.goalId == goal.id)
                             Text(
-                                text = (if (isOutflow) "-" else "+") + MyrFormatter.format(move.amountSen),
+                                text = (if (isOutflow) "-" else "+") + maskedBalance(move.amountSen),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = if (isOutflow) glass.cautionText else glass.positiveText
                             )
@@ -419,13 +420,13 @@ fun SavingsGoalDetailSheet(
                 Text(
                     if (confirm == PendingGoalConfirmAction.ARCHIVE) {
                         if (progress.savedSen > 0L) {
-                            "Archiving releases ${MyrFormatter.format(progress.savedSen)} allocated to this goal back into unreserved wallet funds and preserves its history."
+                            "Archiving releases ${maskedBalance(progress.savedSen)} allocated to this goal back into unreserved wallet funds and preserves its history."
                         } else {
                             "Archived goals are hidden from your active goal list while preserving history."
                         }
                     } else {
                         if (progress.savedSen > 0L) {
-                            "Deleting permanently removes this goal and releases ${MyrFormatter.format(progress.savedSen)} back into unreserved wallet funds."
+                            "Deleting permanently removes this goal and releases ${maskedBalance(progress.savedSen)} back into unreserved wallet funds."
                         } else {
                             "This permanently removes the savings goal and its audit history. Wallet balances are unaffected."
                         }
