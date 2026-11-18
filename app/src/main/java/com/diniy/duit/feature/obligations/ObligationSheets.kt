@@ -347,7 +347,7 @@ fun CommitmentDetailSheet(
                 Spacer(Modifier.height(10.dp))
                 LinearProgressIndicator(
                     progress = { summary.progressFraction },
-                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                    modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50)),
                     color = glass.peachAccent,
                     trackColor = glass.glassSurfaceMuted,
                     strokeCap = StrokeCap.Round
@@ -732,7 +732,7 @@ fun PayLaterDetailSheet(
             Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(
                 progress = { summary.progressFraction },
-                modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
+                modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50)),
                 color = glass.lavenderAccent,
                 trackColor = glass.glassSurfaceMuted,
                 strokeCap = StrokeCap.Round
@@ -1087,7 +1087,7 @@ fun DebtDetailSheet(
             Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(
                 progress = { summary.progressFraction },
-                modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
+                modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50)),
                 color = if (isOwe) glass.peachAccent else glass.aquaAccent,
                 trackColor = glass.glassSurfaceMuted,
                 strokeCap = StrokeCap.Round

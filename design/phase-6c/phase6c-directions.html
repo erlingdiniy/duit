@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>duit. Phase 6C directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&family=Fredoka:wght@400;500;600;700&family=Shrikhand&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --page:#f4f1ea; --ink:#16130f; --muted:#6b645a; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--page); color:var(--ink); font-family:"DM Sans",system-ui,sans-serif; padding:32px 16px 64px; }
+  header.page { max-width:1100px; margin:0 auto 28px; }
+  header.page h1 { font-family:"Archivo Black",sans-serif; font-size:32px; letter-spacing:-0.5px; }
+  header.page p { color:var(--muted); margin-top:6px; max-width:640px; line-height:1.5; }
+  .grid { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:28px; justify-items:center; }
+  .col { width:100%; max-width:340px; }
+  .label { font-family:"Archivo Black",sans-serif; font-size:20px; margin-bottom:4px; }
+  .desc { font-size:14px; color:var(--muted); line-height:1.45; margin-bottom:14px; min-height:60px; }
+  .phone { width:100%; height:700px; border-radius:36px; overflow:hidden; position:relative; border:8px solid #16130f; }
+  .scroll { padding:18px 16px 110px; height:100%; overflow:hidden; }
+  .row { display:flex; align-items:center; justify-content:space-between; }
+  .num { font-variant-numeric:tabular-nums; }
+  .tap { transition:transform .12s cubic-bezier(.3,1.6,.5,1), box-shadow .12s; cursor:pointer; user-select:none; }
+  .notes { margin-top:12px; font-size:13px; line-height:1.5; color:var(--muted); }
+  .notes b { color:var(--ink); font-weight:700; }
+  @media (prefers-reduced-motion: reduce) { .tap, .wob { transition:none !important; animation:none !important; } }
+
+  /* A: Sticker Pop */
+  .a { background:#fff7e8; font-family:"Space Grotesk",sans-serif; color:#16130f; }
+  .a .card { background:#fff; border:2.5px solid #16130f; border-radius:20px; box-shadow:4px 4px 0 #16130f; }
+  .a .tap:active { transform:translate(4px,4px); box-shadow:0 0 0 #16130f; }
+  .a .logo { font-family:"Archivo Black"; font-size:26px; }
+  .a .chip { font-size:12px; font-weight:700; border:2px solid #16130f; border-radius:99px; padding:3px 10px; background:#c6f432; }
+  .a .hero { background:#ff4fa3; padding:18px; margin-top:16px; color:#16130f; transform:rotate(-1.2deg); }
+  .a .hero .big { font-family:"Archivo Black"; font-size:40px; letter-spacing:-1px; }
+  .a .sticker { position:absolute; right:-8px; top:-14px; background:#ffd23f; border:2.5px solid #16130f; border-radius:99px; padding:6px 10px; font-weight:700; font-size:12px; transform:rotate(8deg); }
+  .a .wallets { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+  .a .w { padding:12px; }
+  .a h3 { font-family:"Archivo Black"; font-size:16px; margin:18px 0 8px; }
+  .a .tx { padding:10px 12px; margin-bottom:8px; }
+  .a .ic { width:34px; height:34px; border:2px solid #16130f; border-radius:10px; display:grid; place-items:center; font-weight:700; }
+  .a .nav { position:absolute; left:12px; right:12px; bottom:12px; background:#16130f; border-radius:22px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; color:#fff7e8; font-size:11px; font-weight:700; }
+  .a .add { width:52px; height:52px; border-radius:16px; background:#c6f432; color:#16130f; border:2.5px solid #fff7e8; display:grid; place-items:center; font-size:28px; font-family:"Archivo Black"; margin-top:-26px; box-shadow:3px 3px 0 #fff7e8; }
+
+  /* B: Candy Bubble */
+  .b { background:#f3ecff; font-family:"Fredoka",sans-serif; color:#2a1650; }
+  .b .card { background:#fff; border-radius:28px; }
+  .b .tap:active { transform:scale(.94); }
+  .b .logo { font-weight:700; font-size:28px; color:#7b3cff; }
+  .b .hero { background:#7b3cff; color:#fff; padding:20px; border-radius:32px; margin-top:16px; position:relative; overflow:hidden; }
+  .b .hero .big { font-weight:700; font-size:42px; }
+  .b .blob { position:absolute; border-radius:50%; }
+  .b .face { position:absolute; right:14px; top:14px; width:56px; height:56px; background:#ffd84d; border-radius:50%; display:grid; place-items:center; font-size:20px; color:#2a1650; font-weight:700; }
+  .b .wob { animation:wob 2.6s ease-in-out infinite; }
+  @keyframes wob { 0%,100% { transform:rotate(-6deg) translateY(0);} 50% { transform:rotate(6deg) translateY(-4px);} }
+  .b .wallets { display:flex; gap:10px; margin-top:14px; }
+  .b .w { flex:1; padding:14px; border-radius:24px; }
+  .b h3 { font-weight:600; font-size:17px; margin:18px 0 8px; }
+  .b .tx { padding:10px 12px; margin-bottom:8px; border-radius:22px; }
+  .b .ic { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-weight:600; }
+  .b .nav { position:absolute; left:14px; right:14px; bottom:14px; background:#fff; border-radius:99px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:600; color:#8c7bb0; box-shadow:0 8px 24px rgba(123,60,255,.18); }
+  .b .add { width:54px; height:54px; border-radius:50%; background:#ff5c8a; color:#fff; display:grid; place-items:center; font-size:30px; font-weight:700; margin-top:-30px; border:5px solid #f3ecff; }
+
+  /* C: Retro Groove */
+  .c { background:#fff1dc; font-family:"DM Sans",sans-serif; color:#2b1a10; }
+  .c .card { background:#fffaf2; border:2px solid #2b1a10; border-radius:18px; }
+  .c .tap:active { transform:scale(.96) rotate(-1deg); }
+  .c .logo { font-family:"Shrikhand"; font-size:28px; color:#e8501f; }
+  .c .hero { margin-top:16px; border-radius:26px; padding:18px; color:#2b1a10; background:repeating-linear-gradient(180deg,#ffb627 0 18px,#ff8a1f 18px 36px,#e8501f 36px 54px); border:2px solid #2b1a10; }
+  .c .hero .inner { background:#fff1dc; border:2px solid #2b1a10; border-radius:18px; padding:14px; }
+  .c .hero .big { font-family:"Shrikhand"; font-size:38px; color:#1c6e64; }
+  .c .wallets { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .c .w { padding:12px; }
+  .c h3 { font-family:"Shrikhand"; font-size:18px; margin:16px 0 8px; color:#2b1a10; }
+  .c .tx { padding:10px 12px; margin-bottom:8px; }
+  .c .ic { width:36px; height:36px; border-radius:50% 50% 50% 8px; display:grid; place-items:center; font-weight:700; border:2px solid #2b1a10; }
+  .c .nav { position:absolute; left:12px; right:12px; bottom:12px; background:#1c6e64; border:2px solid #2b1a10; border-radius:24px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; color:#fff1dc; font-size:11px; font-weight:700; }
+  .c .add { width:54px; height:54px; border-radius:50%; background:#ffb627; color:#2b1a10; border:2px solid #2b1a10; display:grid; place-items:center; font-size:30px; font-family:"Shrikhand"; margin-top:-28px; }
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>duit. Phase 6C: pick a direction</h1>
+  <p>Three original takes on the Home screen, all using the same real data and sections (Safe to Spend, wallets, upcoming bill, recent activity, 4-tab nav with quick add). Tap the cards and buttons to feel the press animation. Fonts are open-license and can be bundled in the app.</p>
+</header>
+
+<div class="grid">
+  <!-- A -->
+  <div class="col">
+    <div class="label">A. Sticker Pop</div>
+    <div class="desc">Neo-brutal and loud. Thick ink outlines, hard offset shadows, hot pink and lime, tilted stickers. Buttons physically "press in".</div>
+    <div class="phone a"><div class="scroll">
+      <div class="row"><span class="logo">duit.</span><span class="chip">Nov cycle · 9 days</span></div>
+      <div class="card hero tap" style="position:relative">
+        <span class="sticker">payday 25th!</span>
+        <div style="font-weight:700;font-size:13px">SAFE TO SPEND</div>
+        <div class="big num">RM2,850</div>
+        <div style="font-size:13px;font-weight:500" class="num">Total RM4,500 · Saved RM1,500</div>
+      </div>
+      <div class="wallets">
+        <div class="card w tap"><div class="ic" style="background:#ffd23f">M</div><div style="font-size:12px;margin-top:8px">Maybank</div><div class="num" style="font-weight:700">RM3,000</div></div>
+        <div class="card w tap"><div class="ic" style="background:#7ad7ff">T</div><div style="font-size:12px;margin-top:8px">Touch 'n Go</div><div class="num" style="font-weight:700">RM300</div></div>
+      </div>
+      <h3>Coming up</h3>
+      <div class="card tx tap row" style="background:#ffd23f"><div class="row" style="gap:10px"><div class="ic" style="background:#fff">F</div><div><div style="font-weight:700;font-size:14px">Fibre</div><div style="font-size:12px">Sat, 22 Nov</div></div></div><div class="num" style="font-weight:700">RM150</div></div>
+      <h3>Recent</h3>
+      <div class="card tx tap row"><div class="row" style="gap:10px"><div class="ic" style="background:#ff4fa3">N</div><div><div style="font-weight:700;font-size:14px">Nasi Kandar</div><div style="font-size:12px">Food · Maybank</div></div></div><div class="num" style="font-weight:700">−RM28.50</div></div>
+      <div class="card tx tap row"><div class="row" style="gap:10px"><div class="ic" style="background:#c6f432">S</div><div><div style="font-weight:700;font-size:14px">Monthly Salary</div><div style="font-size:12px">Salary · Maybank</div></div></div><div class="num" style="font-weight:700">+RM3,200</div></div>
+    </div>
+    <div class="nav"><span>Home</span><span>Activity</span><span class="add tap">+</span><span>Planning</span><span>Insights</span></div></div>
+    <div class="notes"><b>Feel:</b> confident, cheeky, high contrast. <b>Risk:</b> can feel heavy on dense screens like Planning; needs restraint on borders there.</div>
+  </div>
+
+  <!-- B -->
+  <div class="col">
+    <div class="label">B. Candy Bubble</div>
+    <div class="desc">Cute and squishy. Big rounded shapes, grape purple with bubblegum pink and sunny yellow, a wobbling coin buddy. Everything squishes on tap.</div>
+    <div class="phone b"><div class="scroll">
+      <div class="row"><span class="logo">duit.</span><span style="background:#fff;border-radius:99px;padding:5px 12px;font-size:12px;font-weight:600;color:#7b3cff">9 days to payday</span></div>
+      <div class="hero tap">
+        <div class="blob" style="width:140px;height:140px;background:#9a66ff;right:-40px;bottom:-60px"></div>
+        <div class="blob" style="width:60px;height:60px;background:#ff5c8a;right:70px;bottom:-24px"></div>
+        <div class="face wob">:)</div>
+        <div style="font-size:14px;font-weight:500;position:relative">Safe to spend</div>
+        <div class="big num" style="position:relative">RM2,850</div>
+        <div class="num" style="font-size:13px;position:relative;opacity:.9">Total RM4,500 · Saved RM1,500</div>
+      </div>
+      <div class="wallets">
+        <div class="w tap" style="background:#ffd84d"><div style="font-size:12px;font-weight:500">Maybank</div><div class="num" style="font-weight:700;font-size:18px">RM3,000</div></div>
+        <div class="w tap" style="background:#7fe0d0"><div style="font-size:12px;font-weight:500">Touch 'n Go</div><div class="num" style="font-weight:700;font-size:18px">RM300</div></div>
+      </div>
+      <h3>Coming up</h3>
+      <div class="card tx tap row"><div class="row" style="gap:10px"><div class="ic" style="background:#ffe1ea;color:#c2185b">F</div><div><div style="font-weight:600;font-size:14px">Fibre</div><div style="font-size:12px;color:#8c7bb0">Sat, 22 Nov</div></div></div><div class="num" style="font-weight:600">RM150</div></div>
+      <h3>Recent</h3>
+      <div class="card tx tap row"><div class="row" style="gap:10px"><div class="ic" style="background:#fff1c2;color:#8a5a00">N</div><div><div style="font-weight:600;font-size:14px">Nasi Kandar</div><div style="font-size:12px;color:#8c7bb0">Food · Maybank</div></div></div><div class="num" style="font-weight:600;color:#d81b60">−RM28.50</div></div>
+      <div class="card tx tap row"><div class="row" style="gap:10px"><div class="ic" style="background:#d6f7f1;color:#0b6b5c">S</div><div><div style="font-weight:600;font-size:14px">Monthly Salary</div><div style="font-size:12px;color:#8c7bb0">Salary · Maybank</div></div></div><div class="num" style="font-weight:600;color:#0b7a68">+RM3,200</div></div>
+    </div>
+    <div class="nav"><span style="color:#7b3cff">Home</span><span>Activity</span><span class="add tap">+</span><span>Planning</span><span>Insights</span></div></div>
+    <div class="notes"><b>Feel:</b> friendly, soft, very "cute". <b>Risk:</b> least "bold and funky" of the three; can drift childish without strong type.</div>
+  </div>
+
+  <!-- C -->
+  <div class="col">
+    <div class="label">C. Retro Groove</div>
+    <div class="desc">70s funk. Sunset stripes in mustard, tangerine and red with deep teal, fat script display, leaf-shaped icons. Taps tilt and bounce.</div>
+    <div class="phone c"><div class="scroll">
+      <div class="row"><span class="logo">duit.</span><span style="font-size:12px;font-weight:700;border:2px solid #2b1a10;border-radius:99px;padding:3px 10px;background:#ffb627">payday in 9</span></div>
+      <div class="hero tap"><div class="inner">
+        <div style="font-size:13px;font-weight:700">Safe to spend</div>
+        <div class="big num">RM2,850</div>
+        <div class="num" style="font-size:13px">Total RM4,500 · Saved RM1,500</div>
+      </div></div>
+      <div class="wallets">
+        <div class="card w tap"><div class="ic" style="background:#ffb627">M</div><div style="font-size:12px;margin-top:8px">Maybank</div><div class="num" style="font-weight:700">RM3,000</div></div>
+        <div class="card w tap"><div class="ic" style="background:#7cc6b8">T</div><div style="font-size:12px;margin-top:8px">Touch 'n Go</div><div class="num" style="font-weight:700">RM300</div></div>
+      </div>
+      <h3>Coming up</h3>
+      <div class="card tx tap row"><div class="row" style="gap:10px"><div class="ic" style="background:#ff8a1f">F</div><div><div style="font-weight:700;font-size:14px">Fibre</div><div style="font-size:12px">Sat, 22 Nov</div></div></div><div class="num" style="font-weight:700">RM150</div></div>
+      <h3>Recent</h3>
+      <div class="card tx tap row"><div class="row" style="gap:10px"><div class="ic" style="background:#e8501f;color:#fff1dc">N</div><div><div style="font-weight:700;font-size:14px">Nasi Kandar</div><div style="font-size:12px">Food · Maybank</div></div></div><div class="num" style="font-weight:700;color:#b8321a">−RM28.50</div></div>
+      <div class="card tx tap row"><div class="row" style="gap:10px"><div class="ic" style="background:#1c6e64;color:#fff1dc">S</div><div><div style="font-weight:700;font-size:14px">Monthly Salary</div><div style="font-size:12px">Salary · Maybank</div></div></div><div class="num" style="font-weight:700;color:#1c6e64">+RM3,200</div></div>
+    </div>
+    <div class="nav"><span>Home</span><span>Activity</span><span class="add tap">+</span><span>Planning</span><span>Insights</span></div></div>
+    <div class="notes"><b>Feel:</b> warm, groovy, very distinctive. <b>Risk:</b> script font must stay on headings and hero only; numbers elsewhere use the clean sans.</div>
+  </div>
+</div>
+</body>
+</html>

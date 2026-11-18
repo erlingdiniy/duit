@@ -51,57 +51,21 @@ fun PrismaticButton(
     val isInteractive = enabled && !isLoading
 
     when (variant) {
-        PrismaticButtonVariant.Primary -> {
-            Button(
+        // Phase 6C: Primary/Secondary share the Candy Pop SpatialGlassButton (sticker primary).
+        PrismaticButtonVariant.Primary, PrismaticButtonVariant.Secondary -> {
+            SpatialGlassButton(
+                text = text,
                 onClick = onClick,
-                enabled = isInteractive,
-                shape = shape,
-                contentPadding = contentPadding,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = modifier
-                    .heightIn(min = 48.dp)
-                    .semantics(mergeDescendants = true) {}
-            ) {
-                ButtonInnerContent(
-                    text = text,
-                    isLoading = isLoading,
-                    leadingIcon = leadingIcon
-                )
-            }
-        }
-
-        PrismaticButtonVariant.Secondary -> {
-            OutlinedButton(
-                onClick = onClick,
-                enabled = isInteractive,
-                shape = shape,
-                contentPadding = contentPadding,
-                border = BorderStroke(
-                    1.dp,
-                    if (isInteractive) glass.glassBorderSubtle.copy(alpha = 0.25f)
-                    else MaterialTheme.colorScheme.outlineVariant
-                ),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = glass.glassSurfaceElevated,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    disabledContainerColor = glass.glassSurfaceMuted,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = modifier
-                    .heightIn(min = 48.dp)
-                    .semantics(mergeDescendants = true) {}
-            ) {
-                ButtonInnerContent(
-                    text = text,
-                    isLoading = isLoading,
-                    leadingIcon = leadingIcon
-                )
-            }
+                modifier = modifier,
+                variant = if (variant == PrismaticButtonVariant.Primary) {
+                    SpatialButtonVariant.Primary
+                } else {
+                    SpatialButtonVariant.SecondaryGlass
+                },
+                enabled = enabled,
+                isLoading = isLoading,
+                leadingIcon = leadingIcon
+            )
         }
 
         PrismaticButtonVariant.Ghost -> {

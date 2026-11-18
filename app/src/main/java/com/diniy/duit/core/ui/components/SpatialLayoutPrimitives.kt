@@ -233,7 +233,7 @@ fun SpatialBentoMetricCard(
             Text(
                 text = item.caption,
                 style = typography.supportingInfo,
-                color = item.accentColor ?: colors.secondaryText,
+                color = item.accentColor?.let { colors.readableOn(it) } ?: colors.secondaryText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

@@ -3,107 +3,120 @@ package com.diniy.duit.core.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Centralized palette for Prismatic Spatial Glass.
- * Preserves all existing [PrismaticPalette] tokens while providing independently tuned
- * Light and Dark spatial glass, border, highlight, text, and semantic financial tokens.
+ * Candy Pop palette (Phase 6C): 70% Candy Bubble + 30% Sticker Pop.
+ * Legacy accent names (Aqua, Lavender, SkyBlue, Peach, Slate) are kept because wallets,
+ * goals and widgets persist them as [com.diniy.duit.domain.model.PrismaticAccentToken];
+ * only their colours change.
  */
 object PrismaticPalette {
-    // Official Brand Palette (Phase 6A Section 4)
-    val Aqua = Color(0xFF42CDBB)
-    val Lavender = Color(0xFF9A83E8)
-    val SkyBlue = Color(0xFF75B9ED)
-    val Peach = Color(0xFFF3B78B)
-    val Slate = Color(0xFF263A55)
+    // Candy Pop brand
+    val Grape = Color(0xFF7B3CFF)
+    val Bubblegum = Color(0xFFFF5C8A)
+    val Sunny = Color(0xFFFFD84D)
+    val Mint = Color(0xFF5EE0C1)
+    val GrapeInk = Color(0xFF2A1650)
 
-    // Light Mode Canvas & Surfaces (Airy spatial daylight with cool pearl undertones)
-    val LightCanvas = Color(0xFFF3F6FC)
+    // Legacy accent tokens remapped to Candy Pop
+    val Aqua = Mint
+    val Lavender = Color(0xFF9B6BFF)
+    val SkyBlue = Color(0xFF62B6FF)
+    val Peach = Bubblegum
+    val Slate = Sunny // 5th candy accent choice (was dark slate; a dark tint turned cards grey)
+
+    // Light canvas & surfaces (lavender world, white candy cards)
+    val LightCanvas = Color(0xFFF3ECFF)
     val LightCanvasElevated = Color(0xFFFFFFFF)
-    val LightSurfaceSubtle = Color(0xFFE9EFF8)
+    val LightSurfaceSubtle = Color(0xFFECE2FF)
     val LightGlassBase = Color(0xFFFFFFFF)
-    val LightGlassSubtle = Color(0xFFF1F5FB)
-    val LightSheetSurface = Color(0xFFF7F9FE)
+    val LightGlassSubtle = Color(0xFFF8F3FF)
+    val LightSheetSurface = Color(0xFFFBF8FF)
 
-    // Light Mode Ink & Contrast-Verified Text (WCAG AA >= 4.5:1 against LightCanvas & Glass)
-    val LightInk = Color(0xFF121E2F)
-    val LightInkMuted = Color(0xFF44566E)
-    val LightInkDisabled = Color(0xFF7B8CA3)
+    // Light ink
+    val LightInk = Color(0xFF2A1650)
+    val LightInkMuted = Color(0xFF5E4C85)
+    val LightInkDisabled = Color(0xFF9A8BBB)
 
-    // Light Mode Semantic Financial & Action Colours
-    val LightPrimary = Color(0xFF5842B5)
+    // Light semantic colours (text tones are darker than the candy fills for AA contrast)
+    val LightPrimary = Grape
     val LightOnPrimary = Color(0xFFFFFFFF)
-    val LightPrimaryContainer = Color(0xFFE8E2FC)
-    val LightOnPrimaryContainer = Color(0xFF25165E)
+    val LightPrimaryContainer = Color(0xFFECE2FF)
+    val LightOnPrimaryContainer = GrapeInk
 
-    val LightSecondary = Color(0xFF0F7B6C)
-    val LightIncome = Color(0xFF0E7A6B)
-    val LightIncomeContainer = Color(0xFFD5F5EE)
-    val LightOnIncomeContainer = Color(0xFF073E36)
+    val LightSecondary = Color(0xFF0B6B5C)
+    val LightIncome = Color(0xFF0B6B5C)
+    val LightIncomeContainer = Color(0xFFD6F7EF)
+    val LightOnIncomeContainer = Color(0xFF064A3F)
 
-    val LightExpense = Color(0xFFB93848)
-    val LightExpenseContainer = Color(0xFFFCE2E5)
-    val LightOnExpenseContainer = Color(0xFF66121E)
+    val LightExpense = Color(0xFFC2185B)
+    val LightExpenseContainer = Color(0xFFFFE1EA)
+    val LightOnExpenseContainer = Color(0xFF6E0F33)
 
-    val LightTertiary = Color(0xFF216499)
-    val LightSavings = Color(0xFF1F6396)
-    val LightSavingsContainer = Color(0xFFD9EEFC)
-    val LightOnSavingsContainer = Color(0xFF0C3554)
+    val LightTertiary = Color(0xFF7A5200)
+    val LightSavings = Color(0xFF7A5200)
+    val LightSavingsContainer = Color(0xFFFFF3C4)
+    val LightOnSavingsContainer = Color(0xFF4D3300)
 
-    val LightCautionInk = Color(0xFF87481A)
-    val LightWarning = Color(0xFF87481A)
-    val LightWarningContainer = Color(0xFFFDE8D7)
-    val LightOnWarningContainer = Color(0xFF4D2507)
+    val LightCautionInk = Color(0xFF9A4700)
+    val LightWarning = Color(0xFF9A4700)
+    val LightWarningContainer = Color(0xFFFFE6CC)
+    val LightOnWarningContainer = Color(0xFF5A2600)
 
-    val LightError = Color(0xFFC43B4B)
-    val LightErrorContainer = Color(0xFFFCE2E5)
-    val LightOnErrorContainer = Color(0xFF6B1420)
+    val LightError = Color(0xFFB3261E)
+    val LightErrorContainer = Color(0xFFFFDAD6)
+    val LightOnErrorContainer = Color(0xFF5F1410)
 
-    val LightSuccess = Color(0xFF0F7B6C)
-    val LightSuccessContainer = Color(0xFFD5F5EE)
-    val LightOnSuccessContainer = Color(0xFF073E36)
+    val LightSuccess = LightIncome
+    val LightSuccessContainer = LightIncomeContainer
+    val LightOnSuccessContainer = LightOnIncomeContainer
 
-    // Dark Mode Canvas & Spatial Surfaces (Deep midnight slate with luminous frost panels)
-    val DarkCanvas = Color(0xFF0B111C)
-    val DarkCanvasElevated = Color(0xFF141F31)
-    val DarkSurfaceSubtle = Color(0xFF1B2940)
-    val DarkGlassBase = Color(0xFF19263B)
-    val DarkGlassElevated = Color(0xFF21324C)
-    val DarkGlassSubtle = Color(0xFF131E30)
-    val DarkSheetSurface = Color(0xFF152033)
+    // Dark canvas & surfaces (night grape, not a naive inversion)
+    val DarkCanvas = Color(0xFF160C2B)
+    val DarkCanvasElevated = Color(0xFF22143F)
+    val DarkSurfaceSubtle = Color(0xFF2B1A4F)
+    val DarkGlassBase = Color(0xFF22143F)
+    val DarkGlassElevated = Color(0xFF2E1C55)
+    val DarkGlassSubtle = Color(0xFF1C1036)
+    val DarkSheetSurface = Color(0xFF22143F)
 
-    // Dark Mode Ink & Contrast-Verified Text (WCAG AA >= 4.5:1 against DarkCanvas & Glass)
-    val DarkInk = Color(0xFFF3F7FD)
-    val DarkInkMuted = Color(0xFFB2C1D6)
-    val DarkInkDisabled = Color(0xFF6E8099)
+    // Dark ink
+    val DarkInk = Color(0xFFF4EEFF)
+    val DarkInkMuted = Color(0xFFBBA9E0)
+    val DarkInkDisabled = Color(0xFF7C6AA3)
 
-    // Dark Mode Semantic Financial & Action Colours
-    val DarkPrimaryInk = Color(0xFF140F2A)
-    val DarkPrimaryContainer = Color(0xFF33266B)
-    val DarkOnPrimaryContainer = Color(0xFFE7E1FF)
+    // Dark semantic colours
+    val DarkPrimary = Color(0xFFB18CFF)
+    val DarkPrimaryInk = Color(0xFF1D0B3D)
+    val DarkPrimaryContainer = Color(0xFF3A2470)
+    val DarkOnPrimaryContainer = Color(0xFFEADDFF)
 
-    val DarkSecondaryInk = Color(0xFF052823)
-    val DarkIncome = Color(0xFF55DEC9)
-    val DarkIncomeContainer = Color(0xFF104A43)
-    val DarkOnIncomeContainer = Color(0xFFB5F7EE)
+    val DarkSecondaryInk = Color(0xFF053A30)
+    val DarkIncome = Color(0xFF6FEBCD)
+    val DarkIncomeContainer = Color(0xFF0F3B33)
+    val DarkOnIncomeContainer = Color(0xFFBDF7E8)
 
-    val DarkExpense = Color(0xFFFF8590)
-    val DarkExpenseContainer = Color(0xFF561922)
-    val DarkOnExpenseContainer = Color(0xFFFFDADE)
+    val DarkExpense = Color(0xFFFF7FA6)
+    val DarkExpenseContainer = Color(0xFF4A1530)
+    val DarkOnExpenseContainer = Color(0xFFFFD6E3)
 
-    val DarkTertiaryInk = Color(0xFF072136)
-    val DarkSavings = Color(0xFF84C4F4)
-    val DarkSavingsContainer = Color(0xFF164266)
-    val DarkOnSavingsContainer = Color(0xFFD2ECFD)
+    val DarkTertiaryInk = Color(0xFF3D2A00)
+    val DarkSavings = Color(0xFFFFE07A)
+    val DarkSavingsContainer = Color(0xFF3D3010)
+    val DarkOnSavingsContainer = Color(0xFFFFF0B8)
 
-    val DarkCautionInk = Color(0xFF361D09)
-    val DarkWarning = Color(0xFFF6C29B)
-    val DarkWarningContainer = Color(0xFF4F2D13)
-    val DarkOnWarningContainer = Color(0xFFFCD9BE)
+    val DarkCautionInk = Color(0xFF3A1E00)
+    val DarkWarning = Color(0xFFFFB870)
+    val DarkWarningContainer = Color(0xFF4A2A08)
+    val DarkOnWarningContainer = Color(0xFFFFDDB8)
 
-    val DarkError = Color(0xFFFF7A85)
-    val DarkErrorContainer = Color(0xFF5D1821)
-    val DarkOnErrorContainer = Color(0xFFFFDADE)
+    val DarkError = Color(0xFFFF8A80)
+    val DarkErrorContainer = Color(0xFF5C1A15)
+    val DarkOnErrorContainer = Color(0xFFFFDAD6)
 
-    val DarkSuccess = Color(0xFF55DEC9)
-    val DarkSuccessContainer = Color(0xFF104A43)
-    val DarkOnSuccessContainer = Color(0xFFB5F7EE)
+    val DarkSuccess = DarkIncome
+    val DarkSuccessContainer = DarkIncomeContainer
+    val DarkOnSuccessContainer = DarkOnIncomeContainer
+
+    // Sticker Pop outline / offset-shadow ink
+    val LightStickerInk = GrapeInk
+    val DarkStickerInk = Color(0xFF07030F)
 }

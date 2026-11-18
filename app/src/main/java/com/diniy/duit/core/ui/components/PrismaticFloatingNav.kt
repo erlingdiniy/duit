@@ -1,5 +1,12 @@
 package com.diniy.duit.core.ui.components
 
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.animation.core.animateDpAsState
+
+import androidx.compose.ui.graphics.drawscope.translate
+
+import androidx.compose.ui.draw.drawBehind
+
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -148,7 +155,7 @@ fun PrismaticFloatingBottomBar(
                 animatedSlot.animateTo(
                     targetValue = targetVisualSlot,
                     animationSpec = spring(
-                        dampingRatio = 0.80f,
+                        dampingRatio = 0.6f,
                         stiffness = Spring.StiffnessMediumLow
                     )
                 )
@@ -184,23 +191,8 @@ fun PrismaticFloatingBottomBar(
                     spotColor = colors.glassShadowSpot
                 )
                 .clip(pillShape)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            colors.floatingNavSurface.copy(alpha = (colors.floatingNavSurface.alpha + 0.04f).coerceAtMost(0.98f)),
-                            colors.floatingNavSurface
-                        )
-                    )
-                )
-                .border(
-                    BorderStroke(
-                        width = geometry.borderStandard,
-                        brush = Brush.linearGradient(
-                            colors = listOf(colors.glassHighlight, colors.glassBorder)
-                        )
-                    ),
-                    shape = pillShape
-                )
+                .background(colors.floatingNavSurface)
+                .border(BorderStroke(geometry.borderHairline, colors.glassBorder), pillShape)
                 .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
             val totalWidthPx = with(density) { maxWidth.toPx() }
@@ -246,7 +238,7 @@ fun PrismaticFloatingBottomBar(
                                     animatedSlot.animateTo(
                                         targetValue = targetVisualSlot,
                                         animationSpec = spring(
-                                            dampingRatio = 0.80f,
+                                            dampingRatio = 0.6f,
                                             stiffness = Spring.StiffnessMediumLow
                                         )
                                     )
@@ -274,21 +266,7 @@ fun PrismaticFloatingBottomBar(
                         .width(slotWidthDp)
                         .height(indicatorHeightDp)
                         .clip(activeIndicatorShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    colors.lavender.copy(alpha = if (colors.isDark) 0.28f else 0.18f),
-                                    colors.aqua.copy(alpha = if (colors.isDark) 0.14f else 0.09f)
-                                )
-                            )
-                        )
-                        .border(
-                            BorderStroke(
-                                width = geometry.borderHairline,
-                                color = colors.glassHighlight.copy(alpha = 0.72f)
-                            ),
-                            shape = activeIndicatorShape
-                        )
+                        .background(colors.floatingNavActivePill)
                 )
 
                 Row(
@@ -377,43 +355,45 @@ private fun SpatialQuickAddCenterButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val scale by animateFloatAsState(
-        targetValue = motion.resolvePressScale(
-            isPressed = isPressed,
-            enabled = true,
-            reduceMotion = reducedMotion,
-            targetScale = 0.93f
+    val geometry = SpatialTheme.geometry
+    val shift by animateDpAsState(
+        targetValue = if (isPressed && !reducedMotion) 3.dp else 0.dp,
+        animationSpec = prismaticSpring(
+            reducedMotion = reducedMotion,
+            dampingRatio = motion.pressDampingRatio,
+            stiffness = motion.pressStiffness
         ),
-        animationSpec = prismaticSpring(reducedMotion = reducedMotion),
-        label = "quick_add_center_scale"
+        label = "quick_add_center_shift"
     )
+    val buttonShape = RoundedCornerShape(18.dp)
+    val stickerInk = colors.sticker
+    val press by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = prismaticSpring(
+            reducedMotion = reducedMotion,
+            dampingRatio = motion.pressDampingRatio,
+            stiffness = motion.pressStiffness
+        ),
+        label = "quick_add_center_press"
+    )
+    val (squashX, squashY) = motion.resolveSquash(press, reducedMotion)
 
     Box(
         modifier = modifier
-            .size(48.dp)
+            .size(52.dp)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = squashX
+                scaleY = squashY
             }
-            .shadow(
-                elevation = if (colors.isDark) 6.dp else 8.dp,
-                shape = CircleShape,
-                ambientColor = colors.lavender.copy(alpha = 0.35f),
-                spotColor = colors.lavender.copy(alpha = 0.28f)
-            )
-            .clip(CircleShape)
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        colors.primaryAction,
-                        colors.lavender
-                    )
-                )
-            )
-            .border(
-                BorderStroke(1.dp, colors.glassHighlight.copy(alpha = 0.70f)),
-                shape = CircleShape
-            )
+            .drawBehind {
+                val o = (3.dp - shift).toPx()
+                val outline = buttonShape.createOutline(size, layoutDirection, this)
+                translate(left = o, top = o) { drawOutline(outline, stickerInk) }
+            }
+            .offset(x = shift, y = shift)
+            .clip(buttonShape)
+            .background(colors.bubblegum)
+            .border(BorderStroke(geometry.stickerBorder, stickerInk), buttonShape)
             .semantics {
                 contentDescription = "Quick add transaction or action"
             }
@@ -429,8 +409,10 @@ private fun SpatialQuickAddCenterButton(
         Icon(
             imageVector = Icons.Rounded.Add,
             contentDescription = null,
-            tint = colors.onPrimaryAction,
-            modifier = Modifier.size(24.dp)
+            tint = com.diniy.duit.core.ui.theme.PrismaticPalette.GrapeInk,
+            modifier = Modifier
+                .size(26.dp)
+                .graphicsLayer { rotationZ = if (reducedMotion) 0f else 90f * press }
         )
     }
 }
@@ -529,15 +511,7 @@ fun PrismaticNavigationRail(
             .padding(start = 12.dp, top = 12.dp, bottom = 12.dp)
             .clip(railShape)
             .background(colors.floatingNavSurface)
-            .border(
-                BorderStroke(
-                    width = 1.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(colors.glassHighlight, colors.glassBorder)
-                    )
-                ),
-                shape = railShape
-            )
+            .border(BorderStroke(1.dp, colors.glassBorder), railShape)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 8.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),

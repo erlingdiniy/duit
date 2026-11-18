@@ -69,22 +69,31 @@ data class SpatialColorTokens(
     // Structure & interactive states
     val divider: Color,
     val pressedStateOverlay: Color,
-    val selectedStateOverlay: Color
+    val selectedStateOverlay: Color,
+    // Candy Pop extras
+    val sticker: Color = PrismaticPalette.LightStickerInk,
+    val sunny: Color = PrismaticPalette.Sunny,
+    val onSunny: Color = PrismaticPalette.GrapeInk,
+    val bubblegum: Color = PrismaticPalette.Bubblegum
 ) {
+    /**
+     * Candy accents (mint, sky, bubblegum…) are too light to be text. This mixes an accent
+     * toward the primary ink so it keeps its hue but stays readable (>= 4.5:1, see tests).
+     */
+    fun readableOn(accent: Color): Color = androidx.compose.ui.graphics.lerp(accent, primaryText, 0.6f)
+
+    /**
+     * Phase 6C: surfaces are opaque candy, so the persisted "glass intensity" setting now
+     * controls shadow depth (Subtle = flatter, Rich = more pop). The DataStore key is unchanged.
+     */
     fun withGlassIntensity(intensity: GlassIntensity): SpatialColorTokens {
         if (intensity == GlassIntensity.BALANCED) return this
         return copy(
-            glassSurface = glassSurface.copy(
-                alpha = (glassSurface.alpha * intensity.alphaScale).coerceIn(0.60f, 0.96f)
+            glassShadowAmbient = glassShadowAmbient.copy(
+                alpha = (glassShadowAmbient.alpha * intensity.alphaScale).coerceIn(0.03f, 0.60f)
             ),
-            glassSurfaceElevated = glassSurfaceElevated.copy(
-                alpha = (glassSurfaceElevated.alpha * intensity.alphaScale).coerceIn(0.72f, 0.98f)
-            ),
-            glassSurfaceSubtle = glassSurfaceSubtle.copy(
-                alpha = (glassSurfaceSubtle.alpha * intensity.alphaScale).coerceIn(0.54f, 0.92f)
-            ),
-            floatingNavSurface = floatingNavSurface.copy(
-                alpha = (floatingNavSurface.alpha * intensity.alphaScale).coerceIn(0.76f, 0.98f)
+            glassShadowSpot = glassShadowSpot.copy(
+                alpha = (glassShadowSpot.alpha * intensity.alphaScale).coerceIn(0.03f, 0.60f)
             )
         )
     }
@@ -95,18 +104,18 @@ val LightSpatialColors = SpatialColorTokens(
     appBackground = PrismaticPalette.LightCanvas,
     baseSurface = PrismaticPalette.LightSurfaceSubtle,
     elevatedSurface = PrismaticPalette.LightCanvasElevated,
-    glassSurface = PrismaticPalette.LightGlassBase.copy(alpha = 0.80f),
-    glassSurfaceElevated = PrismaticPalette.LightGlassBase.copy(alpha = 0.91f),
-    glassSurfaceSubtle = PrismaticPalette.LightGlassSubtle.copy(alpha = 0.75f),
-    glassBorder = PrismaticPalette.Slate.copy(alpha = 0.12f),
-    glassHighlight = Color.White.copy(alpha = 0.96f),
-    glassInnerGlow = Color.White.copy(alpha = 0.55f),
-    glassShadowAmbient = PrismaticPalette.Slate.copy(alpha = 0.11f),
-    glassShadowSpot = PrismaticPalette.Slate.copy(alpha = 0.09f),
-    floatingNavSurface = Color(0xFFFAFBFD).copy(alpha = 0.97f),
-    floatingNavActivePill = PrismaticPalette.Lavender.copy(alpha = 0.18f),
+    glassSurface = PrismaticPalette.LightGlassBase,
+    glassSurfaceElevated = PrismaticPalette.LightGlassBase,
+    glassSurfaceSubtle = PrismaticPalette.LightGlassSubtle,
+    glassBorder = PrismaticPalette.Grape.copy(alpha = 0.10f),
+    glassHighlight = Color.Transparent,
+    glassInnerGlow = Color.Transparent,
+    glassShadowAmbient = PrismaticPalette.Grape.copy(alpha = 0.14f),
+    glassShadowSpot = PrismaticPalette.Grape.copy(alpha = 0.16f),
+    floatingNavSurface = Color.White,
+    floatingNavActivePill = PrismaticPalette.LightSurfaceSubtle,
     bottomSheetSurface = PrismaticPalette.LightSheetSurface,
-    scrim = PrismaticPalette.Slate.copy(alpha = 0.30f),
+    scrim = PrismaticPalette.GrapeInk.copy(alpha = 0.30f),
     primaryText = PrismaticPalette.LightInk,
     secondaryText = PrismaticPalette.LightInkMuted,
     disabledText = PrismaticPalette.LightInkDisabled,
@@ -130,9 +139,9 @@ val LightSpatialColors = SpatialColorTokens(
     success = PrismaticPalette.LightSuccess,
     successContainer = PrismaticPalette.LightSuccessContainer,
     onSuccessContainer = PrismaticPalette.LightOnSuccessContainer,
-    divider = PrismaticPalette.Slate.copy(alpha = 0.10f),
-    pressedStateOverlay = PrismaticPalette.Slate.copy(alpha = 0.07f),
-    selectedStateOverlay = PrismaticPalette.Lavender.copy(alpha = 0.16f)
+    divider = PrismaticPalette.Grape.copy(alpha = 0.10f),
+    pressedStateOverlay = PrismaticPalette.Grape.copy(alpha = 0.08f),
+    selectedStateOverlay = PrismaticPalette.Grape.copy(alpha = 0.14f)
 )
 
 val DarkSpatialColors = SpatialColorTokens(
@@ -140,22 +149,22 @@ val DarkSpatialColors = SpatialColorTokens(
     appBackground = PrismaticPalette.DarkCanvas,
     baseSurface = PrismaticPalette.DarkSurfaceSubtle,
     elevatedSurface = PrismaticPalette.DarkCanvasElevated,
-    glassSurface = PrismaticPalette.DarkGlassBase.copy(alpha = 0.78f),
-    glassSurfaceElevated = PrismaticPalette.DarkGlassElevated.copy(alpha = 0.88f),
-    glassSurfaceSubtle = PrismaticPalette.DarkGlassSubtle.copy(alpha = 0.72f),
-    glassBorder = Color.White.copy(alpha = 0.09f),
-    glassHighlight = Color.White.copy(alpha = 0.22f),
-    glassInnerGlow = Color.White.copy(alpha = 0.07f),
-    glassShadowAmbient = Color.Black.copy(alpha = 0.42f),
-    glassShadowSpot = Color.Black.copy(alpha = 0.34f),
-    floatingNavSurface = Color(0xFF162235).copy(alpha = 0.97f),
-    floatingNavActivePill = PrismaticPalette.Lavender.copy(alpha = 0.24f),
+    glassSurface = PrismaticPalette.DarkGlassBase,
+    glassSurfaceElevated = PrismaticPalette.DarkGlassElevated,
+    glassSurfaceSubtle = PrismaticPalette.DarkGlassSubtle,
+    glassBorder = Color.White.copy(alpha = 0.08f),
+    glassHighlight = Color.Transparent,
+    glassInnerGlow = Color.Transparent,
+    glassShadowAmbient = Color.Black.copy(alpha = 0.40f),
+    glassShadowSpot = Color.Black.copy(alpha = 0.36f),
+    floatingNavSurface = PrismaticPalette.DarkSurfaceSubtle,
+    floatingNavActivePill = PrismaticPalette.DarkPrimaryContainer,
     bottomSheetSurface = PrismaticPalette.DarkSheetSurface,
     scrim = Color.Black.copy(alpha = 0.58f),
     primaryText = PrismaticPalette.DarkInk,
     secondaryText = PrismaticPalette.DarkInkMuted,
     disabledText = PrismaticPalette.DarkInkDisabled,
-    primaryAction = PrismaticPalette.Lavender,
+    primaryAction = PrismaticPalette.DarkPrimary,
     onPrimaryAction = PrismaticPalette.DarkPrimaryInk,
     income = PrismaticPalette.DarkIncome,
     incomeContainer = PrismaticPalette.DarkIncomeContainer,
@@ -177,7 +186,11 @@ val DarkSpatialColors = SpatialColorTokens(
     onSuccessContainer = PrismaticPalette.DarkOnSuccessContainer,
     divider = Color.White.copy(alpha = 0.09f),
     pressedStateOverlay = Color.White.copy(alpha = 0.08f),
-    selectedStateOverlay = PrismaticPalette.Lavender.copy(alpha = 0.22f)
+    selectedStateOverlay = PrismaticPalette.DarkPrimary.copy(alpha = 0.22f),
+    sticker = PrismaticPalette.DarkStickerInk,
+    sunny = Color(0xFFFFE07A),
+    onSunny = Color(0xFF3D2A00),
+    bubblegum = PrismaticPalette.DarkExpense
 )
 
 /**
@@ -213,12 +226,14 @@ data class SpatialSpacingTokens(
  */
 @Immutable
 data class SpatialGeometryTokens(
-    val radiusXs: Dp = 10.dp,
-    val radiusSm: Dp = 14.dp,
-    val radiusMd: Dp = 18.dp,
-    val radiusLg: Dp = 24.dp,
-    val radiusXl: Dp = 28.dp,
-    val radiusFloatingNav: Dp = 32.dp,
+    val radiusXs: Dp = 12.dp,
+    val radiusSm: Dp = 16.dp,
+    val radiusMd: Dp = 22.dp,
+    val radiusLg: Dp = 26.dp,
+    val radiusXl: Dp = 32.dp,
+    val radiusFloatingNav: Dp = 36.dp,
+    val stickerBorder: Dp = 2.5.dp,
+    val stickerOffset: Dp = 4.dp,
     val radiusPill: Dp = 999.dp,
     val minTouchTarget: Dp = 48.dp,
     val buttonHeight: Dp = 48.dp,
@@ -252,16 +267,27 @@ data class SpatialMotionTokens(
     val durationStandardMs: Int = 220,
     val durationEmphasizedMs: Int = 320,
     val durationCounterMs: Int = 420,
-    val pressDampingRatio: Float = 0.78f,
+    // Candy Pop: bouncy springs with visible overshoot (squash and stretch on press/release)
+    val pressDampingRatio: Float = 0.45f,
     val pressStiffness: Float = Spring.StiffnessMedium,
-    val spatialDampingRatio: Float = 0.82f,
+    val spatialDampingRatio: Float = 0.62f,
     val spatialStiffness: Float = Spring.StiffnessMediumLow,
-    val morphDampingRatio: Float = 0.85f,
+    val morphDampingRatio: Float = 0.7f,
     val morphStiffness: Float = Spring.StiffnessLow,
-    val pressedScaleCard: Float = 0.985f,
-    val pressedScaleButton: Float = 0.97f,
-    val selectedScaleIcon: Float = 1.06f
+    val pressedScaleCard: Float = 0.96f,
+    val pressedScaleButton: Float = 0.92f,
+    val selectedScaleIcon: Float = 1.15f,
+    // Squash & stretch targets for press (prep for the Phase 6C animation pass)
+    val squashScaleX: Float = 1.08f,
+    val squashScaleY: Float = 0.90f
 ) {
+    /** Press squash for sticker buttons; returns (scaleX, scaleY). Identity under Reduce Motion. */
+    fun resolveSquash(pressFraction: Float, reduceMotion: Boolean): Pair<Float, Float> {
+        if (reduceMotion) return 1f to 1f
+        val f = pressFraction.coerceIn(0f, 1f)
+        return (1f + (squashScaleX - 1f) * f) to (1f + (squashScaleY - 1f) * f)
+    }
+
     fun resolveDurationMs(
         baseDurationMs: Int = durationStandardMs,
         reduceMotion: Boolean = false,

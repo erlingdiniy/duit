@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.Role
@@ -75,50 +76,48 @@ fun PlanningSectionPillBar(
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val geometry = com.diniy.duit.core.ui.theme.SpatialTheme.geometry
+    val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(geometry.radiusXl))
-            .background(colors.glassSurface)
-            .border(
-                width = geometry.borderStandard,
-                brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                    colors = listOf(colors.glassHighlight, colors.glassBorder)
-                ),
-                shape = RoundedCornerShape(geometry.radiusXl)
-            )
+            .clip(RoundedCornerShape(geometry.radiusPill))
+            .background(if (colors.isDark) colors.glassSurfaceSubtle else colors.baseSurface)
             .padding(5.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         PlanningSectionTab.entries.forEach { tab ->
             val selected = tab == selectedTab
             val bgColor by animateColorAsState(
-                targetValue = if (selected) colors.selectedStateOverlay else Color.Transparent,
+                targetValue = if (selected) (if (colors.isDark) colors.floatingNavActivePill else colors.glassSurfaceElevated) else Color.Transparent,
                 label = "planning_pill_bg"
             )
             val textColor by animateColorAsState(
-                targetValue = if (selected) colors.primaryText else colors.secondaryText,
+                targetValue = if (selected) colors.primaryAction else colors.secondaryText,
                 label = "planning_pill_fg"
             )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(geometry.radiusMd))
-                    .background(bgColor)
                     .then(
                         if (selected) {
-                            Modifier.border(
-                                width = geometry.borderHairline,
-                                color = colors.lavender.copy(alpha = 0.55f),
-                                shape = RoundedCornerShape(geometry.radiusMd)
+                            Modifier.shadow(
+                                elevation = 3.dp,
+                                shape = RoundedCornerShape(geometry.radiusPill),
+                                ambientColor = colors.glassShadowAmbient,
+                                spotColor = colors.glassShadowSpot
                             )
                         } else {
                             Modifier
                         }
                     )
-                    .clickable(role = Role.Tab) { onSelectTab(tab) }
+                    .clip(RoundedCornerShape(geometry.radiusPill))
+                    .background(bgColor)
+                    .clickable(role = Role.Tab) {
+                        if (!selected) haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onSelectTab(tab)
+                    }
                     .padding(horizontal = 8.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -207,7 +206,7 @@ fun BudgetPeriodNavigator(
                         Text(
                             text = range,
                             style = MaterialTheme.typography.labelSmall,
-                            color = glass.aquaAccent
+                            color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.readableOn(glass.aquaAccent)
                         )
                     }
                 }
@@ -335,8 +334,8 @@ fun BudgetOverviewCard(
                 progress = { overview.overallProgressFraction },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(7.dp)
-                    .clip(RoundedCornerShape(4.dp)),
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(50)),
                 color = if (isOver) MaterialTheme.colorScheme.error else glass.lavenderAccent,
                 trackColor = glass.glassSurfaceMuted,
                 strokeCap = StrokeCap.Round
@@ -483,8 +482,8 @@ fun BudgetProgressCard(
             progress = { progress.progressFraction },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
+                .height(10.dp)
+                .clip(RoundedCornerShape(50)),
             color = statusColor,
             trackColor = glass.glassSurfaceMuted,
             strokeCap = StrokeCap.Round

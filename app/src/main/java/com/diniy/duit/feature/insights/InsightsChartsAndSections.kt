@@ -798,8 +798,8 @@ fun SpendingBreakdownDonutCard(
                             progress = { item.fraction },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(50)),
                             color = sliceColor,
                             trackColor = glass.glassSurfaceMuted,
                             strokeCap = StrokeCap.Round
@@ -1028,8 +1028,8 @@ fun SavingsAnalyticsCard(
                             progress = { gp.progressFraction },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(50)),
                             color = glass.skyBlueAccent,
                             trackColor = glass.glassSurfaceMuted,
                             strokeCap = StrokeCap.Round
@@ -1172,8 +1172,8 @@ fun BudgetPerformanceCard(
                 progress = { overview.overallProgressFraction },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(50)),
                 color = if (overview.effectiveOverspentSen > 0L) MaterialTheme.colorScheme.error else glass.lavenderAccent,
                 trackColor = glass.glassSurfaceMuted,
                 strokeCap = StrokeCap.Round
@@ -1216,8 +1216,8 @@ fun BudgetPerformanceCard(
                                 progress = { progress.progressFraction },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(50)),
                                 color = barColor,
                                 trackColor = glass.glassSurfaceMuted,
                                 strokeCap = StrokeCap.Round

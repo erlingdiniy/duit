@@ -4,17 +4,44 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.diniy.duit.R
 
 /**
- * Semantic typography tokens for Prismatic Spatial Glass (Phase 6A Section 6).
- * - Uses `sp` throughout so Android nonlinear font scaling (up to 200%) works cleanly.
- * - Uses OpenType tabular numerals (`tnum`) on financial balances, amounts, and counters
- *   so currency digits align vertically and never jitter during counter transitions.
- * - Avoids tiny sub-11sp text to preserve readability on translucent glass surfaces.
+ * Candy Pop typography (Phase 6C).
+ * - Fredoka (rounded display) for headings, titles and button labels.
+ * - Nunito for body text and ALL money: its digits share one advance width, so amounts stay
+ *   aligned and animated counters never jitter. Fredoka digits are proportional, so it is
+ *   never used for amounts. "tnum" is kept as a harmless hint for fallback fonts.
+ * - `sp` throughout so Android font scaling up to 200% works.
  */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private fun variable(res: Int, weight: Int) = Font(
+    resId = res,
+    weight = FontWeight(weight),
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight))
+)
+
+val CandyDisplayFamily = FontFamily(
+    variable(R.font.fredoka, 400),
+    variable(R.font.fredoka, 500),
+    variable(R.font.fredoka, 600),
+    variable(R.font.fredoka, 700)
+)
+
+val CandyBodyFamily = FontFamily(
+    variable(R.font.nunito, 400),
+    variable(R.font.nunito, 500),
+    variable(R.font.nunito, 600),
+    variable(R.font.nunito, 700),
+    variable(R.font.nunito, 800),
+    variable(R.font.nunito, 900)
+)
+
 @Immutable
 data class SpatialTypographyTokens(
     val heroBalance: TextStyle,
@@ -33,87 +60,84 @@ data class SpatialTypographyTokens(
 
 val DefaultSpatialTypography = SpatialTypographyTokens(
     heroBalance = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
-        fontSize = 36.sp,
-        lineHeight = 42.sp,
-        letterSpacing = (-0.75).sp,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.Black,
+        fontSize = 40.sp,
+        lineHeight = 46.sp,
+        letterSpacing = (-1).sp,
         fontFeatureSettings = "tnum"
     ),
     largeBalance = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 28.sp,
         lineHeight = 34.sp,
-        letterSpacing = (-0.45).sp,
+        letterSpacing = (-0.5).sp,
         fontFeatureSettings = "tnum"
     ),
     cardBalance = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 20.sp,
         lineHeight = 26.sp,
-        letterSpacing = (-0.15).sp,
+        letterSpacing = (-0.2).sp,
         fontFeatureSettings = "tnum"
     ),
     screenHeading = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 30.sp,
-        letterSpacing = (-0.25).sp,
-        fontFeatureSettings = "tnum"
+        fontFamily = CandyDisplayFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 30.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.3).sp
     ),
     sectionHeading = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = CandyDisplayFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-        fontFeatureSettings = "tnum"
+        fontSize = 19.sp,
+        lineHeight = 25.sp
     ),
     cardTitle = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = CandyDisplayFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
-        lineHeight = 22.sp,
-        fontFeatureSettings = "tnum"
+        lineHeight = 22.sp
     ),
     transactionDescription = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 15.sp,
         lineHeight = 21.sp
     ),
     transactionAmount = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 15.sp,
         lineHeight = 21.sp,
         fontFeatureSettings = "tnum"
     ),
     supportingInfo = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp,
         lineHeight = 19.sp
     ),
     caption = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.Bold,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         fontFeatureSettings = "tnum"
     ),
     buttonLabel = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = CandyDisplayFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        lineHeight = 18.sp,
+        fontSize = 15.sp,
+        lineHeight = 20.sp,
         fontFeatureSettings = "tnum"
     ),
     inputLabel = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.Bold,
         fontSize = 13.sp,
         lineHeight = 18.sp
     )
@@ -121,18 +145,15 @@ val DefaultSpatialTypography = SpatialTypographyTokens(
 
 val LocalSpatialTypography = staticCompositionLocalOf { DefaultSpatialTypography }
 
-/**
- * Material3 Typography bridged to [DefaultSpatialTypography] so existing screens
- * and new Spatial Glass components share a unified visual hierarchy.
- */
+/** Material3 Typography bridged to [DefaultSpatialTypography] so every screen shares one hierarchy. */
 val DuitTypography = Typography(
     displayMedium = DefaultSpatialTypography.heroBalance,
     displaySmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.Black,
         fontSize = 30.sp,
         lineHeight = 36.sp,
-        letterSpacing = (-0.5).sp,
+        letterSpacing = (-0.6).sp,
         fontFeatureSettings = "tnum"
     ),
     headlineMedium = DefaultSpatialTypography.screenHeading,
@@ -140,22 +161,22 @@ val DuitTypography = Typography(
     titleLarge = DefaultSpatialTypography.sectionHeading,
     titleMedium = DefaultSpatialTypography.cardTitle,
     titleSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         fontFeatureSettings = "tnum"
     ),
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 15.sp,
         lineHeight = 22.sp,
         fontFeatureSettings = "tnum"
     ),
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
         lineHeight = 20.sp
     ),
@@ -163,10 +184,10 @@ val DuitTypography = Typography(
     labelLarge = DefaultSpatialTypography.buttonLabel,
     labelMedium = DefaultSpatialTypography.caption,
     labelSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 15.sp,
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
         fontFeatureSettings = "tnum"
     )
 )

@@ -1,5 +1,6 @@
 package com.diniy.duit.core.ui.components
 
+import androidx.compose.ui.graphics.drawOutline
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,13 +52,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.semantics.Role
@@ -107,13 +112,13 @@ object SpatialBlurCapabilities {
 }
 
 /**
- * 1. [SpatialGlassSurface] — Core translucent floating glass container.
+ * 1. [SpatialGlassSurface] — Core Candy Pop surface (Phase 6C; name kept for API stability).
  * Renders:
- * - Translucent frosted fill tuned for Light/Dark Mode and [GlassIntensity]
- * - Subtle top-edge inner specular sheen (visionOS overhead illumination)
- * - Directional hairline border (bright top-left rim fading to subtle bottom-right edge)
- * - Soft ambient & spot elevation shadows
- * - Spring-based press feedback when interactive
+ * - Opaque candy fill (no glass sheen, no gradients) tuned for Light/Dark Mode
+ * - Optional solid accent tint for coloured cards
+ * - Soft grape-tinted depth shadow whose strength follows the "depth" (GlassIntensity) setting
+ * - [sticker] = true: Sticker Pop outline + hard offset shadow that "sinks" on press
+ * - Bouncy spring squash on press when interactive (disabled under Reduce Motion)
  */
 @Composable
 fun SpatialGlassSurface(
@@ -126,6 +131,8 @@ fun SpatialGlassSurface(
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
     role: Role = Role.Button,
+    sticker: Boolean = false,
+    containerColor: Color? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     val colors = SpatialTheme.colors
@@ -136,10 +143,11 @@ fun SpatialGlassSurface(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val pressedActive = isPressed && onClick != null && enabled
 
     val scale by animateFloatAsState(
         targetValue = motion.resolvePressScale(
-            isPressed = isPressed && onClick != null,
+            isPressed = pressedActive && !sticker,
             enabled = enabled,
             reduceMotion = reducedMotion,
             targetScale = motion.pressedScaleCard
@@ -152,18 +160,33 @@ fun SpatialGlassSurface(
         label = "spatial_surface_scale"
     )
 
-    val baseFill = when (tier) {
+    // Sticker press: the card slides into its own offset shadow.
+    val stickerShift by animateDpAsState(
+        targetValue = if (sticker && pressedActive) geometry.stickerOffset - 1.dp else 0.dp,
+        animationSpec = prismaticSpring(
+            reducedMotion = reducedMotion,
+            dampingRatio = motion.pressDampingRatio,
+            stiffness = motion.pressStiffness
+        ),
+        label = "spatial_surface_sticker_shift"
+    )
+
+    val baseFill = containerColor ?: when (tier) {
         SpatialGlassTier.Subtle -> colors.glassSurfaceSubtle
         SpatialGlassTier.Standard -> colors.glassSurface
         SpatialGlassTier.Elevated -> colors.glassSurfaceElevated
         SpatialGlassTier.Floating -> colors.floatingNavSurface
     }
-
+    val tintAlpha = when {
+        selected -> if (colors.isDark) 0.30f else 0.22f
+        else -> if (colors.isDark) 0.11f else 0.14f
+    }
+    val tinted = accentTint?.let { lerp(baseFill, it, tintAlpha) }
+        ?: if (selected) colors.selectedStateOverlay.compositeOverSolid(baseFill) else baseFill
     val targetFill = when {
-        !enabled -> baseFill.copy(alpha = (baseFill.alpha * 0.65f).coerceAtLeast(0.40f))
-        isPressed && onClick != null -> baseFill.copy(alpha = (baseFill.alpha + 0.07f).coerceAtMost(0.97f))
-        selected -> baseFill.copy(alpha = (baseFill.alpha + 0.05f).coerceAtMost(0.96f))
-        else -> baseFill
+        !enabled -> tinted.copy(alpha = 0.6f)
+        pressedActive -> colors.pressedStateOverlay.compositeOverSolid(tinted)
+        else -> tinted
     }
 
     val animatedFill by animateColorAsState(
@@ -172,43 +195,46 @@ fun SpatialGlassSurface(
         label = "spatial_surface_fill"
     )
 
-    val baseElevation: Dp = when (tier) {
-        SpatialGlassTier.Subtle -> geometry.elevationNone
-        SpatialGlassTier.Standard -> if (colors.isDark) geometry.elevationCardDark else geometry.elevationCardLight
-        SpatialGlassTier.Elevated -> if (colors.isDark) geometry.elevationElevatedDark else geometry.elevationElevatedLight
-        SpatialGlassTier.Floating -> if (colors.isDark) geometry.elevationFloatingDark else geometry.elevationFloatingLight
+    val baseElevation: Dp = when {
+        sticker -> 0.dp // the hard offset shadow replaces soft elevation
+        tier == SpatialGlassTier.Subtle -> geometry.elevationNone
+        tier == SpatialGlassTier.Standard -> if (colors.isDark) geometry.elevationCardDark else geometry.elevationCardLight
+        tier == SpatialGlassTier.Elevated -> if (colors.isDark) geometry.elevationElevatedDark else geometry.elevationElevatedLight
+        else -> if (colors.isDark) geometry.elevationFloatingDark else geometry.elevationFloatingLight
     }
 
     val animatedElevation by animateDpAsState(
-        targetValue = if (isPressed && onClick != null && !reducedMotion) {
-            (baseElevation - 1.dp).coerceAtLeast(0.dp)
-        } else {
-            baseElevation
-        },
+        targetValue = if (pressedActive && !reducedMotion) (baseElevation / 2) else baseElevation,
         animationSpec = prismaticSpring(reducedMotion = reducedMotion),
         label = "spatial_surface_elevation"
     )
 
-    val rimHighlightColor = if (selected) {
-        (accentTint ?: colors.lavender).copy(alpha = if (colors.isDark) 0.55f else 0.45f)
-    } else {
-        colors.glassHighlight
+    val stickerInk = colors.sticker
+    val stickerOffset = geometry.stickerOffset
+    val outline: BorderStroke? = when {
+        sticker -> BorderStroke(geometry.stickerBorder, stickerInk)
+        selected -> BorderStroke(geometry.borderFocused, accentTint ?: colors.primaryAction)
+        colors.isDark -> BorderStroke(geometry.borderHairline, colors.glassBorder)
+        else -> null
     }
-
-    val borderBrush = remember(rimHighlightColor, colors.glassBorder) {
-        Brush.linearGradient(
-            colors = listOf(rimHighlightColor, colors.glassBorder)
-        )
-    }
-
-    val innerGlowColor = colors.glassInnerGlow
-    val tintColor = accentTint?.copy(alpha = if (colors.isDark) 0.11f else 0.08f)
 
     val surfaceModifier = modifier
         .graphicsLayer {
             scaleX = scale
             scaleY = scale
         }
+        .then(
+            if (sticker) {
+                Modifier.drawBehind {
+                    val o = (stickerOffset - stickerShift).toPx()
+                    val outlineShape = shape.createOutline(size, layoutDirection, this)
+                    translate(left = o, top = o) { drawOutline(outlineShape, stickerInk) }
+                }
+            } else {
+                Modifier
+            }
+        )
+        .offset(x = stickerShift, y = stickerShift)
         .then(
             if (animatedElevation > 0.dp) {
                 Modifier.shadow(
@@ -223,34 +249,7 @@ fun SpatialGlassSurface(
         )
         .clip(shape)
         .background(animatedFill)
-        .drawWithCache {
-            val sheenHeight = (size.height * 0.42f).coerceAtLeast(1f)
-            val topSheenBrush = Brush.verticalGradient(
-                colors = listOf(innerGlowColor, Color.Transparent),
-                startY = 0f,
-                endY = sheenHeight
-            )
-            val accentBrush = tintColor?.let {
-                Brush.linearGradient(
-                    colors = listOf(it, Color.Transparent),
-                    start = Offset.Zero,
-                    end = Offset(size.width * 0.85f, size.height * 0.85f)
-                )
-            }
-            onDrawBehind {
-                drawRect(brush = topSheenBrush)
-                if (accentBrush != null) {
-                    drawRect(brush = accentBrush)
-                }
-            }
-        }
-        .border(
-            BorderStroke(
-                width = if (selected) geometry.borderFocused else geometry.borderStandard,
-                brush = borderBrush
-            ),
-            shape = shape
-        )
+        .then(if (outline != null) Modifier.border(outline, shape) else Modifier)
         .then(
             if (onClick != null) {
                 Modifier
@@ -274,8 +273,14 @@ fun SpatialGlassSurface(
             }
         )
 
-    Box(modifier = surfaceModifier, content = content)
+    // Un-coloured Text/Icon inside a card must follow the theme ink, not default black.
+    CompositionLocalProvider(LocalContentColor provides colors.primaryText) {
+        Box(modifier = surfaceModifier, content = content)
+    }
 }
+
+/** Composites a translucent overlay onto an opaque base, returning an opaque colour. */
+internal fun Color.compositeOverSolid(base: Color): Color = lerp(base, this.copy(alpha = 1f), this.alpha)
 
 /**
  * 2. [SpatialGlassCard] — Structured content card built on [SpatialGlassSurface].
@@ -291,6 +296,8 @@ fun SpatialGlassCard(
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
+    sticker: Boolean = false,
+    containerColor: Color? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     SpatialGlassSurface(
@@ -301,7 +308,9 @@ fun SpatialGlassCard(
         selected = selected,
         enabled = enabled,
         onClick = onClick,
-        onClickLabel = onClickLabel
+        onClickLabel = onClickLabel,
+        sticker = sticker,
+        containerColor = containerColor
     ) {
         Column(
             modifier = Modifier.padding(contentPadding),
@@ -351,30 +360,40 @@ fun SpatialGlassButton(
     )
 
     val shape = RoundedCornerShape(geometry.radiusMd)
+    val isSticker = variant == SpatialButtonVariant.Primary && isInteractive
+    val stickerShift by animateDpAsState(
+        targetValue = if (isSticker && isPressed) geometry.stickerOffset - 1.dp else 0.dp,
+        animationSpec = prismaticSpring(
+            reducedMotion = reducedMotion,
+            dampingRatio = motion.pressDampingRatio,
+            stiffness = motion.pressStiffness
+        ),
+        label = "spatial_button_sticker_shift"
+    )
+    val stickerInk = colors.sticker
+    val stickerOffset = geometry.stickerOffset
 
     val (bgColor, fgColor, borderStroke) = when (variant) {
+        // Candy Pop: Primary is the Sticker Pop action (outline + hard offset shadow).
         SpatialButtonVariant.Primary -> Triple(
             if (isInteractive) colors.primaryAction else colors.baseSurface,
             if (isInteractive) colors.onPrimaryAction else colors.disabledText,
-            BorderStroke(geometry.borderHairline, colors.glassHighlight.copy(alpha = 0.32f))
+            if (isInteractive) BorderStroke(geometry.stickerBorder, colors.sticker) else null
         )
         SpatialButtonVariant.SecondaryGlass -> Triple(
             if (isInteractive) colors.glassSurfaceElevated else colors.glassSurfaceSubtle,
-            if (isInteractive) colors.primaryText else colors.disabledText,
-            BorderStroke(
-                geometry.borderStandard,
-                Brush.linearGradient(listOf(colors.glassHighlight, colors.glassBorder))
-            )
+            if (isInteractive) colors.primaryAction else colors.disabledText,
+            BorderStroke(geometry.borderFocused, colors.primaryAction.copy(alpha = if (isInteractive) 0.35f else 0.12f))
         )
         SpatialButtonVariant.TonalAccent -> Triple(
-            if (isInteractive) colors.selectedStateOverlay else colors.glassSurfaceSubtle,
-            if (isInteractive) colors.primaryText else colors.disabledText,
-            BorderStroke(geometry.borderHairline, colors.lavender.copy(alpha = 0.35f))
+            if (isInteractive) colors.selectedStateOverlay.compositeOverSolid(colors.glassSurfaceElevated) else colors.glassSurfaceSubtle,
+            if (isInteractive) colors.primaryAction else colors.disabledText,
+            null
         )
         SpatialButtonVariant.Destructive -> Triple(
             if (isInteractive) colors.errorContainer else colors.glassSurfaceSubtle,
             if (isInteractive) colors.onErrorContainer else colors.disabledText,
-            BorderStroke(geometry.borderStandard, colors.error.copy(alpha = 0.38f))
+            null
         )
         SpatialButtonVariant.Ghost -> Triple(
             if (isPressed && isInteractive) colors.pressedStateOverlay else Color.Transparent,
@@ -387,9 +406,22 @@ fun SpatialGlassButton(
         modifier = modifier
             .heightIn(min = geometry.minTouchTarget)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                val s = if (isSticker) 1f else scale
+                scaleX = s
+                scaleY = s
             }
+            .then(
+                if (isSticker) {
+                    Modifier.drawBehind {
+                        val o = (stickerOffset - stickerShift).toPx()
+                        val outline = shape.createOutline(size, layoutDirection, this)
+                        translate(left = o, top = o) { drawOutline(outline, stickerInk) }
+                    }
+                } else {
+                    Modifier
+                }
+            )
+            .offset(x = stickerShift, y = stickerShift)
             .clip(shape)
             .background(bgColor)
             .then(if (borderStroke != null) Modifier.border(borderStroke, shape) else Modifier)
@@ -509,26 +541,27 @@ fun SpatialGlassPill(
     val typography = SpatialTheme.typography
     val shape = RoundedCornerShape(geometry.radiusPill)
 
+    // Candy Pop: selected pills become grape "stickers"; idle pills are plain candy.
     val resolvedContainer = containerColor ?: when {
-        selected -> (accentColor ?: colors.lavender).copy(alpha = if (colors.isDark) 0.26f else 0.18f)
-        else -> colors.glassSurfaceSubtle
+        selected -> accentColor ?: colors.primaryAction
+        else -> colors.glassSurfaceElevated
     }
     val resolvedContent = contentColor ?: when {
-        selected -> colors.primaryText
+        selected && accentColor == null -> colors.onPrimaryAction
+        selected -> com.diniy.duit.core.ui.theme.PrismaticPalette.GrapeInk // accents are bright candy in both modes
         else -> colors.secondaryText
     }
-    val borderBrush = Brush.linearGradient(
-        colors = listOf(
-            if (selected) (accentColor ?: colors.lavender).copy(alpha = 0.65f) else colors.glassHighlight,
-            colors.glassBorder
-        )
-    )
+    val pillBorder = if (selected) {
+        BorderStroke(2.dp, colors.sticker)
+    } else {
+        BorderStroke(geometry.borderHairline, colors.glassBorder)
+    }
 
     val pillModifier = modifier
         .heightIn(min = if (onClick != null) 38.dp else geometry.pillHeight)
         .clip(shape)
         .background(resolvedContainer)
-        .border(BorderStroke(geometry.borderHairline, borderBrush), shape)
+        .border(pillBorder, shape)
         .then(
             if (onClick != null) {
                 Modifier
@@ -722,23 +755,8 @@ fun SpatialGlassNavigationSurface(
                 spotColor = colors.glassShadowSpot
             )
             .clip(shape)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        colors.floatingNavSurface.copy(alpha = (colors.floatingNavSurface.alpha + 0.04f).coerceAtMost(0.98f)),
-                        colors.floatingNavSurface
-                    )
-                )
-            )
-            .border(
-                BorderStroke(
-                    width = geometry.borderStandard,
-                    brush = Brush.linearGradient(
-                        colors = listOf(colors.glassHighlight, colors.glassBorder)
-                    )
-                ),
-                shape = shape
-            )
+            .background(colors.floatingNavSurface)
+            .border(BorderStroke(geometry.borderHairline, colors.glassBorder), shape)
             .padding(contentPadding)
     ) {
         Row(

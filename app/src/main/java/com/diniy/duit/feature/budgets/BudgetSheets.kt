@@ -534,8 +534,8 @@ fun BudgetDetailSheet(
                 progress = { progress.progressFraction },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(50)),
                 color = statusColor,
                 trackColor = glass.glassSurfaceMuted,
                 strokeCap = StrokeCap.Round

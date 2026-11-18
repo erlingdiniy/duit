@@ -443,11 +443,16 @@ private fun SpatialSafeToSpendHeroCard(
     val isMasked = privacySettings.isAnyMaskActive
     val reducedMotion = rememberReducedMotionEnabled()
     val isTight = safeToSpendSen < 0L
+    // Candy Pop hero: solid grape sticker (bubblegum when overcommitted) with matching ink.
+    val heroFill = if (isTight) colors.bubblegum else colors.primaryAction
+    val heroInk = if (isTight) com.diniy.duit.core.ui.theme.PrismaticPalette.GrapeInk else colors.onPrimaryAction
 
     SpatialGlassCard(
         modifier = Modifier.fillMaxWidth(),
         tier = SpatialGlassTier.Elevated,
-        accentTint = if (isTight) colors.peach else colors.aqua,
+        containerColor = heroFill,
+        sticker = true,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(SpatialTheme.geometry.radiusXl),
         contentPadding = spacing.cardPaddingHero
     ) {
         Row(
@@ -459,12 +464,12 @@ private fun SpatialSafeToSpendHeroCard(
                 Text(
                     text = "Safe to Spend",
                     style = typography.cardTitle,
-                    color = colors.primaryText
+                    color = heroInk
                 )
                 Text(
                     text = activeReservePeriodLabel,
                     style = typography.caption,
-                    color = colors.secondaryText,
+                    color = heroInk.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -503,12 +508,12 @@ private fun SpatialSafeToSpendHeroCard(
             amountSen = safeToSpendSen,
             accessibilityLabel = "Safe to Spend",
             style = typography.heroBalance,
-            color = if (isTight && !isMasked) colors.error else colors.primaryText
+            color = heroInk
         )
 
         Spacer(Modifier.height(10.dp))
 
-        HorizontalDivider(color = colors.divider)
+        HorizontalDivider(color = heroInk.copy(alpha = 0.2f))
 
         Spacer(Modifier.height(10.dp))
 
@@ -519,7 +524,7 @@ private fun SpatialSafeToSpendHeroCard(
                 "Excludes Protected Savings. All current-cycle obligations are settled."
             },
             style = typography.supportingInfo,
-            color = colors.secondaryText
+            color = heroInk.copy(alpha = 0.88f)
         )
     }
 }

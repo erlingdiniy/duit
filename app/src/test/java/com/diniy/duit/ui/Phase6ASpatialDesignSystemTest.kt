@@ -37,12 +37,43 @@ class Phase6ASpatialDesignSystemTest {
     }
 
     @Test
-    fun brandPalette_matchesOfficialSpecificationExactly() {
-        assertEquals(Color(0xFF42CDBB), PrismaticPalette.Aqua)
-        assertEquals(Color(0xFF9A83E8), PrismaticPalette.Lavender)
-        assertEquals(Color(0xFF75B9ED), PrismaticPalette.SkyBlue)
-        assertEquals(Color(0xFFF3B78B), PrismaticPalette.Peach)
-        assertEquals(Color(0xFF263A55), PrismaticPalette.Slate)
+    fun brandPalette_matchesCandyPopSpecificationExactly() {
+        // Phase 6C Candy Pop brand
+        assertEquals(Color(0xFF7B3CFF), PrismaticPalette.Grape)
+        assertEquals(Color(0xFFFF5C8A), PrismaticPalette.Bubblegum)
+        assertEquals(Color(0xFFFFD84D), PrismaticPalette.Sunny)
+        assertEquals(Color(0xFF5EE0C1), PrismaticPalette.Mint)
+        assertEquals(Color(0xFF2A1650), PrismaticPalette.GrapeInk)
+        assertEquals(Color(0xFFF3ECFF), PrismaticPalette.LightCanvas)
+        // Legacy accent names persisted by wallets/goals still resolve to candy colours
+        assertEquals(PrismaticPalette.Mint, PrismaticPalette.Aqua)
+        assertEquals(PrismaticPalette.Bubblegum, PrismaticPalette.Peach)
+        assertEquals(PrismaticPalette.Sunny, PrismaticPalette.Slate)
+    }
+
+    @Test
+    fun candyPopActionAndMoneyColours_meetWcagAa() {
+        for (c in listOf(LightSpatialColors, DarkSpatialColors)) {
+            val mode = if (c.isDark) "dark" else "light"
+            val onPrimary = contrastRatio(c.onPrimaryAction, c.primaryAction)
+            assertTrue("$mode primary button/hero text ($onPrimary) must be >= 4.5:1", onPrimary >= 4.5)
+            for ((name, fg) in listOf("income" to c.income, "expense" to c.expense, "savings" to c.savings, "warning" to c.warning)) {
+                val onCanvas = contrastRatio(fg, c.appBackground)
+                val onCard = contrastRatio(fg, c.glassSurface)
+                assertTrue("$mode $name on canvas ($onCanvas) must be >= 4.5:1", onCanvas >= 4.5)
+                assertTrue("$mode $name on card ($onCard) must be >= 4.5:1", onCard >= 4.5)
+            }
+            val onOvercommittedHero = contrastRatio(PrismaticPalette.GrapeInk, c.bubblegum)
+            assertTrue("$mode ink on bubblegum hero ($onOvercommittedHero) must be >= 4.5:1", onOvercommittedHero >= 4.5)
+            for (accent in listOf(c.aqua, c.lavender, c.skyBlue, c.peach, c.sunny, c.bubblegum)) {
+                // worst case: accent text on its own 22% tint over the card
+                val tint = androidx.compose.ui.graphics.lerp(c.glassSurface, accent, 0.22f)
+                val r = contrastRatio(c.readableOn(accent), tint)
+                assertTrue("$mode readable accent $accent on its tint ($r) must be >= 4.5:1", r >= 4.5)
+            }
+            val onSunny = contrastRatio(c.onSunny, c.sunny)
+            assertTrue("$mode ink on sunny sticker ($onSunny) must be >= 4.5:1", onSunny >= 4.5)
+        }
     }
 
     @Test
@@ -80,15 +111,20 @@ class Phase6ASpatialDesignSystemTest {
     }
 
     @Test
-    fun glassIntensityScaling_adjustsTranslucencyWithinSafeReadableBounds() {
+    fun depthSetting_scalesShadowsAndKeepsCandySurfacesOpaque() {
+        // Phase 6C: the persisted GlassIntensity setting now controls shadow depth.
         val subtle = LightSpatialColors.withGlassIntensity(GlassIntensity.SUBTLE)
         val balanced = LightSpatialColors.withGlassIntensity(GlassIntensity.BALANCED)
         val rich = LightSpatialColors.withGlassIntensity(GlassIntensity.RICH)
 
-        assertTrue(subtle.glassSurface.alpha > balanced.glassSurface.alpha)
-        assertTrue(rich.glassSurface.alpha < balanced.glassSurface.alpha)
-        assertTrue(rich.glassSurface.alpha in 0.59f..0.97f)
-        assertTrue(subtle.glassSurfaceElevated.alpha in 0.71f..0.99f)
+        assertTrue(subtle.glassShadowSpot.alpha < balanced.glassShadowSpot.alpha)
+        assertTrue(rich.glassShadowSpot.alpha > balanced.glassShadowSpot.alpha)
+        assertTrue(rich.glassShadowSpot.alpha in 0.03f..0.60f)
+        for (t in listOf(subtle, balanced, rich)) {
+            assertEquals(1f, t.glassSurface.alpha, 0.0001f)
+            assertEquals(1f, t.glassSurfaceElevated.alpha, 0.0001f)
+            assertEquals(1f, t.floatingNavSurface.alpha, 0.0001f)
+        }
 
         // Bridge to PrismaticGlassTokens preserves dark mode and glass surface alphas
         val bridgedDark = DarkSpatialColors.withGlassIntensity(GlassIntensity.RICH).toPrismaticGlassTokens()

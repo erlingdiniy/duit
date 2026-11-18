@@ -1411,8 +1411,8 @@ private fun SavingsOverviewDashboardCard(
             progress = { overview.overallProgressFraction },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(7.dp)
-                .clip(RoundedCornerShape(4.dp)),
+                .height(10.dp)
+                .clip(RoundedCornerShape(50)),
             color = glass.skyBlueAccent,
             trackColor = glass.glassSurfaceMuted,
             strokeCap = StrokeCap.Round
@@ -1515,8 +1515,8 @@ private fun SavingsGoalCard(
             progress = { progress.progressFraction },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
+                .height(10.dp)
+                .clip(RoundedCornerShape(50)),
             color = accentColor,
             trackColor = glass.glassSurfaceMuted,
             strokeCap = StrokeCap.Round

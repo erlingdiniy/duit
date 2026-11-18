@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -451,48 +452,48 @@ private fun InsightsSectionPillBar(
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
     val geometry = SpatialTheme.geometry
+    val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(geometry.radiusXl))
-            .background(colors.glassSurface)
-            .border(
-                width = geometry.borderStandard,
-                brush = Brush.linearGradient(listOf(colors.glassHighlight, colors.glassBorder)),
-                shape = RoundedCornerShape(geometry.radiusXl)
-            )
+            .clip(RoundedCornerShape(geometry.radiusPill))
+            .background(if (colors.isDark) colors.glassSurfaceSubtle else colors.baseSurface)
             .padding(5.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         InsightsSectionTab.entries.forEach { tab ->
             val selected = tab == selectedTab
             val bgColor by animateColorAsState(
-                targetValue = if (selected) colors.selectedStateOverlay else Color.Transparent,
+                targetValue = if (selected) (if (colors.isDark) colors.floatingNavActivePill else colors.glassSurfaceElevated) else Color.Transparent,
                 label = "insights_tab_bg"
             )
             val textColor by animateColorAsState(
-                targetValue = if (selected) colors.primaryText else colors.secondaryText,
+                targetValue = if (selected) colors.primaryAction else colors.secondaryText,
                 label = "insights_tab_fg"
             )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 42.dp)
-                    .clip(RoundedCornerShape(geometry.radiusMd))
-                    .background(bgColor)
                     .then(
                         if (selected) {
-                            Modifier.border(
-                                width = geometry.borderHairline,
-                                color = colors.lavender.copy(alpha = 0.55f),
-                                shape = RoundedCornerShape(geometry.radiusMd)
+                            Modifier.shadow(
+                                elevation = 3.dp,
+                                shape = RoundedCornerShape(geometry.radiusPill),
+                                ambientColor = colors.glassShadowAmbient,
+                                spotColor = colors.glassShadowSpot
                             )
                         } else {
                             Modifier
                         }
                     )
-                    .clickable(role = Role.Tab) { onSelectTab(tab) }
+                    .clip(RoundedCornerShape(geometry.radiusPill))
+                    .background(bgColor)
+                    .clickable(role = Role.Tab) {
+                        if (!selected) haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onSelectTab(tab)
+                    }
                     .padding(horizontal = 6.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center
             ) {

@@ -16,9 +16,8 @@ enum class GlassCardTier {
 }
 
 /**
- * Reusable frosted glass surface card for Prismatic Spatial Glass.
- * Backed by [SpatialGlassCard] so all existing screens automatically benefit from
- * the Phase 6A VisionOS specular rim, overhead inner luminance, and tuned Light/Dark tokens.
+ * Reusable Candy Pop card (name kept from Phase 6A for API stability).
+ * Backed by [SpatialGlassCard]; pass [sticker] = true for the Sticker Pop outline + offset shadow.
  */
 @Composable
 fun PrismaticGlassCard(
@@ -30,6 +29,7 @@ fun PrismaticGlassCard(
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
     enabled: Boolean = true,
+    sticker: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val spatialTier = when (tier) {
@@ -47,6 +47,7 @@ fun PrismaticGlassCard(
         enabled = enabled,
         onClick = onClick,
         onClickLabel = onClickLabel,
+        sticker = sticker,
         content = content
     )
 }

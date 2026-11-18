@@ -150,8 +150,8 @@ fun SavingsGoalDetailSheet(
                 progress = { progress.progressFraction },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(50)),
                 color = accentColor,
                 trackColor = glass.glassSurfaceMuted,
                 strokeCap = StrokeCap.Round
@@ -192,7 +192,7 @@ fun SavingsGoalDetailSheet(
                 Text(
                     text = "Suggested pace: ${MyrFormatter.format(progress.suggestedMonthlySen)} / month",
                     style = MaterialTheme.typography.labelMedium,
-                    color = accentColor
+                    color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.readableOn(accentColor)
                 )
             }
         }

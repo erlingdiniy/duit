@@ -37,6 +37,8 @@ data class PrismaticGlassTokens(
     val peachContainer: Color,
     val onPeachContainer: Color,
     val slateAccent: Color,
+    val slateContainer: Color,
+    val onSlateContainer: Color,
     val positiveText: Color,
     val cautionText: Color
 )
@@ -57,14 +59,16 @@ internal fun SpatialColorTokens.toPrismaticGlassTokens(): PrismaticGlassTokens =
     onAquaContainer = onIncomeContainer,
     lavenderAccent = lavender,
     lavenderContainer = lavender.copy(alpha = if (isDark) 0.22f else 0.18f),
-    onLavenderContainer = if (isDark) Color(0xFFD5CAFF) else Color(0xFF392784),
+    onLavenderContainer = if (isDark) Color(0xFFEADDFF) else PrismaticPalette.GrapeInk,
     skyBlueAccent = skyBlue,
     skyBlueContainer = skyBlue.copy(alpha = 0.20f),
     onSkyBlueContainer = onSavingsContainer,
     peachAccent = peach,
     peachContainer = peach.copy(alpha = if (isDark) 0.20f else 0.24f),
-    onPeachContainer = onWarningContainer,
+    onPeachContainer = onExpenseContainer,
     slateAccent = slate,
+    slateContainer = slate.copy(alpha = if (isDark) 0.16f else 0.30f),
+    onSlateContainer = onSavingsContainer,
     positiveText = income,
     cautionText = warning
 )
@@ -90,8 +94,8 @@ private val LightColorScheme = lightColorScheme(
     onSurface = PrismaticPalette.LightInk,
     surfaceVariant = PrismaticPalette.LightSurfaceSubtle,
     onSurfaceVariant = PrismaticPalette.LightInkMuted,
-    outline = PrismaticPalette.Slate.copy(alpha = 0.24f),
-    outlineVariant = PrismaticPalette.Slate.copy(alpha = 0.12f),
+    outline = PrismaticPalette.GrapeInk.copy(alpha = 0.24f),
+    outlineVariant = PrismaticPalette.GrapeInk.copy(alpha = 0.12f),
     error = PrismaticPalette.LightError,
     onError = Color.White,
     errorContainer = PrismaticPalette.LightErrorContainer,
@@ -99,15 +103,15 @@ private val LightColorScheme = lightColorScheme(
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = PrismaticPalette.Lavender,
+    primary = PrismaticPalette.DarkPrimary,
     onPrimary = PrismaticPalette.DarkPrimaryInk,
     primaryContainer = PrismaticPalette.DarkPrimaryContainer,
     onPrimaryContainer = PrismaticPalette.DarkOnPrimaryContainer,
-    secondary = PrismaticPalette.Aqua,
+    secondary = PrismaticPalette.DarkIncome,
     onSecondary = PrismaticPalette.DarkSecondaryInk,
     secondaryContainer = PrismaticPalette.DarkIncomeContainer,
     onSecondaryContainer = PrismaticPalette.DarkOnIncomeContainer,
-    tertiary = PrismaticPalette.SkyBlue,
+    tertiary = PrismaticPalette.DarkSavings,
     onTertiary = PrismaticPalette.DarkTertiaryInk,
     tertiaryContainer = PrismaticPalette.DarkSavingsContainer,
     onTertiaryContainer = PrismaticPalette.DarkOnSavingsContainer,

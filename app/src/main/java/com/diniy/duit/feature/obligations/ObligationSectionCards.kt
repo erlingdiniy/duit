@@ -347,8 +347,8 @@ fun CommitmentObligationCard(
                 progress = { summary.progressFraction },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(5.dp)
-                    .clip(RoundedCornerShape(3.dp)),
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(50)),
                 color = glass.skyBlueAccent,
                 trackColor = glass.glassSurfaceMuted,
                 strokeCap = StrokeCap.Round
@@ -430,8 +430,8 @@ fun PayLaterPlanCard(
             progress = { summary.progressFraction },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
+                .height(10.dp)
+                .clip(RoundedCornerShape(50)),
             color = if (summary.isOverdue) MaterialTheme.colorScheme.error else accentColor,
             trackColor = glass.glassSurfaceMuted,
             strokeCap = StrokeCap.Round
@@ -530,8 +530,8 @@ fun DebtRecordCard(
             progress = { summary.progressFraction },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
+                .height(10.dp)
+                .clip(RoundedCornerShape(50)),
             color = if (summary.isOverdue) MaterialTheme.colorScheme.error else barColor,
             trackColor = glass.glassSurfaceMuted,
             strokeCap = StrokeCap.Round

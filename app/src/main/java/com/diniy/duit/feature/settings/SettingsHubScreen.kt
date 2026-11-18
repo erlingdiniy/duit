@@ -424,7 +424,7 @@ private fun AppearanceSettingsScreen(
                 Text(
                     text = settings.glassIntensity.summary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = glass.aquaAccent
+                    color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.readableOn(glass.aquaAccent)
                 )
             }
         }
@@ -902,7 +902,7 @@ internal fun SettingsPageScaffold(
                 item(key = "settings_status") {
                     PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Standard, accentTint = glass.aquaAccent) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(statusMessage, style = MaterialTheme.typography.bodySmall, color = glass.aquaAccent, modifier = Modifier.weight(1f))
+                            Text(statusMessage, style = MaterialTheme.typography.bodySmall, color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.readableOn(glass.aquaAccent), modifier = Modifier.weight(1f))
                             TextButton(onClick = onClearFeedback) { Text("Dismiss") }
                         }
                     }

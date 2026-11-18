@@ -49,7 +49,7 @@ object SavingsIconMapper {
             PrismaticAccentToken.LAVENDER -> Triple(glass.lavenderAccent, glass.lavenderContainer, glass.onLavenderContainer)
             PrismaticAccentToken.SKY_BLUE -> Triple(glass.skyBlueAccent, glass.skyBlueContainer, glass.onSkyBlueContainer)
             PrismaticAccentToken.PEACH -> Triple(glass.peachAccent, glass.peachContainer, glass.onPeachContainer)
-            PrismaticAccentToken.SLATE -> Triple(glass.slateAccent, glass.glassSurfaceMuted, glass.onLavenderContainer)
+            PrismaticAccentToken.SLATE -> Triple(glass.slateAccent, glass.slateContainer, glass.onSlateContainer)
         }
     }
 }
