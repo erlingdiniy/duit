@@ -1,5 +1,10 @@
 package com.diniy.duit.feature.insights
 
+import androidx.compose.ui.semantics.selected
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -106,6 +111,7 @@ fun InsightsScreen(
 
     var selectedTab by rememberSaveable { mutableStateOf(InsightsSectionTab.OVERVIEW) }
     var showCustomRangePicker by rememberSaveable { mutableStateOf(false) }
+    var showPeriodSheet by rememberSaveable { mutableStateOf(false) }
     var showCommissionHistory by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
@@ -115,17 +121,31 @@ fun InsightsScreen(
     ) {
         // 1. Spatial Header
         item(key = "insights_header", contentType = "header") {
-            Column(modifier = Modifier.padding(top = 2.dp)) {
-                Text(
-                    text = "Insights",
-                    style = typography.screenHeading,
-                    color = colors.primaryText,
-                    modifier = Modifier.semantics { heading() }
-                )
-                Text(
-                    text = uiState.overview.resolvedPeriod.periodLabel,
-                    style = typography.supportingInfo,
-                    color = colors.secondaryText
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Insights",
+                        style = typography.screenHeading,
+                        color = colors.primaryText,
+                        modifier = Modifier.semantics { heading() }
+                    )
+                    Text(
+                        text = "Understand your money",
+                        style = typography.supportingInfo,
+                        color = colors.secondaryText
+                    )
+                }
+                // Phase 11H: period presets moved into this filter sheet (shared Mint Bubble button)
+                com.diniy.duit.core.ui.components.CandyMintIconButton(
+                    icon = Icons.Rounded.Tune,
+                    contentDescription = "Choose period",
+                    onClick = { showPeriodSheet = true },
+                    pressedTilt = 0f
                 )
             }
         }
@@ -171,16 +191,19 @@ fun InsightsScreen(
                                     style = typography.cardTitle,
                                     color = colors.primaryText
                                 )
-                                if (uiState.periodPreset == InsightsPeriodPreset.CUSTOM_RANGE &&
-                                    uiState.customStartEpochDay != null &&
-                                    uiState.customEndEpochDay != null
-                                ) {
-                                    Text(
-                                        text = "${DateTimeFormatters.formatEpochDay(uiState.customStartEpochDay)} – ${DateTimeFormatters.formatEpochDay(uiState.customEndEpochDay)}",
-                                        style = typography.caption,
-                                        color = colors.secondaryText
-                                    )
-                                }
+                                // Active period type stays visible (plus dates for a custom range)
+                                Text(
+                                    text = if (uiState.periodPreset == InsightsPeriodPreset.CUSTOM_RANGE &&
+                                        uiState.customStartEpochDay != null &&
+                                        uiState.customEndEpochDay != null
+                                    ) {
+                                        "${uiState.periodPreset.label} · ${DateTimeFormatters.formatEpochDay(uiState.customStartEpochDay)} – ${DateTimeFormatters.formatEpochDay(uiState.customEndEpochDay)}"
+                                    } else {
+                                        uiState.periodPreset.label
+                                    },
+                                    style = typography.caption,
+                                    color = colors.coral
+                                )
                             }
                             IconButton(onClick = { onShiftMonth(1) }) {
                                 Icon(
@@ -192,38 +215,6 @@ fun InsightsScreen(
                         }
                     }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        InsightsPeriodPreset.entries.forEach { preset ->
-                            SpatialGlassPill(
-                                label = preset.label,
-                                selected = uiState.periodPreset == preset,
-                                accentColor = colors.lavender,
-                                leadingIcon = if (preset == InsightsPeriodPreset.CUSTOM_RANGE) {
-                                    {
-                                        Icon(
-                                            imageVector = Icons.Rounded.DateRange,
-                                            contentDescription = null,
-                                            tint = colors.primaryText,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                } else null,
-                                onClick = {
-                                    if (preset == InsightsPeriodPreset.CUSTOM_RANGE) {
-                                        showCustomRangePicker = true
-                                    } else {
-                                        onSelectPeriodPreset(preset)
-                                    }
-                                }
-                            )
-                        }
-                    }
                 }
             }
 
@@ -410,6 +401,53 @@ fun InsightsScreen(
             walletNamesById = uiState.walletNamesById,
             onDismiss = onDismissCategorySheet
         )
+    }
+
+    if (showPeriodSheet) {
+        com.diniy.duit.core.ui.components.PrismaticModalBottomSheet(
+            title = "Period",
+            subtitle = "Choose what Insights covers",
+            onDismissRequest = { showPeriodSheet = false }
+        ) {
+            InsightsPeriodPreset.entries.forEach { preset ->
+                val selected = uiState.periodPreset == preset
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (selected) colors.selectedStateOverlay else Color.Transparent)
+                        .clickable(role = Role.RadioButton) {
+                            showPeriodSheet = false
+                            if (preset == InsightsPeriodPreset.CUSTOM_RANGE) {
+                                showCustomRangePicker = true // existing picker + validation
+                            } else {
+                                onSelectPeriodPreset(preset)
+                            }
+                        }
+                        .semantics { this.selected = selected }
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (preset == InsightsPeriodPreset.CUSTOM_RANGE) Icons.Rounded.DateRange else Icons.Rounded.CalendarMonth,
+                        contentDescription = null,
+                        tint = if (selected) colors.primaryAction else colors.secondaryText,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        preset.label,
+                        style = typography.transactionDescription,
+                        color = colors.primaryText,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (selected) {
+                        Icon(Icons.Rounded.Check, contentDescription = null, tint = colors.primaryAction)
+                    }
+                }
+            }
+        }
     }
 
     if (showCustomRangePicker) {

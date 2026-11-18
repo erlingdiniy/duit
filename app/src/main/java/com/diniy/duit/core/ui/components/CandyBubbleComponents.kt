@@ -84,6 +84,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -573,5 +574,62 @@ fun CandySuccessHost(content: @Composable () -> Unit) {
                 )
             }
         }
+    }
+}
+
+
+/**
+ * Mint Bubble header button (Phase 11E/11F): 48dp mint squircle with a deep-teal outline.
+ * Squishes and tilts its icon while pressed, springs back. No motion under Reduce Motion.
+ */
+@Composable
+fun CandyMintIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    pressedTilt: Float = 30f
+) {
+    val colors = SpatialTheme.colors
+    val motion = SpatialTheme.motion
+    val reduced = rememberReducedMotionEnabled()
+    val haptic = rememberDuitHaptic()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val spec = prismaticSpring<Float>(reduced, motion.pressDampingRatio, motion.pressStiffness)
+    val scale by animateFloatAsState(if (pressed && !reduced) 0.92f else 1f, spec, label = "mint_btn_scale")
+    val tilt by animateFloatAsState(if (pressed && !reduced) pressedTilt else 0f, spec, label = "mint_btn_tilt")
+    val shape = RoundedCornerShape(16.dp)
+
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(colors.aqua)
+            .border(BorderStroke(2.dp, colors.sticker), shape)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = contentDescription
+            ) {
+                haptic(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = colors.onCoral,
+            modifier = Modifier
+                .size(24.dp)
+                .graphicsLayer { rotationZ = tilt }
+        )
     }
 }

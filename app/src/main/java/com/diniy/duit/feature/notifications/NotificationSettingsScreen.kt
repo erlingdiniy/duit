@@ -1,5 +1,17 @@
 package com.diniy.duit.feature.notifications
 
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
+import com.diniy.duit.core.ui.components.candyPressable
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -73,6 +85,8 @@ fun NotificationSettingsScreen(
     onOpenNotificationCentre: (() -> Unit)? = null
 ) {
     val glass = LocalPrismaticGlass.current
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     var showTimePicker by rememberSaveable { mutableStateOf(false) }
 
     BackHandler(onBack = onBack)
@@ -115,249 +129,100 @@ fun NotificationSettingsScreen(
                 }
             }
 
-            if (onOpenNotificationCentre != null) {
-                item(key = "centre_link") {
-                    com.diniy.duit.core.ui.components.SpatialCompactListRow(
-                        title = "Notification Centre",
-                        subtitle = "Recent reminders and alerts",
-                        trailingPrimaryText = "Open",
-                        trailingPrimaryColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.primaryAction,
-                        onClick = onOpenNotificationCentre
-                    )
-                }
-            }
-
-            // Permission & Master card
-            item(key = "master_card") {
-                PrismaticGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    tier = GlassCardTier.Elevated,
-                    accentTint = glass.aquaAccent
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+            // A. Notifications: master switch, permission state, centre, Android settings, lock-screen privacy
+            item(key = "section_notifications") {
+                NotifCard {
+                    NotifSectionHeader(icon = Icons.Rounded.NotificationsActive, accent = colors.aqua, title = "Notifications") {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (uiState.hasOsPermission) colors.incomeContainer else colors.warningContainer)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = glass.aquaAccent)
-                            Text("Smart Reminders", style = MaterialTheme.typography.titleMedium)
-                        }
-                        PrismaticBadge(
-                            label = if (uiState.hasOsPermission) "Permission Granted" else "Permission Needed",
-                            containerColor = if (uiState.hasOsPermission) glass.aquaContainer else glass.peachContainer,
-                            contentColor = if (uiState.hasOsPermission) glass.onAquaContainer else glass.onPeachContainer
+                        Text(
+                            text = if (uiState.hasOsPermission) "Allowed" else "Not allowed",
+                            style = typography.caption,
+                            color = if (uiState.hasOsPermission) colors.onIncomeContainer else colors.onWarningContainer
                         )
                     }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    NotifSwitchRow(
-                        title = "Enable Notifications",
-                        subtitle = "Schedule local WorkManager reminders with zero cloud tracking.",
-                        checked = uiState.settings.masterEnabled,
-                        onCheckedChange = { enabled ->
-                            onSetMasterEnabled(enabled)
-                            if (enabled && !uiState.hasOsPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                permissionRequester.requestOrOpenSettings()
+                    }
+                        NotifSwitchRow(
+                            title = "Enable notifications",
+                            subtitle = "Reminders are scheduled on this phone",
+                            checked = uiState.settings.masterEnabled,
+                            onCheckedChange = { enabled ->
+                                onSetMasterEnabled(enabled)
+                                if (enabled && !uiState.hasOsPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    permissionRequester.requestOrOpenSettings()
+                                }
                             }
-                        }
-                    )
-
-                    if (!uiState.hasOsPermission) {
-                        Spacer(Modifier.height(10.dp))
-                        if (permissionRequester.isPromptBlockedBySystem) {
+                        )
+                        if (!uiState.hasOsPermission) {
                             Text(
-                                text = "Android suppressed the permission prompt. Open Notification Settings to allow notifications for duit.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = if (permissionRequester.isPromptBlockedBySystem) {
+                                    "Android is blocking duit.'s notifications. Allow them in Android settings to get reminders."
+                                } else {
+                                    "duit. needs your permission to show reminders."
+                                },
+                                style = typography.caption,
+                                color = colors.warning,
+                                modifier = Modifier.padding(vertical = 4.dp)
                             )
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !permissionRequester.isPromptBlockedBySystem) {
                                 PrismaticButton(
-                                    text = "Grant Permission",
+                                    text = "Allow notifications",
                                     onClick = permissionRequester.requestOrOpenSettings,
-                                    variant = PrismaticButtonVariant.Secondary
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                                 )
                             }
-                            PrismaticButton(
-                                text = if (permissionRequester.isPromptBlockedBySystem) "Open Notification Settings" else "System Settings",
-                                onClick = permissionRequester.openNotificationSettings,
-                                variant = if (permissionRequester.isPromptBlockedBySystem) {
-                                    PrismaticButtonVariant.Primary
-                                } else {
-                                    PrismaticButtonVariant.Ghost
-                                }
-                            )
                         }
-                    } else {
-                        Spacer(Modifier.height(8.dp))
-                        PrismaticButton(
-                            text = "Android Notification Settings",
-                            onClick = permissionRequester.openNotificationSettings,
-                            variant = PrismaticButtonVariant.Ghost
-                        )
-                    }
-                }
-            }
-
-            // Verification & Test Notification card
-            item(key = "test_notification_card") {
-                PrismaticGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    tier = GlassCardTier.Standard,
-                    accentTint = glass.aquaAccent
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (uiState.hasOsPermission) {
-                                Icons.Rounded.NotificationsActive
+                        if (onOpenNotificationCentre != null) {
+                            NotifNavRow("Notification Centre", "Recent reminders and alerts", onOpenNotificationCentre)
+                        }
+                        NotifNavRow("Android notification settings", "Sound, pop-ups and channels", permissionRequester.openNotificationSettings)
+                        NotifSwitchRow(
+                            title = "Hide amounts on lock screen",
+                            subtitle = if (uiState.isAppLockOrPrivacyActive) {
+                                "On automatically while App Lock or Privacy Mode is active"
                             } else {
-                                Icons.Rounded.NotificationsPaused
+                                "Show reminders without Ringgit amounts"
                             },
-                            contentDescription = null,
-                            tint = glass.aquaAccent
+                            checked = uiState.settings.hideLockScreenAmounts || uiState.isAppLockOrPrivacyActive,
+                            onCheckedChange = onSetHideLockScreenAmounts
                         )
-                        Text("Verify Delivery", style = MaterialTheme.typography.titleMedium)
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "Send one immediate local notification without creating any transaction, bill, or scheduled reminder.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PrismaticButton(
-                            text = "Send Test Notification",
-                            onClick = onSendTestNotification,
-                            enabled = !uiState.isTestNotificationCoolingDown,
-                            variant = PrismaticButtonVariant.Secondary
-                        )
-                        if (!uiState.hasOsPermission || uiState.testNotificationStatus == TestNotificationStatus.PERMISSION_DENIED) {
-                            PrismaticButton(
-                                text = "Open Notification Settings",
-                                onClick = permissionRequester.openNotificationSettings,
-                                variant = PrismaticButtonVariant.Primary
-                            )
-                        }
-                    }
-
-                    val feedbackMessage = when (uiState.testNotificationStatus) {
-                        TestNotificationStatus.SENT ->
-                            "Test notification sent (\"duit. Test Notification\"). Check your notification shade."
-                        TestNotificationStatus.THROTTLED ->
-                            "A test notification was just sent — please wait a moment before sending another."
-                        TestNotificationStatus.PERMISSION_DENIED ->
-                            "Notification permission is currently disabled. Open Notification Settings to allow alerts."
-                        TestNotificationStatus.FAILED ->
-                            "Unable to deliver test notification on this device."
-                        null -> null
-                    }
-                    if (feedbackMessage != null) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = feedbackMessage,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (uiState.testNotificationStatus) {
-                                TestNotificationStatus.PERMISSION_DENIED,
-                                TestNotificationStatus.FAILED -> MaterialTheme.colorScheme.error
-                                else -> glass.aquaAccent
-                            }
-                        )
-                    }
                 }
             }
 
-            // Schedule & offsets card
-            item(key = "schedule_card") {
-                PrismaticGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    tier = GlassCardTier.Standard,
-                    accentTint = glass.lavenderAccent
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Rounded.Schedule, contentDescription = null, tint = glass.lavenderAccent)
-                        Text("Reminder Schedule", style = MaterialTheme.typography.titleMedium)
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Preferred Reminder Time", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                text = uiState.settings.formattedReminderTime,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        PrismaticButton(
-                            text = "Change Time",
-                            onClick = { showTimePicker = true },
-                            variant = PrismaticButtonVariant.Secondary
-                        )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = glass.glassBorderSubtle)
-
-                    Text("Reminder Offsets", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(6.dp))
+            // B. Reminder schedule: time, offsets, overdue, and what to be reminded about
+            item(key = "section_schedule") {
+                NotifCard {
+                    NotifSectionHeader(icon = Icons.Rounded.Schedule, accent = colors.coral, title = "Reminder schedule")
+                    NotifNavRow("Reminder time", uiState.settings.formattedReminderTime, { showTimePicker = true })
+                    Text("Remind me before due date", style = typography.caption, color = colors.secondaryText, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ReminderOffset.entries.forEach { offset ->
                             val selected = offset in uiState.settings.enabledOffsets
-                            FilterChip(
+                            com.diniy.duit.core.ui.components.SpatialGlassPill(
+                                label = offset.label,
                                 selected = selected,
-                                onClick = { onSetOffsetEnabled(offset, !selected) },
-                                label = { Text(offset.label) },
-                                modifier = Modifier.heightIn(min = 44.dp)
+                                onClick = { onSetOffsetEnabled(offset, !selected) }
                             )
                         }
                     }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = glass.glassBorderSubtle)
-
+                    Spacer(Modifier.height(4.dp))
                     NotifSwitchRow(
-                        title = "Overdue Reminders",
-                        subtitle = "Send a reminder when unpaid obligations pass their scheduled due date.",
+                        title = "Overdue reminders",
+                        subtitle = "When a bill passes its due date unpaid",
                         checked = uiState.settings.overdueEnabled,
                         onCheckedChange = onSetOverdueEnabled
                     )
-                }
-            }
-
-            // Category toggles card
-            item(key = "categories_card") {
-                PrismaticGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    tier = GlassCardTier.Standard,
-                    accentTint = glass.skyBlueAccent
-                ) {
-                    Text("Notification Categories", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    NotificationCategory.entries.forEachIndexed { idx, category ->
-                        if (idx > 0) {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = glass.glassBorderSubtle)
-                        }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = colors.divider)
+                    Text("Remind me about", style = typography.caption, color = colors.secondaryText, modifier = Modifier.padding(bottom = 2.dp))
+                    NotificationCategory.entries.forEach { category ->
                         NotifSwitchRow(
                             title = category.displayName,
                             subtitle = category.description,
@@ -365,19 +230,17 @@ fun NotificationSettingsScreen(
                             onCheckedChange = { enabled -> onSetCategoryEnabled(category, enabled) }
                         )
                         if (category == NotificationCategory.BUDGETS && category in uiState.settings.enabledCategories) {
-                            Spacer(Modifier.height(6.dp))
                             FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 BudgetAlertThreshold.entries.forEach { threshold ->
                                     val selected = threshold in uiState.settings.enabledBudgetThresholds
-                                    FilterChip(
+                                    com.diniy.duit.core.ui.components.SpatialGlassPill(
+                                        label = "${threshold.label} alert",
                                         selected = selected,
-                                        onClick = { onSetBudgetThresholdEnabled(threshold, !selected) },
-                                        label = { Text("${threshold.label} alert") },
-                                        modifier = Modifier.heightIn(min = 44.dp)
+                                        onClick = { onSetBudgetThresholdEnabled(threshold, !selected) }
                                     )
                                 }
                             }
@@ -386,31 +249,53 @@ fun NotificationSettingsScreen(
                 }
             }
 
-            // Privacy control card
-            item(key = "privacy_card") {
-                PrismaticGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    tier = GlassCardTier.Standard,
-                    accentTint = glass.peachAccent
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Rounded.Shield, contentDescription = null, tint = glass.peachAccent)
-                        Text("Notification Privacy", style = MaterialTheme.typography.titleMedium)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    NotifSwitchRow(
-                        title = "Hide Amounts on Lock Screen & Previews",
-                        subtitle = if (uiState.isAppLockOrPrivacyActive) {
-                            "App Lock / Privacy Mode is active — monetary amounts are automatically masked in notifications."
-                        } else {
-                            "Use generic reminder text without Ringgit figures in system notifications."
-                        },
-                        checked = uiState.settings.hideLockScreenAmounts || uiState.isAppLockOrPrivacyActive,
-                        onCheckedChange = onSetHideLockScreenAmounts
+            // C. Test notification with honest feedback
+            item(key = "section_test") {
+                NotifCard {
+                    NotifSectionHeader(
+                        icon = if (uiState.hasOsPermission) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsPaused,
+                        accent = colors.sunny,
+                        title = "Test notification"
                     )
+                    Text(
+                        "Sends one notification now. Nothing is saved.",
+                        style = typography.caption,
+                        color = colors.secondaryText,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    PrismaticButton(
+                        text = "Send test notification",
+                        onClick = onSendTestNotification,
+                        enabled = !uiState.isTestNotificationCoolingDown,
+                        variant = PrismaticButtonVariant.Secondary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (!uiState.hasOsPermission || uiState.testNotificationStatus == TestNotificationStatus.PERMISSION_DENIED) {
+                        PrismaticButton(
+                            text = "Open notification settings",
+                            onClick = permissionRequester.openNotificationSettings,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                    }
+                    val feedbackMessage = when (uiState.testNotificationStatus) {
+                        TestNotificationStatus.SENT -> "Sent. Check your notification shade."
+                        TestNotificationStatus.THROTTLED -> "Just sent one. Try again in a moment."
+                        TestNotificationStatus.PERMISSION_DENIED -> "Not sent: notifications aren't allowed for duit."
+                        TestNotificationStatus.FAILED -> "Not sent: this phone couldn't deliver it."
+                        null -> null
+                    }
+                    if (feedbackMessage != null) {
+                        Text(
+                            text = feedbackMessage,
+                            style = typography.caption,
+                            color = when (uiState.testNotificationStatus) {
+                                TestNotificationStatus.PERMISSION_DENIED,
+                                TestNotificationStatus.FAILED -> colors.error
+                                else -> colors.income
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                 }
             }
         }
@@ -441,16 +326,88 @@ fun NotificationSettingsScreen(
 }
 
 @Composable
+private fun NotifCard(content: @Composable ColumnScope.() -> Unit) {
+    com.diniy.duit.core.ui.components.SpatialGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        content = content
+    )
+}
+
+@Composable
+private fun NotifSectionHeader(
+    icon: ImageVector,
+    accent: Color,
+    title: String,
+    trailing: @Composable () -> Unit = {}
+) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .rotate(-6f)
+                .clip(RoundedCornerShape(13.dp))
+                .background(accent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = colors.onCoral, modifier = Modifier.size(18.dp).rotate(6f))
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            title,
+            style = com.diniy.duit.core.ui.theme.SpatialTheme.typography.cardTitle,
+            color = colors.primaryText,
+            modifier = Modifier
+                .weight(1f)
+                .semantics { heading() }
+        )
+        trailing()
+    }
+}
+
+/** Whole-row tappable navigation with a chevron, so it reads clearly as interactive. */
+@Composable
+private fun NotifNavRow(title: String, value: String, onClick: () -> Unit) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .candyPressable(onClick = onClick, onClickLabel = title)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = typography.transactionDescription, color = colors.primaryText)
+            Text(value, style = typography.caption, color = colors.secondaryText)
+        }
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = colors.secondaryText)
+    }
+}
+
+@Composable
 private fun NotifSwitchRow(
     title: String,
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp),
+            .heightIn(min = 52.dp)
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -459,10 +416,20 @@ private fun NotifSwitchRow(
                 .weight(1f)
                 .padding(end = 12.dp)
         ) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = typography.transactionDescription, color = colors.primaryText)
+            Text(subtitle, style = typography.caption, color = colors.secondaryText)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                checkedTrackColor = colors.coral,
+                checkedThumbColor = Color.White,
+                checkedBorderColor = colors.sticker,
+                uncheckedTrackColor = colors.baseSurface,
+                uncheckedThumbColor = colors.secondaryText,
+                uncheckedBorderColor = Color.Transparent
+            )
+        )
     }
 }

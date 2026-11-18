@@ -120,27 +120,13 @@ fun ActivityScreen(
                         color = colors.secondaryText
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SpatialGlassIconButton(
-                        icon = Icons.Rounded.Tune,
-                        contentDescription = "Manage categories",
-                        onClick = onOpenCategories
-                    )
-                    SpatialGlassIconButton(
-                        icon = Icons.Rounded.Add,
-                        contentDescription = "New transaction",
-                        selected = true,
-                        accentTint = colors.lavender,
-                        onClick = {
-                            val defaultType = when (uiState.selectedFilter) {
-                                ActivityFilter.INCOME -> TransactionType.INCOME
-                                ActivityFilter.TRANSFER -> TransactionType.TRANSFER
-                                else -> TransactionType.EXPENSE
-                            }
-                            onOpenNewTransaction(defaultType)
-                        }
-                    )
-                }
+                // Phase 11F: mint bubble button; the duplicate "+" was removed (use the floating +).
+                com.diniy.duit.core.ui.components.CandyMintIconButton(
+                    icon = Icons.Rounded.Tune,
+                    contentDescription = "Manage categories",
+                    onClick = onOpenCategories,
+                    pressedTilt = 0f
+                )
             }
         }
 

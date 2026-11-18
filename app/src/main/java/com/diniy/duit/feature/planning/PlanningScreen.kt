@@ -251,28 +251,42 @@ fun PlanningScreen(
                         modifier = Modifier.semantics { heading() }
                     )
                     Text(
-                        text = "Savings goals, budgets & commitments",
+                        text = "Your goals, budgets & bills",
                         style = com.diniy.duit.core.ui.theme.SpatialTheme.typography.supportingInfo,
-                        color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.secondaryText
+                        color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.secondaryText,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    com.diniy.duit.core.ui.components.SpatialGlassPill(
-                        label = uiState.activeCycle?.label ?: "Salary Cycles",
-                        accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.aqua,
-                        onClick = { showCycleSheet = true }
-                    )
-                    com.diniy.duit.core.ui.components.SpatialGlassPill(
-                        label = "Categories",
-                        accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.lavender,
-                        onClick = onOpenCategories
-                    )
-                    com.diniy.duit.core.ui.components.SpatialGlassIconButton(
-                        icon = androidx.compose.material.icons.Icons.Rounded.Tune,
-                        contentDescription = "Money preferences",
-                        onClick = onOpenFinancialPreferences
-                    )
-                }
+                Spacer(Modifier.width(12.dp))
+                // Phase 11G: shared Mint Bubble button (opens money preferences, as before)
+                com.diniy.duit.core.ui.components.CandyMintIconButton(
+                    icon = androidx.compose.material.icons.Icons.Rounded.Tune,
+                    contentDescription = "Money preferences",
+                    onClick = onOpenFinancialPreferences,
+                    pressedTilt = 0f
+                )
+            }
+        }
+
+        // Second row: cycle selector + Categories (scrolls sideways instead of wrapping on small screens)
+        item(key = "planning_header_controls", contentType = "header_controls") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                com.diniy.duit.core.ui.components.SpatialGlassPill(
+                    label = uiState.activeCycle?.label ?: "Salary Cycles",
+                    accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.aqua,
+                    onClick = { showCycleSheet = true }
+                )
+                com.diniy.duit.core.ui.components.SpatialGlassPill(
+                    label = "Categories",
+                    accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.lavender,
+                    onClick = onOpenCategories
+                )
             }
         }
 

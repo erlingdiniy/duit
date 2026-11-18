@@ -146,8 +146,10 @@ class MainActivity : FragmentActivity() {
                 CompositionLocalProvider(
                     LocalPrivacySettings provides appLockState.privacySettings,
                     LocalMotionPreferences provides MotionPreferences(
-                        reduceMotion = appSettings.reduceMotion,
-                        animationIntensity = appSettings.animationIntensity,
+                        // Phase 11J: in-app motion controls removed. Approved defaults apply; stored values
+                        // are kept untouched, and Android's own animation scale is still respected.
+                        reduceMotion = false,
+                        animationIntensity = com.diniy.duit.domain.model.AnimationIntensity.BALANCED,
                         hapticFeedbackEnabled = appSettings.hapticFeedbackEnabled
                     )
                 ) {

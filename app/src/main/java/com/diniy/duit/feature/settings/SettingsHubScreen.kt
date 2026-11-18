@@ -1,5 +1,9 @@
 package com.diniy.duit.feature.settings
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.layout.width
 import com.diniy.duit.core.ui.components.candyPressable
 import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.shape.CircleShape
@@ -115,7 +119,8 @@ fun SettingsHubContainerScreen(
             onOpenNotificationCentre = onOpenNotificationCentre,
             onOpenSecurity = onOpenSecurity,
             onSelectTheme = viewModel::setThemeMode,
-            onSelectGlassIntensity = viewModel::setGlassIntensity
+            onSelectGlassIntensity = viewModel::setGlassIntensity,
+            onSetHaptics = viewModel::setHapticFeedbackEnabled
         )
         SettingsHubRoute.APPEARANCE -> AppearanceSettingsScreen(
             uiState = uiState,
@@ -125,13 +130,13 @@ fun SettingsHubContainerScreen(
             onOpenMotion = { onNavigateRoute(SettingsHubRoute.MOTION_HAPTICS) },
             onOpenHomeLayout = { onNavigateRoute(SettingsHubRoute.DASHBOARD) }
         )
-        // Motion and Home layout are reached from Appearance, so Back returns there.
-        SettingsHubRoute.MOTION_HAPTICS -> MotionHapticsSettingsScreen(
+        // Phase 11J: Motion & Haptics screen removed; the legacy route opens Appearance.
+        SettingsHubRoute.MOTION_HAPTICS -> AppearanceSettingsScreen(
             uiState = uiState,
-            onBack = { onNavigateRoute(SettingsHubRoute.APPEARANCE) },
-            onSetHaptics = viewModel::setHapticFeedbackEnabled,
-            onSetReduceMotion = viewModel::setReduceMotion,
-            onSetAnimationIntensity = viewModel::setAnimationIntensity
+            onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onSelectTheme = viewModel::setThemeMode,
+            onSelectGlassIntensity = viewModel::setGlassIntensity,
+            onOpenHomeLayout = { onNavigateRoute(SettingsHubRoute.DASHBOARD) }
         )
         SettingsHubRoute.DASHBOARD -> DashboardCustomizationScreen(
             uiState = uiState,
@@ -180,7 +185,8 @@ private fun SettingsHubOverviewScreen(
     onOpenNotificationCentre: () -> Unit,
     onOpenSecurity: () -> Unit,
     onSelectTheme: (ThemeMode) -> Unit,
-    onSelectGlassIntensity: (GlassIntensity) -> Unit
+    onSelectGlassIntensity: (GlassIntensity) -> Unit,
+    onSetHaptics: (Boolean) -> Unit
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
@@ -210,7 +216,7 @@ private fun SettingsHubOverviewScreen(
                         icon = Icons.Rounded.Palette,
                         accent = colors.coral,
                         title = "Appearance",
-                        subtitle = "${app.themeMode.label} · ${app.glassIntensity.label} depth · ${if (app.reduceMotion) "Reduce motion" else app.animationIntensity.label + " motion"}",
+                        subtitle = "${app.themeMode.label} theme · Home layout",
                         onClick = { onSelectRoute(SettingsHubRoute.APPEARANCE) }
                     )
                     SettingsGroupedRowItem(
@@ -234,6 +240,15 @@ private fun SettingsHubOverviewScreen(
                             append(if (uiState.securityState.privacySettings.isAnyMaskActive) "Amounts hidden" else "Amounts visible")
                         },
                         onClick = onOpenSecurity
+                    )
+                    // Phase 11J: haptics moved here from the removed Motion & Haptics screen
+                    SettingsGroupedSwitchItem(
+                        icon = Icons.Rounded.Vibration,
+                        accent = colors.peach,
+                        title = "Haptic feedback",
+                        subtitle = "Gentle vibration on taps",
+                        checked = app.hapticFeedbackEnabled,
+                        onCheckedChange = onSetHaptics
                     )
                 }
             }
@@ -284,164 +299,74 @@ private fun AppearanceSettingsScreen(
     onOpenMotion: () -> Unit = {},
     onOpenHomeLayout: () -> Unit = {}
 ) {
-    val glass = LocalPrismaticGlass.current
+    // Phase 11A: Card depth is no longer shown here. The stored preference (default Balanced
+    // when none is saved) is left untouched for backward compatibility.
     val settings = uiState.appSettings
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val visibleCount = DashboardSectionKey.entries.size - settings.hiddenDashboardSections.size
 
     SettingsPageScaffold(
         title = "Appearance",
-        subtitle = "Theme, card depth, motion and Home layout",
+        subtitle = "Theme and Home layout",
         onBack = onBack
     ) {
         item(key = "theme_mode") {
-            PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Elevated, accentTint = glass.lavenderAccent) {
-                Text("Theme Mode", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Applies immediately across the app and home screen widgets.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(10.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.diniy.duit.core.ui.components.SpatialGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .rotate(-6f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.coral),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Palette,
+                            contentDescription = null,
+                            tint = colors.onCoral,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .rotate(6f)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text("Theme", style = typography.cardTitle, color = colors.primaryText)
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     ThemeMode.entries.forEach { mode ->
-                        FilterChip(
+                        com.diniy.duit.core.ui.components.SpatialGlassPill(
+                            label = mode.label,
+                            modifier = Modifier.weight(1f),
                             selected = settings.themeMode == mode,
-                            onClick = { onSelectTheme(mode) },
-                            label = { Text(mode.label) },
-                            modifier = Modifier.heightIn(min = 44.dp)
+                            onClick = { onSelectTheme(mode) }
                         )
                     }
                 }
-            }
-        }
-
-        item(key = "glass_intensity") {
-            PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Standard, accentTint = glass.aquaAccent) {
-                Text("Card depth", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "How much soft shadow candy cards have.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(10.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassIntensity.entries.forEach { level ->
-                        FilterChip(
-                            selected = settings.glassIntensity == level,
-                            onClick = { onSelectGlassIntensity(level) },
-                            label = { Text(level.label) },
-                            modifier = Modifier.heightIn(min = 44.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = settings.glassIntensity.summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.readableOn(glass.aquaAccent)
-                )
             }
         }
 
         item(key = "appearance_more") {
             com.diniy.duit.core.ui.components.SpatialGlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(28.dp),
                 contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
             ) {
-                SettingsGroupedRowItem(
-                    icon = Icons.Rounded.Animation,
-                    accent = colors.skyBlue,
-                    title = "Motion & Haptics",
-                    subtitle = "${if (settings.hapticFeedbackEnabled) "Haptics on" else "Haptics off"} · ${if (settings.reduceMotion) "Reduce motion" else settings.animationIntensity.label}",
-                    onClick = onOpenMotion
-                )
                 SettingsGroupedRowItem(
                     icon = Icons.Rounded.DashboardCustomize,
                     accent = colors.aqua,
                     title = "Home layout",
-                    subtitle = "$visibleCount/${DashboardSectionKey.entries.size} Home sections shown · Safe to Spend pinned",
+                    subtitle = "$visibleCount/${DashboardSectionKey.entries.size} sections shown",
                     onClick = onOpenHomeLayout
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun MotionHapticsSettingsScreen(
-    uiState: SettingsHubUiState,
-    onBack: () -> Unit,
-    onSetHaptics: (Boolean) -> Unit,
-    onSetReduceMotion: (Boolean) -> Unit,
-    onSetAnimationIntensity: (AnimationIntensity) -> Unit
-) {
-    val glass = LocalPrismaticGlass.current
-    val context = LocalContext.current
-    val settings = uiState.appSettings
-    val systemReduced = remember(context) {
-        runCatching {
-            AndroidSettings.Global.getFloat(context.contentResolver, AndroidSettings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-        }.getOrDefault(false)
-    }
-
-    SettingsPageScaffold(
-        title = "Motion & Haptics",
-        subtitle = "Touch feedback, reduced motion & accessibility pacing",
-        onBack = onBack
-    ) {
-        item(key = "haptics_motion_toggles") {
-            PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Elevated, accentTint = glass.skyBlueAccent) {
-                SettingsSwitchRow(
-                    title = "Haptic Feedback",
-                    subtitle = "Subtle tactile confirmation on privacy eye toggles and primary controls.",
-                    checked = settings.hapticFeedbackEnabled,
-                    onCheckedChange = onSetHaptics
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = glass.glassBorderSubtle)
-                SettingsSwitchRow(
-                    title = "Reduce Motion",
-                    subtitle = if (systemReduced) {
-                        "System animator scale is off — transitions are already snapped."
-                    } else {
-                        "Replaces spring & fade animations with instant state changes."
-                    },
-                    checked = settings.reduceMotion || systemReduced,
-                    onCheckedChange = onSetReduceMotion
-                )
-            }
-        }
-
-        item(key = "anim_intensity") {
-            PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Standard, accentTint = glass.lavenderAccent) {
-                Text("Animation Intensity", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Persists transition pacing preferences and informs Phase 6 polish. Follows Android system display refresh capabilities.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(10.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AnimationIntensity.entries.forEach { level ->
-                        FilterChip(
-                            selected = settings.animationIntensity == level,
-                            onClick = { onSetAnimationIntensity(level) },
-                            label = { Text(level.label) },
-                            enabled = !settings.reduceMotion && !systemReduced,
-                            modifier = Modifier.heightIn(min = 44.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = settings.animationIntensity.summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -723,61 +648,230 @@ private fun FinancialPreferencesScreen(
     }
 }
 
+/** Phase 11B: About has its own small sub-pages; Back (system or toolbar) returns to About. */
+private enum class AboutPage { MAIN, PRIVACY, LICENSES }
+
 @Composable
 private fun AboutDuitScreen(onBack: () -> Unit) {
-    val glass = LocalPrismaticGlass.current
-    val context = LocalContext.current
-    val pkgInfo = remember(context) {
-        runCatching { context.packageManager.getPackageInfo(context.packageName, 0) }.getOrNull()
+    var page by rememberSaveable { mutableStateOf(AboutPage.MAIN) }
+    when (page) {
+        AboutPage.MAIN -> AboutMainPage(
+            onBack = onBack,
+            onOpenPrivacy = { page = AboutPage.PRIVACY },
+            onOpenLicenses = { page = AboutPage.LICENSES }
+        )
+        AboutPage.PRIVACY -> AboutPrivacyPage(onBack = { page = AboutPage.MAIN })
+        AboutPage.LICENSES -> AboutLicensesPage(onBack = { page = AboutPage.MAIN })
     }
-    val versionName = pkgInfo?.versionName ?: "0.1.0"
-    val versionCode = pkgInfo?.longVersionCode ?: 1L
+}
+
+@Composable
+private fun AboutMainPage(onBack: () -> Unit, onOpenPrivacy: () -> Unit, onOpenLicenses: () -> Unit) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+    val context = LocalContext.current
+    // Version comes from the installed package (build metadata), never hardcoded.
+    val versionName = remember(context) {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+    }
 
     SettingsPageScaffold(
         title = "About duit.",
-        subtitle = "Offline-first personal finance for Malaysia (MYR)",
+        subtitle = "App information",
         onBack = onBack
     ) {
-        item(key = "app_info") {
-            PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Elevated, accentTint = glass.aquaAccent) {
-                Text("duit.", style = MaterialTheme.typography.headlineSmall)
+        item(key = "identity") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(com.diniy.duit.R.drawable.duit_logo),
+                    contentDescription = "duit. logo",
+                    modifier = Modifier
+                        .size(112.dp)
+                        .clip(RoundedCornerShape(30.dp))
+                )
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = androidx.compose.ui.text.buildAnnotatedString {
+                        append("duit")
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = colors.coral)) { append(".") }
+                    },
+                    style = typography.screenHeading,
+                    color = colors.primaryText
+                )
+                Text("Your money, made simple.", style = typography.supportingInfo, color = colors.secondaryText)
+                if (!versionName.isNullOrBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(colors.baseSurface)
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Text("Version $versionName", style = typography.caption, color = colors.secondaryText)
+                    }
+                }
+            }
+        }
+
+        item(key = "info_menu") {
+            com.diniy.duit.core.ui.components.SpatialGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
+            ) {
+                SettingsGroupedRowItem(
+                    icon = Icons.Rounded.Shield,
+                    accent = colors.aqua,
+                    title = "Privacy & Security",
+                    subtitle = "Your financial data stays on your device",
+                    onClick = onOpenPrivacy
+                )
+                SettingsGroupedRowItem(
+                    icon = Icons.Rounded.Info,
+                    accent = colors.skyBlue,
+                    title = "Open-Source Licenses",
+                    subtitle = "Third-party acknowledgements",
+                    onClick = onOpenLicenses
+                )
+            }
+        }
+
+        item(key = "credit") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp, bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Designed & developed by", style = typography.caption, color = colors.secondaryText)
+                Spacer(Modifier.height(2.dp))
+                // Deep teal in light mode; the theme's primary ink keeps it readable in dark mode.
+                Text("Erling Diniy", style = typography.cardTitle, color = colors.primaryText)
+                Spacer(Modifier.height(2.dp))
+                Text("Made with care in Malaysia 🇲🇾", style = typography.caption, color = colors.secondaryText)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutInfoCard(icon: ImageVector, accent: Color, title: String, body: String) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+    com.diniy.duit.core.ui.components.SpatialGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .rotate(-6f)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(accent),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = colors.onCoral, modifier = Modifier.size(19.dp).rotate(6f))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = typography.cardTitle, color = colors.primaryText)
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Version $versionName (Build $versionCode) · Min SDK 29 · Target SDK ${context.applicationInfo.targetSdkVersion}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(body, style = typography.supportingInfo, color = colors.secondaryText)
             }
         }
-        item(key = "privacy_guarantee") {
-            PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Standard, accentTint = glass.lavenderAccent) {
-                Text("Offline-First Privacy Guarantee", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "• Zero internet permissions — your ledger never leaves this device.\n" +
-                        "• All balances use integer sen arithmetic with Room SQLite transactions.\n" +
-                        "• App PIN protection uses per-device salted PBKDF2-HMAC-SHA256 sealed in Android Keystore.\n" +
-                        "• Portable local backups use password-derived PBKDF2-HMAC-SHA256 + AES-256-GCM authenticated encryption.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+    }
+}
+
+@Composable
+private fun AboutPrivacyPage(onBack: () -> Unit) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    SettingsPageScaffold(
+        title = "Privacy & Security",
+        subtitle = "How duit. looks after your money data",
+        onBack = onBack
+    ) {
+        item(key = "on_device") {
+            AboutInfoCard(
+                Icons.Rounded.Storage, colors.aqua, "Stays on your device",
+                "Your wallets, transactions and plans are saved only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
+            )
         }
-        item(key = "oss_notices") {
-            PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Standard, accentTint = glass.skyBlueAccent) {
-                Text("Open-Source Acknowledgements", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Built with Kotlin, Kotlin Coroutines, AndroidX Jetpack Compose, Material Design 3, AndroidX Room, DataStore Preferences, WorkManager, BiometricPrompt, and Jetpack Glance (Apache License 2.0).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        item(key = "lock") {
+            AboutInfoCard(
+                Icons.Rounded.Shield, colors.coral, "Lock the app",
+                "Turn on a PIN in Settings → Security, and use your fingerprint where your phone supports it. While App Lock is on, duit. also hides its screen in the recent-apps view."
+            )
+        }
+        item(key = "mask") {
+            AboutInfoCard(
+                Icons.Rounded.Palette, colors.sunny, "Hide amounts",
+                "Privacy Mode hides balances and amounts on screen when you want a little discretion."
+            )
+        }
+        item(key = "backup") {
+            AboutInfoCard(
+                Icons.Rounded.Backup, colors.skyBlue, "Encrypted backups",
+                "Backups you create are encrypted (AES-256) with a password you choose. Keep that password safe — duit. can't recover it for you."
+            )
+        }
+    }
+}
+
+private data class LicenseNotice(val name: String, val copyright: String, val license: String)
+
+// Only components shipped in the app. Font notices are copied from the font files' own metadata.
+private val LicenseNotices = listOf(
+    LicenseNotice(
+        "Fredoka (font)",
+        "Copyright 2016 The Fredoka Project Authors (https://github.com/hafontia/Fredoka-One)",
+        "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: http://scripts.sil.org/OFL"
+    ),
+    LicenseNotice(
+        "Nunito (font)",
+        "Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)",
+        "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://scripts.sil.org/OFL"
+    ),
+    LicenseNotice(
+        "AndroidX & Jetpack Compose",
+        "Copyright The Android Open Source Project. Includes Compose UI, Material 3, Material Icons, Activity, Lifecycle, Navigation, Room, DataStore, WorkManager, Glance, Biometric, Fragment and Core.",
+        "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+    ),
+    LicenseNotice(
+        "Kotlin & kotlinx.coroutines",
+        "Copyright JetBrains s.r.o. and Kotlin Programming Language contributors.",
+        "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+    )
+)
+
+@Composable
+private fun AboutLicensesPage(onBack: () -> Unit) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+    SettingsPageScaffold(
+        title = "Open-Source Licenses",
+        subtitle = "Third-party acknowledgements",
+        onBack = onBack
+    ) {
+        LicenseNotices.forEach { notice ->
+            item(key = "license_${notice.name}") {
+                com.diniy.duit.core.ui.components.SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(26.dp),
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Text(notice.name, style = typography.cardTitle, color = colors.primaryText)
+                    Spacer(Modifier.height(4.dp))
+                    Text(notice.copyright, style = typography.caption, color = colors.secondaryText)
+                    Spacer(Modifier.height(6.dp))
+                    Text(notice.license, style = typography.supportingInfo, color = colors.secondaryText)
+                }
             }
         }
     }
@@ -920,6 +1014,55 @@ private fun SettingsGroupedRowItem(
                 modifier = Modifier.size(18.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun SettingsGroupedSwitchItem(
+    icon: ImageVector,
+    accent: Color,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .rotate(-6f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(accent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = colors.onCoral, modifier = Modifier.size(20.dp).rotate(6f))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = typography.transactionDescription, color = colors.primaryText)
+            Text(subtitle, style = typography.caption, color = colors.secondaryText)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = null, // the whole row toggles (single, accessible target)
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                checkedTrackColor = colors.coral,
+                checkedThumbColor = Color.White,
+                checkedBorderColor = colors.sticker,
+                uncheckedTrackColor = colors.baseSurface,
+                uncheckedThumbColor = colors.secondaryText,
+                uncheckedBorderColor = Color.Transparent
+            )
+        )
     }
 }
 

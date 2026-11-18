@@ -155,8 +155,9 @@ fun PrismaticFloatingBottomBar(
                 animatedSlot.animateTo(
                     targetValue = targetVisualSlot,
                     animationSpec = spring(
-                        dampingRatio = 0.8f,
-                        stiffness = Spring.StiffnessMediumLow
+                        // Phase 11K: critically damped (no overshoot/wobble), ~250ms glide
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
                     )
                 )
             }
@@ -238,8 +239,8 @@ fun PrismaticFloatingBottomBar(
                                     animatedSlot.animateTo(
                                         targetValue = targetVisualSlot,
                                         animationSpec = spring(
-                                            dampingRatio = 0.8f,
-                                            stiffness = Spring.StiffnessMediumLow
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessMedium
                                         )
                                     )
                                 }
@@ -463,8 +464,8 @@ private fun FloatingNavTabItem(
     )
 
     val iconScale by animateFloatAsState(
-        targetValue = if (isSelected && !reducedMotion) 1.07f else 1f,
-        animationSpec = prismaticSpring(reducedMotion = reducedMotion, stiffness = Spring.StiffnessMedium),
+        targetValue = if (isSelected && !reducedMotion) 1.06f else 1f,
+        animationSpec = prismaticSpring(reducedMotion = reducedMotion, dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
         label = "nav_icon_scale"
     )
 

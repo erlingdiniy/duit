@@ -2,6 +2,15 @@
 
 package com.diniy.duit.feature.navigation
 
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.key
+import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.AnimatedVisibility
@@ -526,7 +535,8 @@ fun DuitAppShell(
             ) { innerPadding ->
                 val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
                 // Extra clearance so the last list item can scroll above the floating quick action.
-                val fabClearance = if (useNavigationRail) 0.dp else 80.dp
+                // FAB (60dp) + Scaffold margin (16dp) + breathing room, so the last row can always clear it.
+                val fabClearance = if (useNavigationRail) 0.dp else 96.dp
                 val baseBottom = innerPadding.calculateBottomPadding() + 20.dp + fabClearance
                 val screenPadding = PaddingValues(
                     start = if (useNavigationRail) 12.dp else innerPadding.calculateStartPadding(layoutDirection) + 16.dp,
@@ -551,37 +561,60 @@ fun DuitAppShell(
                             .fillMaxSize()
                             .nestedScroll(fabScrollConnection)
                     ) {
+                        // Phase 11K: NavHost still owns the route and back stack (Back, deep links,
+                        // tab requests); it renders nothing itself.
                         NavHost(
                             navController = navController,
                             startDestination = DuitRoute.HOME,
-                            // Tabs slide a little toward the tab you picked (left/right by order) and fade.
-                            enterTransition = {
-                                if (reducedMotion) EnterTransition.None
-                                else fadeIn(tween(220)) + slideInHorizontally(tween(260)) {
-                                    tabDirection(initialState.destination.route, targetState.destination.route) * it / 12
-                                }
-                            },
-                            exitTransition = {
-                                if (reducedMotion) ExitTransition.None
-                                else fadeOut(tween(160)) + slideOutHorizontally(tween(260)) {
-                                    -tabDirection(initialState.destination.route, targetState.destination.route) * it / 12
-                                }
-                            },
-                            popEnterTransition = {
-                                if (reducedMotion) EnterTransition.None
-                                else fadeIn(tween(220)) + slideInHorizontally(tween(260)) {
-                                    tabDirection(initialState.destination.route, targetState.destination.route) * it / 12
-                                }
-                            },
-                            popExitTransition = {
-                                if (reducedMotion) ExitTransition.None
-                                else fadeOut(tween(160)) + slideOutHorizontally(tween(260)) {
-                                    -tabDirection(initialState.destination.route, targetState.destination.route) * it / 12
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize()
+                            enterTransition = { EnterTransition.None },
+                            exitTransition = { ExitTransition.None },
+                            popEnterTransition = { EnterTransition.None },
+                            popExitTransition = { ExitTransition.None },
+                            modifier = Modifier.size(0.dp)
                         ) {
-                            composable(DuitRoute.HOME) {
+                            composable(DuitRoute.HOME) {}
+                            composable(DuitRoute.ACTIVITY) {}
+                            composable(DuitRoute.PLANNING) {}
+                            composable(DuitRoute.INSIGHTS) {}
+                        }
+
+                        // Keep-alive tabs: each tab composes once on first visit and then stays in
+                        // memory, so switching tabs no longer re-composes a whole screen (that was the
+                        // measured one-frame hitch). Hidden tabs are invisible, untouchable and hidden
+                        // from TalkBack.
+                        val visitedTabs = remember { mutableStateListOf<String>() }
+                        if (currentRoute !in visitedTabs) visitedTabs.add(currentRoute)
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            listOf(DuitRoute.HOME, DuitRoute.ACTIVITY, DuitRoute.PLANNING, DuitRoute.INSIGHTS).forEach { tab ->
+                                if (tab in visitedTabs) {
+                                    key(tab) {
+                                        val selected = tab == currentRoute
+                                        val tabAlpha by animateFloatAsState(
+                                            targetValue = if (selected) 1f else 0f,
+                                            animationSpec = if (reducedMotion) snap() else tween(if (selected) 120 else 90),
+                                            label = "tab_alpha"
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .zIndex(if (selected) 1f else 0f)
+                                                .graphicsLayer { alpha = tabAlpha }
+                                                .then(
+                                                    if (selected) {
+                                                        Modifier
+                                                    } else {
+                                                        Modifier
+                                                            .clearAndSetSemantics { }
+                                                            .pointerInput(Unit) {
+                                                                awaitPointerEventScope {
+                                                                    while (true) awaitPointerEvent().changes.forEach { it.consume() }
+                                                                }
+                                                            }
+                                                    }
+                                                )
+                                        ) {
+                                            when (tab) {
+                                                DuitRoute.HOME -> {
                                 HomeScreen(
                                     uiState = homeState,
                                     contentPadding = screenPadding,
@@ -623,8 +656,9 @@ fun DuitAppShell(
                                     unreadNotificationCount = notificationState.unreadCount,
                                     onOpenNotifications = { showNotificationCentre = true }
                                 )
-                            }
-                            composable(DuitRoute.ACTIVITY) {
+                            
+                                                }
+                                                DuitRoute.ACTIVITY -> {
                                 ActivityScreen(
                                     uiState = activityState,
                                     contentPadding = screenPadding,
@@ -640,8 +674,9 @@ fun DuitAppShell(
                                     onExitPreview = activityViewModel::exitSamplePreview,
                                     onDismissError = activityViewModel::dismissError
                                 )
-                            }
-                            composable(DuitRoute.PLANNING) {
+                            
+                                                }
+                                                DuitRoute.PLANNING -> {
                                 PlanningScreen(
                                     uiState = planningState,
                                     contentPadding = screenPadding,
@@ -704,8 +739,9 @@ fun DuitAppShell(
                                     requestCommissionSection = requestCommissionSection,
                                     onConsumeCommissionSection = { requestCommissionSection = false }
                                 )
-                            }
-                            composable(DuitRoute.INSIGHTS) {
+                            
+                                                }
+                                                DuitRoute.INSIGHTS -> {
                                 InsightsScreen(
                                     uiState = insightsState,
                                     contentPadding = screenPadding,
@@ -718,6 +754,12 @@ fun DuitAppShell(
                                     onEnablePreview = insightsViewModel::enableSamplePreview,
                                     onExitPreview = insightsViewModel::exitSamplePreview
                                 )
+                            
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

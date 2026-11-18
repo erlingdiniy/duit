@@ -1,5 +1,9 @@
 package com.diniy.duit.feature.home
 
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import com.diniy.duit.core.ui.components.candyEntrance
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -394,7 +398,13 @@ private fun SpatialHomeHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 2.dp),
+            .padding(top = 2.dp)
+            // Phase 11I: tighter gap to the Safe to Spend card (layout height trimmed; nothing is clipped)
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                val trim = 10.dp.roundToPx()
+                layout(placeable.width, (placeable.height - trim).coerceAtLeast(0)) { placeable.place(0, 0) }
+            },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -416,21 +426,21 @@ private fun SpatialHomeHeader(
                     CandySticker(text = "Sample", tone = CandyTone.Sunny, tilt = 4f)
                 }
             }
-            Text(
-                text = activeCycleLabel?.let { "$it · Personal MYR" } ?: "Personal MYR Overview",
-                style = typography.supportingInfo,
-                color = colors.secondaryText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // Phase 11I: cycle subtitle removed; the cycle is shown inside the Safe to Spend card.
         }
 
-        SpatialGlassIconButton(
-            icon = Icons.Rounded.Settings,
-            contentDescription = "Settings hub",
-            onClick = onOpenSettingsHub
-        )
+        HomeSettingsButton(onClick = onOpenSettingsHub)
     }
+}
+
+/** Phase 11E: mint Candy Bubble settings button (shared with Activity header). */
+@Composable
+private fun HomeSettingsButton(onClick: () -> Unit) {
+    com.diniy.duit.core.ui.components.CandyMintIconButton(
+        icon = Icons.Rounded.Settings,
+        contentDescription = "Settings hub",
+        onClick = onClick
+    )
 }
 
 @Composable
