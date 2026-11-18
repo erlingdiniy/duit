@@ -1,6 +1,10 @@
 package com.diniy.duit
 
 import android.content.Intent
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
@@ -12,6 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.diniy.duit.core.ui.components.LocalMotionPreferences
@@ -41,12 +46,37 @@ class MainActivity : FragmentActivity() {
             container.setPendingWidgetDeepLink(target)
         }
 
+        // Phase 10B.3: mirror the saved theme into the per-app night mode (Android 12+) so the
+        // system splash and launch window use the right theme from the very first frame, even
+        // when the app is set to Dark while the system is Light. Only real stored values apply.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            lifecycleScope.launch {
+                container.userPreferencesRepository.observeAppSettings()
+                    .map { it.themeMode }
+                    .distinctUntilChanged()
+                    .collect { mode ->
+                        val night = when (mode) {
+                            ThemeMode.LIGHT -> android.app.UiModeManager.MODE_NIGHT_NO
+                            ThemeMode.DARK -> android.app.UiModeManager.MODE_NIGHT_YES
+                            ThemeMode.SYSTEM -> android.app.UiModeManager.MODE_NIGHT_AUTO
+                        }
+                        getSystemService(android.app.UiModeManager::class.java)?.setApplicationNightMode(night)
+                    }
+            }
+        }
+
         setContent {
             val appSettings by container.userPreferencesRepository
                 .observeAppSettings()
                 .collectAsStateWithLifecycle(initialValue = AppSettingsSnapshot())
             val themeMode = appSettings.themeMode
             val appLockState by lockManager.uiState.collectAsStateWithLifecycle()
+            // Phase 10B.2: play the animated splash only for a fresh launch. Skip it when the activity
+            // is restored (config change / process restore) or reopened from Recents. Resuming a
+            // live activity (Home, Recents, screen unlock) never re-runs setContent, so it skips too.
+            var splashDone by androidx.compose.runtime.saveable.rememberSaveable {
+                androidx.compose.runtime.mutableStateOf(!isFreshLaunch(savedInstanceState))
+            }
 
             val systemDark = isSystemInDarkTheme()
             val isDark = when (themeMode) {
@@ -97,8 +127,10 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
-            LaunchedEffect(appLockState.isLocked, appLockState.shouldPromptBiometricAutomatically) {
-                if (appLockState.isLocked &&
+            // The automatic biometric prompt waits for the splash so it never covers the animation.
+            LaunchedEffect(appLockState.isLocked, appLockState.shouldPromptBiometricAutomatically, splashDone) {
+                if (splashDone &&
+                    appLockState.isLocked &&
                     appLockState.shouldPromptBiometricAutomatically &&
                     appLockState.canUseBiometricNow
                 ) {
@@ -119,17 +151,28 @@ class MainActivity : FragmentActivity() {
                         hapticFeedbackEnabled = appSettings.hapticFeedbackEnabled
                     )
                 ) {
-                    com.diniy.duit.core.ui.components.CandySuccessHost {
-                    DuitAppShell(
-                        container = container,
-                        appLockState = appLockState,
-                        onTriggerBiometric = triggerBiometricPrompt
-                    )
+                    androidx.compose.foundation.layout.Box {
+                        com.diniy.duit.core.ui.components.CandySuccessHost {
+                        DuitAppShell(
+                            container = container,
+                            appLockState = appLockState,
+                            onTriggerBiometric = triggerBiometricPrompt
+                        )
+                        }
+                        // App Lock / Home renders underneath, so the splash never delays startup.
+                        if (!splashDone) {
+                            com.diniy.duit.core.ui.components.CandySplash(onFinished = { splashDone = true }, isDark = isDark)
+                        }
                     }
                 }
             }
         }
     }
+
+    /** New task / first activity creation, not a restore and not a Recents re-entry. */
+    private fun isFreshLaunch(savedInstanceState: Bundle?): Boolean =
+        savedInstanceState == null &&
+            (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Duit" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Duit" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Plain cream launch window; the animated Compose splash follows without a white flash. -->
+        <item name="android:windowBackground">@color/splash_cream</item>
+    </style>
 </resources>

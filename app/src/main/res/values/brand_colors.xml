@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tile colour sampled from the approved logo artwork -->
+    <color name="ic_launcher_background">#FEF2E6</color>
+    <!-- Candy Bubble cream splash -->
+    <color name="splash_cream">#FFF4E9</color>
+</resources>
