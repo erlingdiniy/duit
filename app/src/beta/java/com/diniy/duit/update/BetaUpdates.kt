@@ -23,7 +23,11 @@ internal data class BetaRelease(
     val versionCode: Long,
     val download: URI,
     val size: Long,
-    val sha256: String
+    val sha256: String,
+    /** Display-only metadata from the same validated GitHub release; never used for trust decisions. */
+    val versionName: String = "",
+    val notes: String = "",
+    val publishedDate: String = ""
 )
 
 internal class BetaUpdates(private val context: Context) {
@@ -32,6 +36,21 @@ internal class BetaUpdates(private val context: Context) {
 
     suspend fun check(): BetaRelease? = withContext(Dispatchers.IO) {
         if (repository.isEmpty()) return@withContext null
+        selectBetaRelease(fetchReleases(), repository, installed().longVersionCode)
+    }
+
+    /** Notes of the release whose tag matches this exact installed build, or null if it has none. */
+    suspend fun notesForInstalled(): String? = withContext(Dispatchers.IO) {
+        if (repository.isEmpty()) return@withContext null
+        findReleaseNotes(fetchReleases(), installed().longVersionCode)
+    }
+
+    fun installedVersionCode(): Long = installed().longVersionCode
+
+    /** True right after a fresh install (never updated), so What's New is not shown to new users. */
+    fun isFreshInstall(): Boolean = installed().let { it.firstInstallTime == it.lastUpdateTime }
+
+    private suspend fun fetchReleases(): JSONArray = withContext(Dispatchers.IO) {
         val url = URI("https://api.github.com/repos/$repository/releases?per_page=30")
         request(url, setOf("api.github.com")) { connection ->
             val bytes = connection.inputStream.use { input ->
@@ -45,23 +64,26 @@ internal class BetaUpdates(private val context: Context) {
                 }
                 output.toByteArray()
             }
-            selectBetaRelease(JSONArray(bytes.toString(Charsets.UTF_8)), repository, installed().longVersionCode)
+            JSONArray(bytes.toString(Charsets.UTF_8))
         }
     }
 
     fun canInstall(): Boolean = manager.canRequestPackageInstalls()
 
+    fun installedVersionName(): String = runCatching { installed().versionName }.getOrNull().orEmpty()
+
     // The caller owns the PackageInstaller status callback and must surface Android's confirmation
     // while the activity is visible. Commit alone does not report an installed update.
     suspend fun downloadAndRequestInstall(
         release: BetaRelease,
+        onProgress: (Float) -> Unit = {},
         status: suspend (sessionId: Int) -> IntentSender
     ): Int =
         withContext(Dispatchers.IO) {
             check(canInstall()) { "Allow installs from duit. Beta before continuing" }
             val apk = File.createTempFile("duit-beta-", ".apk", context.cacheDir)
             try {
-                download(release, apk)
+                download(release, apk, onProgress)
                 verifyApk(release, apk)
                 coroutineContext.ensureActive()
                 commit(apk, status)
@@ -70,10 +92,11 @@ internal class BetaUpdates(private val context: Context) {
             }
         }
 
-    private suspend fun download(release: BetaRelease, apk: File) {
+    private suspend fun download(release: BetaRelease, apk: File, onProgress: (Float) -> Unit) {
         val job = coroutineContext
         val hash = MessageDigest.getInstance("SHA-256")
         var total = 0L
+        var reportedPercent = -1
         request(release.download, DOWNLOAD_HOSTS) { connection ->
             connection.inputStream.use { input ->
                 apk.outputStream().use { output ->
@@ -86,6 +109,12 @@ internal class BetaUpdates(private val context: Context) {
                         if (total > release.size) throw IOException("APK exceeds its declared size")
                         hash.update(buffer, 0, count)
                         output.write(buffer, 0, count)
+                        // Report whole-percent steps only, so the UI recomposes at most 100 times.
+                        val percent = (total * 100 / release.size).toInt()
+                        if (percent != reportedPercent) {
+                            reportedPercent = percent
+                            onProgress(percent / 100f)
+                        }
                     }
                 }
             }
@@ -152,6 +181,17 @@ internal class BetaUpdates(private val context: Context) {
     }
 }
 
+/** Matches by exact tag (beta-N), never by "latest", so notes always belong to the installed build. */
+internal fun findReleaseNotes(releases: JSONArray, installedCode: Long): String? {
+    for (i in 0 until releases.length()) {
+        val release = releases.optJSONObject(i) ?: continue
+        if (release.optBoolean("draft", true)) continue
+        if (release.optString("tag_name") != "beta-$installedCode") continue
+        return release.optString("body").take(MAX_NOTES_CHARS)
+    }
+    return null
+}
+
 internal fun selectBetaRelease(releases: JSONArray, repository: String, installedCode: Long): BetaRelease? {
     var latest: BetaRelease? = null
     for (i in 0 until releases.length()) {
@@ -170,7 +210,12 @@ internal fun selectBetaRelease(releases: JSONArray, repository: String, installe
             val digest = DIGEST.matchEntire(asset.optString("digest")) ?: continue
             val size = asset.optLong("size", -1)
             if (size !in 1..MAX_APK_BYTES) continue
-            latest = BetaRelease(code, URI(expected), size, digest.groupValues[1].lowercase())
+            latest = BetaRelease(
+                code, URI(expected), size, digest.groupValues[1].lowercase(),
+                versionName = VERSION_NAME.find(release.optString("name"))?.value.orEmpty(),
+                notes = release.optString("body").take(MAX_NOTES_CHARS),
+                publishedDate = release.optString("published_at").take(10).takeIf { DATE.matches(it) }.orEmpty()
+            )
             break
         }
     }
@@ -210,3 +255,6 @@ private val TAG = Regex("beta-([1-9][0-9]{0,9})")
 private val DIGEST = Regex("sha256:([0-9a-fA-F]{64})")
 private const val MAX_METADATA_BYTES = 2 * 1024 * 1024
 private const val MAX_APK_BYTES = 100L * 1024 * 1024
+private const val MAX_NOTES_CHARS = 12_000
+private val VERSION_NAME = Regex("""\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?""")
+private val DATE = Regex("""\d{4}-\d{2}-\d{2}""")

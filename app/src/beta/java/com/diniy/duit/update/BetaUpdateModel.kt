@@ -22,22 +22,117 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.time.Duration.Companion.minutes
 
+/** Why an update stopped. Drives friendly copy and whether a retry is offered. */
+internal enum class UpdateProblem(val canRetry: Boolean) {
+    NETWORK(true), SERVER(true), INVALID_APK(true), STORAGE(true), INSTALL(true),
+    SIGNATURE(false), // a different signer can never install over this app; retrying cannot help
+    GENERIC(true)
+}
+
+internal fun classifyUpdateFailure(error: Throwable): UpdateProblem {
+    val message = error.message.orEmpty()
+    return when {
+        error is java.net.UnknownHostException || error is java.net.ConnectException ||
+            error is java.net.SocketTimeoutException || error is javax.net.ssl.SSLException -> UpdateProblem.NETWORK
+        "ENOSPC" in message || "No space" in message -> UpdateProblem.STORAGE
+        "signer does not match" in message -> UpdateProblem.SIGNATURE
+        "integrity" in message || "Invalid APK" in message || "exceeds its declared size" in message -> UpdateProblem.INVALID_APK
+        "HTTP" in message || "update server" in message || "redirect" in message -> UpdateProblem.SERVER
+        error is java.io.IOException -> UpdateProblem.NETWORK
+        else -> UpdateProblem.GENERIC
+    }
+}
+
 internal sealed interface BetaUpdateState {
     data object Idle : BetaUpdateState
-    data class Offer(val release: BetaRelease) : BetaUpdateState
+    data class Offer(val release: BetaRelease, val cancelled: Boolean = false) : BetaUpdateState
     data class Permission(val release: BetaRelease) : BetaUpdateState
-    data class Downloading(val release: BetaRelease) : BetaUpdateState
+    /** [progress] is 0..1 from real bytes received; below 0 until the first bytes arrive. */
+    data class Downloading(val release: BetaRelease, val progress: Float = -1f) : BetaUpdateState
     data class AwaitingInstaller(val release: BetaRelease) : BetaUpdateState
     data class Confirm(val release: BetaRelease, val intent: Intent) : BetaUpdateState
     data class Installing(val release: BetaRelease) : BetaUpdateState
-    data class Error(val release: BetaRelease) : BetaUpdateState
+    data class Error(val release: BetaRelease, val problem: UpdateProblem = UpdateProblem.GENERIC) : BetaUpdateState
 }
+
+/** Post-update welcome. [notes] is null while loading; [unavailable] when offline or the release has none. */
+internal data class WhatsNewState(
+    val versionName: String,
+    val versionCode: Long,
+    val notes: String? = null,
+    val unavailable: Boolean = false
+)
 
 internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(app) {
     private val updates = BetaUpdates(app)
+    private val memory = UpdateMemory(app)
     private val sessionInstaller = app.packageManager.packageInstaller
     private val mutableState = MutableStateFlow<BetaUpdateState>(BetaUpdateState.Idle)
     val state = mutableState.asStateFlow()
+    val installedVersionName: String = updates.installedVersionName()
+
+    private val mutableWhatsNew = MutableStateFlow<WhatsNewState?>(null)
+    val whatsNew = mutableWhatsNew.asStateFlow()
+    private val mutableLastCheck = MutableStateFlow(memory.lastCheckEpochMs to memory.lastCheckResult)
+    val lastCheck = mutableLastCheck.asStateFlow()
+    private val mutableChecking = MutableStateFlow(false)
+    val checking = mutableChecking.asStateFlow()
+
+    init {
+        prepareWhatsNew()
+    }
+
+    private fun prepareWhatsNew() {
+        val code = runCatching { updates.installedVersionCode() }.getOrNull() ?: return
+        val fresh = runCatching { updates.isFreshInstall() }.getOrDefault(true)
+        val acknowledged = memory.acknowledgedVersionCode
+        if (!shouldShowWhatsNew(acknowledged, code, fresh)) {
+            // Fresh install: remember this build so the welcome only follows a real upgrade.
+            if (acknowledged == null) memory.acknowledgedVersionCode = code
+            return
+        }
+        val cached = memory.cachedNotes(code)
+        mutableWhatsNew.value = WhatsNewState(installedVersionName, code, notes = cached)
+        if (cached != null) return
+        // Fetched in the background; the welcome shows at once and fills in when notes arrive.
+        viewModelScope.launch {
+            val notes = try {
+                updates.notesForInstalled()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            val current = mutableWhatsNew.value ?: return@launch
+            mutableWhatsNew.value = if (notes == null) {
+                current.copy(unavailable = true)
+            } else {
+                memory.cacheNotes(code, notes)
+                current.copy(notes = notes)
+            }
+        }
+    }
+
+    /** Persisted only when the user dismisses, so process death simply shows it again. */
+    fun acknowledgeWhatsNew() {
+        val shown = mutableWhatsNew.value ?: return
+        memory.acknowledgedVersionCode = shown.versionCode
+        mutableWhatsNew.value = null
+    }
+
+    /** Manual "Check for updates" from Settings. */
+    fun checkNow() {
+        if (mutableChecking.value || mutableState.value !is BetaUpdateState.Idle) return
+        checked = true
+        runCheck()
+    }
+
+    private fun recordCheck(result: String) {
+        val now = System.currentTimeMillis()
+        memory.lastCheckEpochMs = now
+        memory.lastCheckResult = result
+        mutableLastCheck.value = now to result
+    }
 
     private val lease = Any()
     private var checked = false
@@ -48,13 +143,30 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
     fun check() {
         if (checked) return
         checked = true
+        runCheck()
+    }
+
+    private fun runCheck() {
+        mutableChecking.value = true
         viewModelScope.launch {
             try {
-                updates.check()?.let { mutableState.value = BetaUpdateState.Offer(it) }
+                val release = updates.check()
+                if (release != null) {
+                    recordCheck("Update available: v${release.versionName.ifBlank { "build ${release.versionCode}" }}")
+                    mutableState.value = BetaUpdateState.Offer(release)
+                } else {
+                    recordCheck("You're up to date")
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                // A failed background check must leave the app usable.
+            } catch (error: Exception) {
+                // A failed check must leave the app usable.
+                recordCheck(
+                    if (classifyUpdateFailure(error) == UpdateProblem.NETWORK) "Couldn't check: you're offline"
+                    else "Couldn't check: GitHub is unavailable"
+                )
+            } finally {
+                mutableChecking.value = false
             }
         }
     }
@@ -86,7 +198,7 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
         val release = when (val current = mutableState.value) {
             is BetaUpdateState.Offer -> current.release
             is BetaUpdateState.Permission -> current.release
-            is BetaUpdateState.Error -> current.release
+            is BetaUpdateState.Error -> current.release.takeIf { current.problem.canRetry } ?: return
             else -> return
         }
         if (!updates.canInstall()) {
@@ -101,15 +213,21 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
         mutableState.value = BetaUpdateState.Downloading(release)
         downloadJob = viewModelScope.launch {
             try {
-                updates.downloadAndRequestInstall(release) { sessionId ->
+                updates.downloadAndRequestInstall(release, onProgress = { progress ->
+                    viewModelScope.launch(Dispatchers.Main.immediate) {
+                        if (mutableState.value is BetaUpdateState.Downloading) {
+                            mutableState.value = BetaUpdateState.Downloading(release, progress)
+                        }
+                    }
+                }) { sessionId ->
                     withContext(Dispatchers.Main.immediate) {
                         awaitInstaller(release, sessionId).intentSender
                     }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                val failure = if (updates.canInstall()) BetaUpdateState.Error(release)
+            } catch (error: Exception) {
+                val failure = if (updates.canInstall()) BetaUpdateState.Error(release, classifyUpdateFailure(error))
                 else BetaUpdateState.Permission(release)
                 finish(failure, abandon = true)
             }
@@ -163,8 +281,12 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> finish(BetaUpdateState.Idle)
-            PackageInstaller.STATUS_FAILURE_ABORTED -> finish(BetaUpdateState.Offer(release))
-            else -> finish(BetaUpdateState.Error(release))
+            PackageInstaller.STATUS_FAILURE_ABORTED -> finish(BetaUpdateState.Offer(release, cancelled = true))
+            PackageInstaller.STATUS_FAILURE_STORAGE -> finish(BetaUpdateState.Error(release, UpdateProblem.STORAGE))
+            PackageInstaller.STATUS_FAILURE_INVALID -> finish(BetaUpdateState.Error(release, UpdateProblem.INVALID_APK))
+            PackageInstaller.STATUS_FAILURE_CONFLICT,
+            PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> finish(BetaUpdateState.Error(release, UpdateProblem.SIGNATURE))
+            else -> finish(BetaUpdateState.Error(release, UpdateProblem.INSTALL))
         }
     }
 

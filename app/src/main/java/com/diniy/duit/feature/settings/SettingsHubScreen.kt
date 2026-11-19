@@ -751,6 +751,9 @@ private fun AboutMainPage(onBack: () -> Unit, onOpenPrivacy: () -> Unit, onOpenL
             }
         }
 
+        // Beta builds show update status and a manual check here; other builds render nothing.
+        item(key = "app_updates") { com.diniy.duit.update.EditionUpdateSettingsCard() }
+
         item(key = "info_menu") {
             com.diniy.duit.core.ui.components.SpatialGlassCard(
                 modifier = Modifier.fillMaxWidth(),
