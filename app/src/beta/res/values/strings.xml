@@ -1,15 +1,3 @@
 <resources>
     <string name="app_name">duit. Beta</string>
-    <string name="beta_update_available">Update available</string>
-    <string name="beta_update_build">Beta build %1$d</string>
-    <string name="beta_update_download">Download</string>
-    <string name="beta_update_later">Later</string>
-    <string name="beta_update_allow">Allow updates</string>
-    <string name="beta_update_permission">Allow installs from duit. Beta in Android settings.</string>
-    <string name="beta_update_settings">Open settings</string>
-    <string name="beta_update_downloading">Downloading update</string>
-    <string name="beta_update_preparing">Preparing install</string>
-    <string name="beta_update_cancel">Cancel</string>
-    <string name="beta_update_failed">Update couldn’t continue</string>
-    <string name="beta_update_retry">Try again</string>
 </resources>

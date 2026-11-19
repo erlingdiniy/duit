@@ -34,6 +34,23 @@ class ReleaseNotesTest {
     }
 
     @Test
+    fun introBeforeTitledSections_hasNoDuplicateHeading() {
+        val sections = parseReleaseNotes("Third beta.\n\n## New Features\n- Popup\n## Improvements\n- Progress")
+        assertEquals(listOf("", "What's New", "Improvements"), sections.map { it.title })
+        assertEquals("Third beta.", sections[0].items.single().text)
+    }
+
+    @Test
+    fun checksumsAreHidden_andSameCategoryHeadingsMergeIntoOne() {
+        val sections = parseReleaseNotes(
+            "## What's New\n- Popup\n## New Features\n- Welcome screen\n## Bug Fixes\n- Crash\n\nSHA-256 APK: `abc123`"
+        )
+        assertEquals(listOf("What's New", "Bug Fixes"), sections.map { it.title })
+        assertEquals(listOf("Popup", "Welcome screen"), sections[0].items.map { it.text })
+        assertTrue(sections.flatMap { it.items }.toString(), sections.flatMap { it.items }.none { "abc123" in it.text || "SHA" in it.text })
+    }
+
+    @Test
     fun untrustedMarkup_isReducedToPlainText() {
         val text = parseReleaseNotes("- **Bold** [link](https://evil.example) <script>alert(1)</script> ![x](http://img) `code`")
             .single().items.single().text

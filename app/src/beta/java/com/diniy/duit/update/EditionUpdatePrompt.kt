@@ -131,9 +131,7 @@ internal fun UpdateDialogs(model: BetaUpdateModel) {
     if (lifecycleState != Lifecycle.State.RESUMED) return
     val current = model.installedVersionName
     when (val update = state) {
-        is BetaUpdateState.Offer -> CandyUpdateDialog(onDismiss = model::dismiss) {
-            OfferContent(update, current, onUpdate = model::download, onLater = model::dismiss)
-        }
+        is BetaUpdateState.Offer -> UpdateOfferDialog(update, current, onUpdate = model::download, onLater = model::dismiss)
         is BetaUpdateState.Permission -> CandyUpdateDialog(onDismiss = model::dismiss) {
             StatusHeader(Icons.Rounded.Security, CandyTone.Sunny, "One quick permission")
             Body("To install updates, allow duit. Beta to install apps in Android settings. You'll still confirm every install.")
@@ -152,7 +150,7 @@ internal fun UpdateDialogs(model: BetaUpdateModel) {
                         model.settingsUnavailable()
                     }
                 },
-                secondary = "Maybe later",
+                secondary = "Maybe Later",
                 onSecondary = model::dismiss
             )
         }
@@ -224,6 +222,12 @@ private fun CandyUpdateDialog(
     }
 }
 
+/** The dialog the GitHub update checker shows for an available update. */
+@Composable
+internal fun UpdateOfferDialog(offer: BetaUpdateState.Offer, installedVersion: String, onUpdate: () -> Unit, onLater: () -> Unit) {
+    CandyUpdateDialog(onDismiss = onLater) { OfferContent(offer, installedVersion, onUpdate, onLater) }
+}
+
 @Composable
 private fun ColumnScope.OfferContent(
     offer: BetaUpdateState.Offer,
@@ -268,12 +272,12 @@ private fun ColumnScope.OfferContent(
     Spacer(Modifier.height(8.dp))
     NotesPanel(notes = release.notes, modifier = Modifier.weight(1f, fill = false))
     Actions(
-        primary = "Update now",
+        primary = "Update Now",
         onPrimary = {
             haptic(HapticFeedbackType.Confirm)
             onUpdate()
         },
-        secondary = "Maybe later",
+        secondary = "Maybe Later",
         onSecondary = onLater
     )
 }
@@ -351,7 +355,7 @@ private fun NotesPanel(notes: String?, modifier: Modifier = Modifier, unavailabl
         }
         sections.forEachIndexed { index, section ->
             if (index > 0) Spacer(Modifier.height(12.dp))
-            NotesHeading(section.icon, section.title)
+            if (section.title.isNotBlank()) NotesHeading(section.icon, section.title)
             section.items.forEach { item ->
                 Text(
                     text = if (item.bullet) "•  ${item.text}" else item.text,
