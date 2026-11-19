@@ -36,7 +36,10 @@ internal class BetaUpdates(private val context: Context) {
 
     suspend fun check(): BetaRelease? = withContext(Dispatchers.IO) {
         if (repository.isEmpty()) return@withContext null
-        selectBetaRelease(fetchReleases(), repository, installed().longVersionCode)
+        val current = installed()
+        // Beta builds follow betas and stable releases; stable builds follow stable releases only.
+        val followsPrereleases = current.versionName?.contains("beta") == true
+        selectBetaRelease(fetchReleases(), repository, current.longVersionCode, followsPrereleases)
     }
 
     /** Notes of the release whose tag matches this exact installed build, or null if it has none. */
@@ -80,7 +83,7 @@ internal class BetaUpdates(private val context: Context) {
         status: suspend (sessionId: Int) -> IntentSender
     ): Int =
         withContext(Dispatchers.IO) {
-            check(canInstall()) { "Allow installs from duit. Beta before continuing" }
+            check(canInstall()) { "Allow installs from duit. before continuing" }
             val apk = File.createTempFile("duit-beta-", ".apk", context.cacheDir)
             try {
                 download(release, apk, onProgress)
@@ -186,21 +189,45 @@ internal fun findReleaseNotes(releases: JSONArray, installedCode: Long): String?
     for (i in 0 until releases.length()) {
         val release = releases.optJSONObject(i) ?: continue
         if (release.optBoolean("draft", true)) continue
-        if (release.optString("tag_name") != "beta-$installedCode") continue
+        if (releaseIdentity(release)?.first != installedCode) continue
         return release.optString("body").take(MAX_NOTES_CHARS)
     }
     return null
 }
 
-internal fun selectBetaRelease(releases: JSONArray, repository: String, installedCode: Long): BetaRelease? {
+/**
+ * Stable releases are tagged vX.Y.Z (not prerelease) with asset duit-X.Y.Z.apk, and their
+ * versionCode is X*1_000_000 + Y*1_000 + Z, so 1.0.0 is above every beta-N. Betas stay beta-N
+ * prereleases with asset duit-beta-N.apk. Returns (versionCode, asset name) or null.
+ */
+internal fun releaseIdentity(release: org.json.JSONObject): Pair<Long, String>? {
+    val tag = release.optString("tag_name")
+    return if (release.optBoolean("prerelease")) {
+        TAG.matchEntire(tag)?.groupValues?.get(1)?.toLongOrNull()?.let { it to "duit-beta-$it.apk" }
+    } else {
+        STABLE_TAG.matchEntire(tag)?.destructured?.let { (major, minor, patch) ->
+            stableVersionCode(major.toInt(), minor.toInt(), patch.toInt()) to "duit-$major.$minor.$patch.apk"
+        }
+    }
+}
+
+internal fun stableVersionCode(major: Int, minor: Int, patch: Int): Long =
+    major * 1_000_000L + minor * 1_000L + patch
+
+internal fun selectBetaRelease(
+    releases: JSONArray,
+    repository: String,
+    installedCode: Long,
+    includePrereleases: Boolean = true
+): BetaRelease? {
     var latest: BetaRelease? = null
     for (i in 0 until releases.length()) {
         val release = releases.optJSONObject(i) ?: continue
-        if (release.optBoolean("draft", true) || !release.optBoolean("prerelease")) continue
+        if (release.optBoolean("draft", true)) continue
+        if (release.optBoolean("prerelease") && !includePrereleases) continue
         val tag = release.optString("tag_name")
-        val code = TAG.matchEntire(tag)?.groupValues?.get(1)?.toLongOrNull() ?: continue
+        val (code, name) = releaseIdentity(release) ?: continue
         if (code <= installedCode || code > 2_100_000_000L || code <= (latest?.versionCode ?: 0)) continue
-        val name = "duit-beta-$code.apk"
         val expected = "https://github.com/$repository/releases/download/$tag/$name"
         val assets = release.optJSONArray("assets") ?: continue
         for (j in 0 until assets.length()) {
@@ -252,6 +279,7 @@ private inline fun <T> request(start: URI, hosts: Set<String>, read: (HttpsURLCo
 
 private val DOWNLOAD_HOSTS = setOf("github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com")
 private val TAG = Regex("beta-([1-9][0-9]{0,9})")
+private val STABLE_TAG = Regex("""v([0-9]{1,3})[.]([0-9]{1,3})[.]([0-9]{1,3})""")
 private val DIGEST = Regex("sha256:([0-9a-fA-F]{64})")
 private const val MAX_METADATA_BYTES = 2 * 1024 * 1024
 private const val MAX_APK_BYTES = 100L * 1024 * 1024

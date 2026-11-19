@@ -12,6 +12,13 @@ require(betaRepository.isEmpty() || betaRepository.matches(Regex("[A-Za-z0-9_-]+
 val betaVersionCode = providers.gradleProperty("duitBetaVersionCode").orElse("1").get().toInt()
 require(betaVersionCode in 1..2100000000)
 val betaVersionName = providers.gradleProperty("duitBetaVersionName").orElse("0.1.0-beta").get()
+val betaAppName = providers.gradleProperty("duitBetaAppName").orElse("duit. Beta").get()
+// Stable X.Y.Z must use versionCode X*1_000_000 + Y*1_000 + Z, the rule the in-app updater relies on.
+Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(betaVersionName)?.destructured?.let { (major, minor, patch) ->
+    require(betaVersionCode == major.toInt() * 1_000_000 + minor.toInt() * 1_000 + patch.toInt()) {
+        "Stable $betaVersionName needs duitBetaVersionCode=${major.toInt() * 1_000_000 + minor.toInt() * 1_000 + patch.toInt()}"
+    }
+}
 val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
 
 android {
@@ -55,6 +62,7 @@ android {
             signingConfig = signingConfigs.findByName("beta")
             matchingFallbacks += listOf("release")
             buildConfigField("String", "BETA_REPOSITORY", "\"$betaRepository\"")
+            manifestPlaceholders["appLabel"] = betaAppName
         }
         // Release-like build for on-device performance checks. Separate app ID, so it never touches
         // the installed app or its data; signed with the debug key so it can be sideloaded.

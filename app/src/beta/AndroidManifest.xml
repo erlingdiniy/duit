@@ -1,7 +1,12 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <application android:usesCleartextTraffic="false">
+    <!-- Launcher name comes from duitBetaAppName ("duit. Beta" for betas, "duit." for stable). -->
+    <application
+        android:label="${appLabel}"
+        android:usesCleartextTraffic="false"
+        tools:replace="android:label">
         <receiver
             android:name=".update.BetaInstallStatusReceiver"
             android:exported="false" />

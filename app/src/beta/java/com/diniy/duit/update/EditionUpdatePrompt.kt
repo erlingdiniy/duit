@@ -134,7 +134,7 @@ internal fun UpdateDialogs(model: BetaUpdateModel) {
         is BetaUpdateState.Offer -> UpdateOfferDialog(update, current, onUpdate = model::download, onLater = model::dismiss)
         is BetaUpdateState.Permission -> CandyUpdateDialog(onDismiss = model::dismiss) {
             StatusHeader(Icons.Rounded.Security, CandyTone.Sunny, "One quick permission")
-            Body("To install updates, allow duit. Beta to install apps in Android settings. You'll still confirm every install.")
+            Body("To install updates, allow duit. to install apps in Android settings. You'll still confirm every install.")
             Actions(
                 primary = "Open settings",
                 onPrimary = {
@@ -416,7 +416,11 @@ internal fun EditionUpdateSettingsCard() {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("App updates", style = type.cardTitle, color = colors.primaryText)
-                Text("Beta channel · GitHub prereleases", style = type.caption, color = colors.secondaryText)
+                Text(
+                    if ("beta" in model.installedVersionName) "Beta channel · GitHub releases" else "Stable channel · GitHub releases",
+                    style = type.caption,
+                    color = colors.secondaryText
+                )
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -558,7 +562,7 @@ private fun problemCopy(problem: UpdateProblem): ProblemCopy = when (problem) {
     UpdateProblem.INVALID_APK -> ProblemCopy(Icons.Rounded.GppBad, "Download didn't check out",
         "The downloaded file failed its safety check, so it wasn't installed. Trying again downloads a fresh copy.")
     UpdateProblem.SIGNATURE -> ProblemCopy(Icons.Rounded.GppBad, "This update can't be trusted",
-        "Its signature doesn't match duit. Beta, so it was blocked to keep your data safe. Nothing was changed.")
+        "Its signature doesn't match duit., so it was blocked to keep your data safe. Nothing was changed.")
     UpdateProblem.STORAGE -> ProblemCopy(Icons.Rounded.SdStorage, "Not enough space",
         "Free up some storage on your phone, then try again.")
     UpdateProblem.INSTALL -> ProblemCopy(Icons.Rounded.SentimentDissatisfied, "Install didn't finish",
