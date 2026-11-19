@@ -58,6 +58,8 @@ data class AppSettingsSnapshot(
     val defaultBudgetPeriodType: BudgetPeriodType = BudgetPeriodType.MONTHLY,
     val autoAdvanceRecurringCommitments: Boolean = true,
     val commissionTrackingEnabled: Boolean = true,
+    /** Public edition only: Settings > Optional Features > Commission Tracking. Always true in the personal edition. */
+    val commissionFeatureEnabled: Boolean = true,
     val commissionFormulaConfig: CommissionFormulaConfig = CommissionFormulaConfig(),
     val hasCompletedOnboarding: Boolean = false
 )

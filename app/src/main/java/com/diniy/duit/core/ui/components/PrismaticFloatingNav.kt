@@ -596,7 +596,8 @@ fun PrismaticNavigationRail(
 fun SpatialQuickAddSheet(
     onDismiss: () -> Unit,
     onSelectTransactionType: (TransactionType) -> Unit,
-    onOpenCommissionTools: () -> Unit,
+    /** Null hides the Commission tile (public edition with Commission Tracking off). */
+    onOpenCommissionTools: (() -> Unit)?,
     onOpenCategories: () -> Unit
 ) {
     val colors = SpatialTheme.colors
@@ -680,7 +681,7 @@ fun SpatialQuickAddSheet(
                     },
                     modifier = Modifier.weight(1f)
                 )
-                QuickAddTile(
+                if (onOpenCommissionTools != null) QuickAddTile(
                     title = "Commission",
                     subtitle = "Income · sales, GP & payout",
                     accentColor = colors.lavender,

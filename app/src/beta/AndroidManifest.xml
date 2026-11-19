@@ -7,6 +7,15 @@
         android:label="${appLabel}"
         android:usesCleartextTraffic="false"
         tools:replace="android:label">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.supportqr"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/support_share_paths" />
+        </provider>
         <receiver
             android:name=".update.BetaInstallStatusReceiver"
             android:exported="false" />

@@ -230,7 +230,7 @@ class Phase6BScreenRedesignTest {
         assertEquals(listOf("home", "activity", "planning", "insights"), listOf(
             DuitRoute.HOME, DuitRoute.ACTIVITY, DuitRoute.PLANNING, DuitRoute.INSIGHTS
         ))
-        assertEquals(10, SettingsHubRoute.entries.size)
+        assertEquals(12, SettingsHubRoute.entries.size)
 
         // Obligations overview keeps Recurring Commitments, PayLater instalments, and Debts distinct
         val today = LocalDate.of(2026, 11, 16)

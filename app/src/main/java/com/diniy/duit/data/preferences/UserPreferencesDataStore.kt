@@ -41,6 +41,7 @@ class UserPreferencesDataStore(context: Context) {
         val DEFAULT_BUDGET_PERIOD_TYPE = stringPreferencesKey("default_budget_period_type")
         val AUTO_ADVANCE_RECURRING = booleanPreferencesKey("auto_advance_recurring_commitments")
         val COMMISSION_TRACKING_ENABLED = booleanPreferencesKey("commission_tracking_enabled")
+        val COMMISSION_FEATURE_ENABLED = booleanPreferencesKey("commission_feature_enabled")
         val COMMISSION_FORMULA_NAME = stringPreferencesKey("commission_formula_name")
         val COMMISSION_CONFIGURED = booleanPreferencesKey("commission_configured")
         val COMMISSION_ENABLED = booleanPreferencesKey("commission_enabled")
@@ -89,6 +90,9 @@ class UserPreferencesDataStore(context: Context) {
                 defaultBudgetPeriodType = budgetPeriod,
                 autoAdvanceRecurringCommitments = prefs[Keys.AUTO_ADVANCE_RECURRING] ?: true,
                 commissionTrackingEnabled = prefs[Keys.COMMISSION_TRACKING_ENABLED] ?: true,
+                // Personal edition: always on. Public edition: off until chosen (startup turns it on for existing records).
+                commissionFeatureEnabled = !com.diniy.duit.BuildConfig.OPTIONAL_COMMISSION ||
+                    (prefs[Keys.COMMISSION_FEATURE_ENABLED] ?: false),
                 commissionFormulaConfig = CommissionFormulaConfig(
                     formulaName = prefs[Keys.COMMISSION_FORMULA_NAME] ?: "",
                     isConfigured = prefs[Keys.COMMISSION_CONFIGURED] ?: false,
@@ -186,6 +190,16 @@ class UserPreferencesDataStore(context: Context) {
         dataStore.edit { it[Keys.AUTO_ADVANCE_RECURRING] = enabled }
     }
 
+    suspend fun setCommissionFeatureEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.COMMISSION_FEATURE_ENABLED] = enabled }
+    }
+
+    /** True once the public-edition commission choice was stored (by the user, startup or a restore). */
+    suspend fun hasCommissionFeatureChoice(): Boolean = dataStore.data
+        .catch { exception -> if (exception is IOException) emit(emptyPreferences()) else throw exception }
+        .first()
+        .contains(Keys.COMMISSION_FEATURE_ENABLED)
+
     suspend fun setCommissionTrackingEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.COMMISSION_TRACKING_ENABLED] = enabled }
     }
@@ -229,6 +243,7 @@ class UserPreferencesDataStore(context: Context) {
             prefs[Keys.DEFAULT_BUDGET_PERIOD_TYPE] = snapshot.defaultBudgetPeriodType.name
             prefs[Keys.AUTO_ADVANCE_RECURRING] = snapshot.autoAdvanceRecurringCommitments
             prefs[Keys.COMMISSION_TRACKING_ENABLED] = snapshot.commissionTrackingEnabled
+            prefs[Keys.COMMISSION_FEATURE_ENABLED] = snapshot.commissionFeatureEnabled
             prefs[Keys.COMMISSION_FORMULA_NAME] = snapshot.commissionFormulaConfig.formulaName
             prefs[Keys.COMMISSION_CONFIGURED] = snapshot.commissionFormulaConfig.isConfigured
             prefs[Keys.COMMISSION_ENABLED] = snapshot.commissionFormulaConfig.isEnabled

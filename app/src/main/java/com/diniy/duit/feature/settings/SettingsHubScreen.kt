@@ -39,10 +39,15 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.LocalCafe
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DashboardCustomize
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Calculate
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
@@ -97,7 +102,9 @@ enum class SettingsHubRoute {
     DATA_MANAGEMENT,
     ABOUT,
     FEATURE_GUIDE,
-    APP_PERMISSIONS
+    APP_PERMISSIONS,
+    PRIVACY_DATA,
+    HELP_CENTRE
 }
 
 @Composable
@@ -127,7 +134,8 @@ fun SettingsHubContainerScreen(
             onOpenSecurity = onOpenSecurity,
             onSelectTheme = viewModel::setThemeMode,
             onSelectGlassIntensity = viewModel::setGlassIntensity,
-            onSetHaptics = viewModel::setHapticFeedbackEnabled
+            onSetHaptics = viewModel::setHapticFeedbackEnabled,
+            onSetCommissionFeature = viewModel::setCommissionFeatureEnabled
         )
         SettingsHubRoute.APPEARANCE -> AppearanceSettingsScreen(
             uiState = uiState,
@@ -180,6 +188,14 @@ fun SettingsHubContainerScreen(
         SettingsHubRoute.ABOUT -> AboutDuitScreen(
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) }
         )
+        SettingsHubRoute.HELP_CENTRE -> HelpCentreScreen(
+            onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onOpenRoute = onNavigateRoute
+        )
+        SettingsHubRoute.PRIVACY_DATA -> PrivacyDataScreen(
+            onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onOpenRoute = onNavigateRoute
+        )
         SettingsHubRoute.FEATURE_GUIDE -> FeatureGuideScreen(
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
             onReplayTour = onReplayTour
@@ -205,11 +221,20 @@ private fun SettingsHubOverviewScreen(
     onOpenSecurity: () -> Unit,
     onSelectTheme: (ThemeMode) -> Unit,
     onSelectGlassIntensity: (GlassIntensity) -> Unit,
-    onSetHaptics: (Boolean) -> Unit
+    onSetHaptics: (Boolean) -> Unit,
+    onSetCommissionFeature: (Boolean) -> Unit = {}
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val app = uiState.appSettings
+    // Public edition only (the personal build has no feedback URL and no network access).
+    var showFeedback by rememberSaveable { mutableStateOf(false) }
+    if (showFeedback) com.diniy.duit.feedback.HelpFeedbackScreen(onClose = { showFeedback = false })
+    // Public edition with a real QR configured only; never shown as a popup elsewhere.
+    val hostContext = androidx.compose.ui.platform.LocalContext.current
+    val supportAvailable = remember { com.diniy.duit.support.isSupportPageAvailable(hostContext) }
+    var showSupport by rememberSaveable { mutableStateOf(false) }
+    if (showSupport) com.diniy.duit.support.SupportDuitScreen(onClose = { showSupport = false })
     val defaultWalletName = uiState.wallets.firstOrNull { it.id == app.defaultWalletId }?.name ?: "First liquid wallet"
     val visibleCount = DashboardSectionKey.entries.size - app.hiddenDashboardSections.size
 
@@ -224,7 +249,7 @@ private fun SettingsHubOverviewScreen(
         // Phase 7A: exactly six destinations. Motion, Home layout live in Appearance;
         // Notification Centre in Notifications; money preferences in Planning.
         item(key = "group_personal") {
-            com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Make it yours") {
+            com.diniy.duit.core.ui.components.SpatialGlassSection(title = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Make It Yours" else "Make it yours") {
                 com.diniy.duit.core.ui.components.SpatialGlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
@@ -264,7 +289,7 @@ private fun SettingsHubOverviewScreen(
                     SettingsGroupedSwitchItem(
                         icon = Icons.Rounded.Vibration,
                         accent = colors.peach,
-                        title = "Haptic feedback",
+                        title = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Haptic Feedback" else "Haptic feedback",
                         subtitle = "Gentle vibration on taps",
                         checked = app.hapticFeedbackEnabled,
                         onCheckedChange = onSetHaptics
@@ -273,49 +298,220 @@ private fun SettingsHubOverviewScreen(
             }
         }
 
-        item(key = "group_data") {
-            com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Your data") {
-                com.diniy.duit.core.ui.components.SpatialGlassCard(
+        if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+            // Public edition layout (v1.1.0): grouped cards with matching rows, padding and touch targets.
+            if (com.diniy.duit.BuildConfig.OPTIONAL_COMMISSION) {
+                item(key = "group_optional_features") {
+                    com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Optional Features") {
+                        com.diniy.duit.core.ui.components.SpatialGlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                     contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
                 ) {
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.Backup,
-                        accent = colors.skyBlue,
-                        title = "Backup & Restore",
-                        subtitle = "Encrypted local backup and safe restore",
-                        onClick = { onSelectRoute(SettingsHubRoute.BACKUP_RESTORE) }
-                    )
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.Storage,
-                        accent = colors.peach,
-                        title = "Data Management",
-                        subtitle = "${uiState.storageSummary.totalFinancialRecords} records on this device · export and tools",
-                        onClick = { onSelectRoute(SettingsHubRoute.DATA_MANAGEMENT) }
-                    )
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.AutoStories,
-                        accent = colors.sunny,
-                        title = "Getting Started & Feature Guide",
-                        subtitle = "Learn how to use duit. · Replay tour",
-                        onClick = { onSelectRoute(SettingsHubRoute.FEATURE_GUIDE) }
-                    )
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.VerifiedUser,
-                        accent = colors.aqua,
-                        title = "App Permissions",
-                        subtitle = "Notifications, biometrics and storage",
-                        onClick = { onSelectRoute(SettingsHubRoute.APP_PERMISSIONS) }
-                    )
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.Info,
-                        accent = colors.aqua,
-                        title = "About duit.",
-                        subtitle = "Version and app information",
-                        onClick = { onSelectRoute(SettingsHubRoute.ABOUT) }
-                    )
+                            SettingsGroupedSwitchItem(
+                                icon = Icons.Rounded.Calculate,
+                                accent = colors.lavender,
+                                title = "Commission Tracking",
+                                subtitle = if (app.commissionFeatureEnabled) {
+                                    "Sales, commission and payouts in Planning, Quick Add and Insights"
+                                } else {
+                                    "Off. Turn on to track sales and commission. Saved records are kept"
+                                },
+                                checked = app.commissionFeatureEnabled,
+                                onCheckedChange = onSetCommissionFeature
+                            )
+                        }
+                    }
+                }
+            }
+            item(key = "group_data") {
+                com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Your Data") {
+                    com.diniy.duit.core.ui.components.SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
+                ) {
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Backup,
+                            accent = colors.skyBlue,
+                            title = "Backup & Restore",
+                            subtitle = "Encrypted local backup and safe restore",
+                            onClick = { onSelectRoute(SettingsHubRoute.BACKUP_RESTORE) }
+                        )
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Storage,
+                            accent = colors.peach,
+                            title = "Data Management",
+                            subtitle = recordCountLabel(uiState.storageSummary.totalFinancialRecords) + " on this device · Export and tools",
+                            onClick = { onSelectRoute(SettingsHubRoute.DATA_MANAGEMENT) }
+                        )
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Shield,
+                            accent = colors.aqua,
+                            title = "Privacy & Your Data",
+                            subtitle = "What's stored, what's sent and how to delete it",
+                            onClick = { onSelectRoute(SettingsHubRoute.PRIVACY_DATA) }
+                        )
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.VerifiedUser,
+                            accent = colors.aqua,
+                            title = "App Permissions",
+                            subtitle = "Notifications, biometrics and storage",
+                            onClick = { onSelectRoute(SettingsHubRoute.APP_PERMISSIONS) }
+                        )
+                    }
+                }
+            }
+            item(key = "group_help") {
+                com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Help & Support") {
+                    com.diniy.duit.core.ui.components.SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
+                ) {
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.AutoStories,
+                            accent = colors.peach,
+                            title = "Help Centre",
+                            subtitle = "Quick guides for every part of duit.",
+                            onClick = { onSelectRoute(SettingsHubRoute.HELP_CENTRE) }
+                        )
+                        if (com.diniy.duit.BuildConfig.FEEDBACK_URL.isNotEmpty()) {
+                            SettingsGroupedRowItem(
+                                icon = Icons.Rounded.Forum,
+                                accent = colors.coral,
+                                title = "Help & Feedback",
+                                subtitle = "Report a bug, suggest a feature or say hi",
+                                onClick = { showFeedback = true }
+                            )
+                        }
+                        if (supportAvailable) {
+                            SettingsGroupedRowItem(
+                                icon = Icons.Rounded.LocalCafe,
+                                accent = colors.sunny,
+                                title = "Support duit. ☕",
+                                subtitle = "Buy the developer a coffee. 100% optional",
+                                onClick = { showSupport = true }
+                            )
+                        }
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.AutoStories,
+                            accent = colors.sunny,
+                            title = "Getting Started & Feature Guide",
+                            subtitle = "Learn how to use duit. · Replay tour",
+                            onClick = { onSelectRoute(SettingsHubRoute.FEATURE_GUIDE) }
+                        )
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Info,
+                            accent = colors.aqua,
+                            title = "About duit.",
+                            subtitle = "Version and app information",
+                            onClick = { onSelectRoute(SettingsHubRoute.ABOUT) }
+                        )
+                    }
+                }
+            }
+        } else {
+            // Personal edition: unchanged layout.
+            // Public edition only. Turning it off hides commission tools; no record is ever deleted.
+            if (com.diniy.duit.BuildConfig.OPTIONAL_COMMISSION) {
+                item(key = "group_optional_features") {
+                    com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Optional Features") {
+                        SettingsSwitchRow(
+                            title = "Commission Tracking",
+                            subtitle = if (app.commissionFeatureEnabled) {
+                                "Sales, commission and payouts in Planning, Quick Add and Insights."
+                            } else {
+                                "Off. Turn on to track sales and commission. Any saved records are kept."
+                            },
+                            checked = app.commissionFeatureEnabled,
+                            onCheckedChange = onSetCommissionFeature
+                        )
+                    }
+                }
+            }
+
+            item(key = "group_data") {
+                com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Your data") {
+                    com.diniy.duit.core.ui.components.SpatialGlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                        contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
+                    ) {
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Backup,
+                            accent = colors.skyBlue,
+                            title = "Backup & Restore",
+                            subtitle = "Encrypted local backup and safe restore",
+                            onClick = { onSelectRoute(SettingsHubRoute.BACKUP_RESTORE) }
+                        )
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Storage,
+                            accent = colors.peach,
+                            title = "Data Management",
+                            subtitle = "${uiState.storageSummary.totalFinancialRecords} records on this device · export and tools",
+                            onClick = { onSelectRoute(SettingsHubRoute.DATA_MANAGEMENT) }
+                        )
+                        if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                            SettingsGroupedRowItem(
+                                icon = Icons.Rounded.AutoStories,
+                                accent = colors.peach,
+                                title = "Help Centre",
+                                subtitle = "Quick guides for every part of duit.",
+                                onClick = { onSelectRoute(SettingsHubRoute.HELP_CENTRE) }
+                            )
+                            SettingsGroupedRowItem(
+                                icon = Icons.Rounded.Shield,
+                                accent = colors.aqua,
+                                title = "Privacy & Your Data",
+                                subtitle = "What's stored, what's sent and how to delete it",
+                                onClick = { onSelectRoute(SettingsHubRoute.PRIVACY_DATA) }
+                            )
+                        }
+                        if (com.diniy.duit.BuildConfig.FEEDBACK_URL.isNotEmpty()) {
+                            SettingsGroupedRowItem(
+                                icon = Icons.Rounded.Forum,
+                                accent = colors.coral,
+                                title = "Help & Feedback",
+                                subtitle = "Report a bug, suggest a feature or say hi",
+                                onClick = { showFeedback = true }
+                            )
+                        }
+                        if (supportAvailable) {
+                            SettingsGroupedRowItem(
+                                icon = Icons.Rounded.LocalCafe,
+                                accent = colors.sunny,
+                                title = "Support duit. ☕",
+                                subtitle = "Buy the developer a coffee. 100% optional",
+                                onClick = { showSupport = true }
+                            )
+                        }
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.AutoStories,
+                            accent = colors.sunny,
+                            title = "Getting Started & Feature Guide",
+                            subtitle = "Learn how to use duit. · Replay tour",
+                            onClick = { onSelectRoute(SettingsHubRoute.FEATURE_GUIDE) }
+                        )
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.VerifiedUser,
+                            accent = colors.aqua,
+                            title = "App Permissions",
+                            subtitle = "Notifications, biometrics and storage",
+                            onClick = { onSelectRoute(SettingsHubRoute.APP_PERMISSIONS) }
+                        )
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Info,
+                            accent = colors.aqua,
+                            title = "About duit.",
+                            subtitle = "Version and app information",
+                            onClick = { onSelectRoute(SettingsHubRoute.ABOUT) }
+                        )
+                    }
                 }
             }
         }
@@ -581,6 +777,7 @@ private fun FinancialPreferencesScreen(
         }
 
         item(key = "commission_cycles_categories") {
+            if (!settings.commissionFeatureEnabled) return@item // public edition with Commission Tracking off
             PrismaticGlassCard(modifier = Modifier.fillMaxWidth(), tier = GlassCardTier.Standard, accentTint = glass.lavenderAccent) {
                 SettingsSwitchRow(
                     title = "Show Commission Notice on Home",
@@ -836,7 +1033,11 @@ private fun AboutPrivacyPage(onBack: () -> Unit) {
         item(key = "on_device") {
             AboutInfoCard(
                 Icons.Rounded.Storage, colors.aqua, "Stays on your device",
-                "Your wallets, transactions and plans are saved only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
+                if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                    "Your wallets, transactions and plans are saved only on this phone. duit. goes online only to check for app updates and to send feedback you choose to submit. Your financial records are never sent."
+                } else {
+                    "Your wallets, transactions and plans are saved only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
+                }
             )
         }
         item(key = "lock") {
@@ -1024,12 +1225,14 @@ private fun SettingsGroupedRowItem(
                     .rotate(6f)
             )
         }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f).padding(end = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) 8.dp else 0.dp)) {
             Text(
                 text = title,
                 style = typography.transactionDescription,
                 color = colors.primaryText
             )
+            // Public edition: a little air between title and subtitle, and room before the chevron.
+            if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
                 style = typography.caption,
@@ -1085,6 +1288,7 @@ private fun SettingsGroupedSwitchItem(
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = typography.transactionDescription, color = colors.primaryText)
+            if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) Spacer(Modifier.height(2.dp))
             Text(subtitle, style = typography.caption, color = colors.secondaryText)
         }
         Switch(
@@ -1135,3 +1339,114 @@ internal fun SettingsSwitchRow(
         )
     }
 }
+
+/**
+ * Settings > Privacy & Your Data (public edition). Every statement here matches the code:
+ * Room/DataStore on device with Android backup off; AES-256-GCM password backups via the system file
+ * picker; PIN kept as a salted PBKDF2 value sealed by Android Keystore; FLAG_SECURE and masked
+ * widgets/notifications while App Lock is on; feedback fields as sent by FeedbackClient; QR-only support.
+ */
+@Composable
+internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRoute) -> Unit) {
+    val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    var showSummary by rememberSaveable { mutableStateOf(false) }
+    var showFeedback by rememberSaveable { mutableStateOf(false) }
+    if (showSummary) {
+        androidx.activity.compose.BackHandler { showSummary = false }
+        AboutPrivacyPage(onBack = { showSummary = false })
+        return
+    }
+    if (showFeedback) com.diniy.duit.feedback.HelpFeedbackScreen(onClose = { showFeedback = false })
+    SettingsPageScaffold(
+        title = "Privacy & Your Data",
+        subtitle = "Plain answers about what duit. keeps and shares",
+        onBack = onBack
+    ) {
+        item(key = "where") {
+            AboutInfoCard(
+                Icons.Rounded.Storage, colors.aqua, "Where your data lives",
+                "Wallets, transactions, budgets, goals and settings are saved in duit.'s private storage on this phone. " +
+                    "There's no account and no cloud sync. On a standard phone, Android keeps this storage private from other apps. " +
+                    "Android's automatic cloud backup is turned off for duit., so your records don't leave your phone that way."
+            )
+        }
+        item(key = "backup") {
+            AboutInfoCard(
+                Icons.Rounded.Backup, colors.skyBlue, "Backup & restore",
+                "Backups are files you create and save wherever you choose. Each one is encrypted (AES-256) with a password you set. " +
+                    "duit. can't recover a lost password. Restoring checks the password and the file first, and if anything fails your current data stays as it was. " +
+                    "Restoring doesn't change your PIN. CSV exports are plain spreadsheets and are not encrypted."
+            )
+        }
+        item(key = "lock") {
+            AboutInfoCard(
+                Icons.Rounded.Shield, colors.coral, "PIN & fingerprint",
+                "With App Lock on, duit. asks for your 6-digit PIN or fingerprint when you open it. Your PIN is never stored as plain text; " +
+                    "only a salted, scrambled value is kept, protected by Android's secure keystore. While App Lock is on, duit. also hides its screen " +
+                    "in recent apps, blocks screenshots, and hides amounts in widgets and notifications."
+            )
+        }
+        item(key = "feedback") {
+            AboutInfoCard(
+                Icons.Rounded.Forum, colors.peach, "When you send feedback",
+                "Only what you choose to send: your message, the category, the app version, your email if you add one, and a random ID made for this install " +
+                    "to limit spam (it isn't saved with your message). It goes to the developer through Google Apps Script and is kept in a private Google Sheet, " +
+                    "so Google's own terms apply. Your balances, transactions and backups are never included."
+            )
+        }
+        item(key = "updates") {
+            AboutInfoCard(
+                Icons.Rounded.SystemUpdate, colors.aqua, "Update checks",
+                "duit. checks GitHub for new versions. Like visiting any website, GitHub can see your phone's internet address, " +
+                    "but duit. sends no personal or financial information."
+            )
+        }
+        item(key = "support") {
+            AboutInfoCard(
+                Icons.Rounded.LocalCafe, colors.sunny, "Supporting duit.",
+                "Support duit. only shows the developer's DuitNow QR code. Any payment happens in your own banking or eWallet app; " +
+                    "duit. never sees, processes or records it, and doesn't know whether you paid. Saving the QR adds an image to Pictures/duit."
+            )
+        }
+        item(key = "delete") {
+            AboutInfoCard(
+                Icons.Rounded.DeleteSweep, colors.lavender, "Managing & deleting your data",
+                "Export or delete your records in Data Management. Deleting all financial data asks you to confirm and can't be undone; " +
+                    "your PIN and app settings are kept. Uninstalling duit. removes everything it stored on this phone. Backups and CSV files you saved elsewhere " +
+                    "stay until you delete them. To remove feedback you've sent, ask through Help & Feedback."
+            )
+        }
+        item(key = "links") {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                PrismaticButton(text = "Privacy & Security summary", onClick = { showSummary = true }, variant = PrismaticButtonVariant.Secondary, modifier = Modifier.fillMaxWidth())
+                val context = androidx.compose.ui.platform.LocalContext.current
+                PrismaticButton(
+                    text = "Read the full Privacy Policy",
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(PRIVACY_POLICY_URL))
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    },
+                    variant = PrismaticButtonVariant.Secondary,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (com.diniy.duit.BuildConfig.FEEDBACK_URL.isNotEmpty()) {
+                    PrismaticButton(text = "Help & Feedback", onClick = { showFeedback = true }, variant = PrismaticButtonVariant.Secondary, modifier = Modifier.fillMaxWidth())
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    PrismaticButton(text = "Backup & Restore", onClick = { onOpenRoute(SettingsHubRoute.BACKUP_RESTORE) }, variant = PrismaticButtonVariant.Ghost, modifier = Modifier.weight(1f))
+                    PrismaticButton(text = "Data Management", onClick = { onOpenRoute(SettingsHubRoute.DATA_MANAGEMENT) }, variant = PrismaticButtonVariant.Ghost, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+/** Public Privacy Policy (published with the release on the distribution repository). */
+internal const val PRIVACY_POLICY_URL = "https://github.com/erlingdiniy/duit-beta/blob/main/PRIVACY.md"
+
+/** "1 record", "2 records". */
+internal fun recordCountLabel(count: Int): String = if (count == 1) "1 record" else "$count records"

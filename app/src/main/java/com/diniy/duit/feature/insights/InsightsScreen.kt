@@ -94,6 +94,8 @@ enum class InsightsSectionTab(val label: String) {
 @Composable
 fun InsightsScreen(
     uiState: InsightsUiState,
+    /** False hides salary-and-commission cards; every other insight is unchanged. */
+    commissionEnabled: Boolean = true,
     contentPadding: PaddingValues,
     onShiftMonth: (Long) -> Unit,
     onSelectPeriodPreset: (InsightsPeriodPreset) -> Unit,
@@ -318,6 +320,7 @@ fun InsightsScreen(
                 }
 
                 InsightsSectionTab.INCOME -> {
+                    if (commissionEnabled) {
                     item(key = "income_bento", contentType = "income_bento") {
                         SpatialBentoSummaryRow(
                             leftMetric = SpatialBentoMetricItem(
@@ -362,6 +365,7 @@ fun InsightsScreen(
                                 isSamplePreview = uiState.isSamplePreview
                             )
                         }
+                    }
                     }
                 }
 

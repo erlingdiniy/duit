@@ -38,7 +38,8 @@ class ReminderSyncEngine(
     private val notificationPoster: SystemNotificationPoster,
     private val budgetRepository: BudgetRepository? = null,
     private val transactionRepository: TransactionRepository? = null,
-    private val categoryRepository: CategoryRepository? = null
+    private val categoryRepository: CategoryRepository? = null,
+    private val userPreferencesRepository: com.diniy.duit.data.repository.UserPreferencesRepository? = null
 ) : ReminderSyncDelegate {
 
     override suspend fun syncAndComputeNext(
@@ -60,7 +61,12 @@ class ReminderSyncEngine(
             savingsGoals = savingsRepository.observeSavingsGoals().first(),
             savingsAllocations = savingsRepository.observeSavingsAllocations().first(),
             activeCycle = planningRepository.observeActiveCycle().first(),
-            commissions = commissionRepository.observeCommissions().first(),
+            // Commission reminders follow the public-edition toggle; records themselves are untouched.
+            commissions = if (userPreferencesRepository?.observeAppSettings()?.first()?.commissionFeatureEnabled == false) {
+                emptyList()
+            } else {
+                commissionRepository.observeCommissions().first()
+            },
             nowInstant = nowInstant,
             zoneId = zoneId,
             budgets = budgetRepository?.observeBudgets()?.first() ?: emptyList(),

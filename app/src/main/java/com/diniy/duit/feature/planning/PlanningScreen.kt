@@ -173,6 +173,8 @@ fun PlanningScreen(
     onOpenCategories: () -> Unit,
     onOpenFinancialPreferences: () -> Unit = {},
     requestCommissionSection: Boolean = false,
+    /** False hides commission tools only; salary cycles and all records stay as they are. */
+    commissionEnabled: Boolean = true,
     onConsumeCommissionSection: () -> Unit = {},
     onEnablePreview: () -> Unit,
     onExitPreview: () -> Unit,
@@ -574,7 +576,7 @@ fun PlanningScreen(
                         ) {
                             BillsSection.entries.forEach { section ->
                                 com.diniy.duit.core.ui.components.SpatialGlassPill(
-                                    label = section.label,
+                                    label = if (section == BillsSection.INCOME && !commissionEnabled) "Salary" else section.label,
                                     selected = billsSection == section,
                                     onClick = { billsSection = section }
                                 )
@@ -868,6 +870,7 @@ fun PlanningScreen(
                         )
                     }
 
+                    if (commissionEnabled) {
                     item(key = "period_controls", contentType = "controls") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             MonthSelectorCard(
@@ -985,6 +988,7 @@ fun PlanningScreen(
                         }
                     }
 
+                    }
                     }
                 }
             }

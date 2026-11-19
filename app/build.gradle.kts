@@ -13,6 +13,11 @@ val betaVersionCode = providers.gradleProperty("duitBetaVersionCode").orElse("1"
 require(betaVersionCode in 1..2100000000)
 val betaVersionName = providers.gradleProperty("duitBetaVersionName").orElse("0.1.0-beta").get()
 val betaAppName = providers.gradleProperty("duitBetaAppName").orElse("duit. Beta").get()
+// Public Apps Script /exec URL (not a secret: it ships in the APK). Only the public edition uses it.
+val feedbackUrl = providers.gradleProperty("duitFeedbackUrl").orElse("").get()
+require(feedbackUrl.isEmpty() || Regex("""https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec""").matches(feedbackUrl)) {
+    "duitFeedbackUrl must be an Apps Script /exec URL"
+}
 // Stable X.Y.Z must use versionCode X*1_000_000 + Y*1_000 + Z, the rule the in-app updater relies on.
 Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(betaVersionName)?.destructured?.let { (major, minor, patch) ->
     require(betaVersionCode == major.toInt() * 1_000_000 + minor.toInt() * 1_000 + patch.toInt()) {
@@ -33,6 +38,11 @@ android {
         versionName = "0.1.0-phase1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Public edition (beta build type) makes Commission Tracking optional; personal builds keep it always on.
+        buildConfigField("boolean", "OPTIONAL_COMMISSION", "false")
+        buildConfigField("String", "FEEDBACK_URL", "\"\"")
+        buildConfigField("boolean", "SUPPORT_PREVIEW", "false")
+        buildConfigField("boolean", "PUBLIC_EDITION", "false")
     }
 
     signingConfigs {
@@ -63,6 +73,11 @@ android {
             matchingFallbacks += listOf("release")
             buildConfigField("String", "BETA_REPOSITORY", "\"$betaRepository\"")
             manifestPlaceholders["appLabel"] = betaAppName
+            buildConfigField("boolean", "OPTIONAL_COMMISSION", "true")
+            buildConfigField("String", "FEEDBACK_URL", "\"$feedbackUrl\"")
+            buildConfigField("boolean", "PUBLIC_EDITION", "true")
+            // QA only: shows Support duit. with the placeholder before the real QR exists. Never set for releases.
+            buildConfigField("boolean", "SUPPORT_PREVIEW", providers.gradleProperty("duitSupportPreview").orElse("false").get())
         }
         // Release-like build for on-device performance checks. Separate app ID, so it never touches
         // the installed app or its data; signed with the debug key so it can be sideloaded.

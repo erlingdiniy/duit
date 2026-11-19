@@ -269,7 +269,7 @@ fun HomeScreen(
 
                         // 5. Pending Commissions Notice
                         DashboardSectionKey.PENDING_COMMISSIONS -> {
-                            if (uiState.appSettings.commissionTrackingEnabled && uiState.summary.pendingCommissionsSen > 0L) {
+                            if (uiState.appSettings.commissionFeatureEnabled && uiState.appSettings.commissionTrackingEnabled && uiState.summary.pendingCommissionsSen > 0L) {
                                 item(key = "pending_commissions", contentType = "notice") {
                                     SpatialPendingCommissionsCard(
                                         pendingCommissionsSen = uiState.summary.pendingCommissionsSen,

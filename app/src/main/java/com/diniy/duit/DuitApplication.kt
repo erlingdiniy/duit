@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -125,7 +126,8 @@ class DuitContainer(application: Application) {
             notificationPoster = notificationPoster,
             budgetRepository = budgetRepository,
             transactionRepository = transactionRepository,
-            categoryRepository = categoryRepository
+            categoryRepository = categoryRepository,
+            userPreferencesRepository = userPreferencesRepository
         )
     }
 
@@ -211,6 +213,23 @@ class DuitContainer(application: Application) {
         )
         reminderScheduler.enqueueImmediateSync()
         widgetUpdateCoordinator.enqueueRefresh()
+
+        // Public edition: decide the Commission Tracking default once, without touching any records.
+        if (com.diniy.duit.BuildConfig.OPTIONAL_COMMISSION) {
+            applicationScope.launch {
+                runCatching {
+                    if (!userPreferencesRepository.hasCommissionFeatureChoice()) {
+                        val hasRecords = commissionRepository.observeCommissions().first().isNotEmpty() ||
+                            commissionRepository.observeCommissionSources().first().isNotEmpty() ||
+                            commissionRepository.observeDailySales().first().isNotEmpty() ||
+                            commissionRepository.observeCommissionRuleVersions().first().isNotEmpty()
+                        userPreferencesRepository.setCommissionFeatureEnabled(
+                            com.diniy.duit.domain.model.CommissionFeatureDefaults.initialValue(hasRecords)
+                        )
+                    }
+                }
+            }
+        }
 
         applicationScope.launch {
             securityRepository.observeSecurityConfig()

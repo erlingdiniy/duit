@@ -174,6 +174,10 @@ class SettingsViewModel(
         viewModelScope.launch { userPreferencesRepository.setAutoAdvanceRecurringCommitments(enabled) }
     }
 
+    fun setCommissionFeatureEnabled(enabled: Boolean) {
+        viewModelScope.launch { userPreferencesRepository.setCommissionFeatureEnabled(enabled) }
+    }
+
     fun setCommissionTrackingEnabled(enabled: Boolean) {
         viewModelScope.launch { userPreferencesRepository.setCommissionTrackingEnabled(enabled) }
     }

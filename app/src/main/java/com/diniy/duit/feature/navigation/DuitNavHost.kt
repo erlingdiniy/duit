@@ -807,6 +807,7 @@ fun DuitAppShell(
                                                 }
                                                 DuitRoute.PLANNING -> {
                                 PlanningScreen(
+                                    commissionEnabled = homeState.appSettings.commissionFeatureEnabled,
                                     uiState = planningState,
                                     contentPadding = screenPadding,
                                     onShiftMonth = planningViewModel::shiftMonth,
@@ -872,6 +873,7 @@ fun DuitAppShell(
                                                 }
                                                 DuitRoute.INSIGHTS -> {
                                 InsightsScreen(
+                                    commissionEnabled = homeState.appSettings.commissionFeatureEnabled,
                                     uiState = insightsState,
                                     contentPadding = screenPadding,
                                     onShiftMonth = insightsViewModel::shiftMonth,
@@ -901,9 +903,13 @@ fun DuitAppShell(
         com.diniy.duit.core.ui.components.SpatialQuickAddSheet(
             onDismiss = { showQuickAddSheet = false },
             onSelectTransactionType = openNewTransaction,
-            onOpenCommissionTools = {
-                requestCommissionSection = true
-                navigateToRoute(DuitRoute.PLANNING)
+            onOpenCommissionTools = if (homeState.appSettings.commissionFeatureEnabled) {
+                {
+                    requestCommissionSection = true
+                    navigateToRoute(DuitRoute.PLANNING)
+                }
+            } else {
+                null
             },
             onOpenCategories = {
                 categoryInitialType = TransactionType.EXPENSE

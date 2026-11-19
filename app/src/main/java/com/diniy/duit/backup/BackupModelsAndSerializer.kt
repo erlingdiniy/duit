@@ -783,6 +783,7 @@ object BackupSerializer {
         put("defaultBudgetPeriodType", a.defaultBudgetPeriodType.name)
         put("autoAdvanceRecurringCommitments", a.autoAdvanceRecurringCommitments)
         put("commissionTrackingEnabled", a.commissionTrackingEnabled)
+        put("commissionFeatureEnabled", a.commissionFeatureEnabled)
         put("commissionFormula", JSONObject().apply {
             put("formulaName", a.commissionFormulaConfig.formulaName)
             put("isConfigured", a.commissionFormulaConfig.isConfigured)
@@ -847,6 +848,8 @@ object BackupSerializer {
             defaultBudgetPeriodType = json.optEnum("defaultBudgetPeriodType", BudgetPeriodType.MONTHLY),
             autoAdvanceRecurringCommitments = json.optBoolean("autoAdvanceRecurringCommitments", true),
             commissionTrackingEnabled = json.optBoolean("commissionTrackingEnabled", true),
+            // Older backups predate the toggle; restoring them keeps commission tools visible.
+            commissionFeatureEnabled = json.optBoolean("commissionFeatureEnabled", true),
             commissionFormulaConfig = formulaConfig
         )
 

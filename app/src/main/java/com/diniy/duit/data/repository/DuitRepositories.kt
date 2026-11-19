@@ -265,6 +265,9 @@ interface UserPreferencesRepository {
     suspend fun setDefaultBudgetPeriodType(periodType: BudgetPeriodType)
     suspend fun setAutoAdvanceRecurringCommitments(enabled: Boolean)
     suspend fun setCommissionTrackingEnabled(enabled: Boolean)
+    // Defaults keep test fakes compiling; a fake reports "already chosen" so startup never changes it.
+    suspend fun setCommissionFeatureEnabled(enabled: Boolean) = Unit
+    suspend fun hasCommissionFeatureChoice(): Boolean = true
     suspend fun saveCommissionFormulaConfig(config: CommissionFormulaConfig)
     suspend fun resetCommissionFormulaConfig()
     suspend fun applyPortableSettings(snapshot: AppSettingsSnapshot)
@@ -2273,6 +2276,11 @@ class OfflineUserPreferencesRepository(
         dataStore.setAutoAdvanceRecurringCommitments(enabled)
     override suspend fun setCommissionTrackingEnabled(enabled: Boolean) =
         dataStore.setCommissionTrackingEnabled(enabled)
+
+    override suspend fun setCommissionFeatureEnabled(enabled: Boolean) =
+        dataStore.setCommissionFeatureEnabled(enabled)
+
+    override suspend fun hasCommissionFeatureChoice(): Boolean = dataStore.hasCommissionFeatureChoice()
     override suspend fun saveCommissionFormulaConfig(config: CommissionFormulaConfig) =
         dataStore.saveCommissionFormulaConfig(config)
 
