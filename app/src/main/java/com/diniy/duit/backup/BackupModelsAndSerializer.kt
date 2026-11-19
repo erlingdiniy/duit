@@ -858,7 +858,7 @@ object BackupSerializer {
                 nJson.optStringList("enabledCategories")
                     .mapNotNull { name -> NotificationCategory.entries.firstOrNull { it.name == name } }
                     .toSet()
-            } else NotificationCategory.entries.toSet()
+            } else NotificationCategory.DEFAULT_ENABLED
             val offsets = if (nJson.has("enabledOffsets")) {
                 nJson.optStringList("enabledOffsets")
                     .mapNotNull { name -> ReminderOffset.entries.firstOrNull { it.name == name } }

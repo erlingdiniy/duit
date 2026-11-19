@@ -31,6 +31,14 @@ class GlanceWidgetUpdateCoordinator(
         runCatching { DuitUpcomingPaymentsWidget().updateAll(appContext) }
         runCatching { DuitSavingsGoalsWidget().updateAll(appContext) }
         runCatching { DuitQuickAddWidget().updateAll(appContext) }
+        runCatching { DuitWalletsWidget().updateAll(appContext) }
+        runCatching { DuitBudgetWidget().updateAll(appContext) }
+        runCatching { DuitPulseWidget().updateAll(appContext) }
+        runCatching { DuitPaydayWidget().updateAll(appContext) }
+        runCatching { DuitSummaryWidget().updateAll(appContext) }
+        runCatching { DuitCommitmentsWidget().updateAll(appContext) }
+        runCatching { DuitBuddyWidget().updateAll(appContext) }
+        runCatching { DuitPrivacyWidget().updateAll(appContext) }
     }
 
     companion object {

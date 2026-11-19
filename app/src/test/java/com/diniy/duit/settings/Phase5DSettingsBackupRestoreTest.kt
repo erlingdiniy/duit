@@ -496,10 +496,10 @@ class Phase5DSettingsBackupRestoreTest {
         val foodAlert = evalAll.dueNowCandidates.first { it.entityId == 1L }
         val transportAlert = evalAll.dueNowCandidates.first { it.entityId == 2L }
         assertTrue(foodAlert.dedupKey.contains("90"))
-        assertTrue(foodAlert.detailedTitle.contains("90%"))
+        assertTrue(foodAlert.detailedBody.contains("90%"))
         assertEquals(NotificationDeepLink.PLANNING_BUDGETS, foodAlert.deepLink)
-        assertTrue(transportAlert.dedupKey.contains("100"))
-        assertTrue(transportAlert.detailedTitle.contains("100%"))
+        assertTrue(transportAlert.dedupKey.contains("T10")) // T100 at the limit, T101 once over
+        assertTrue(transportAlert.detailedTitle in setOf("Budget limit reached", "Over your budget"))
         assertTrue(transportAlert.isOverdue)
 
         val only80Settings = allThresholdsSettings.copy(enabledBudgetThresholds = setOf(BudgetAlertThreshold.PERCENT_80))

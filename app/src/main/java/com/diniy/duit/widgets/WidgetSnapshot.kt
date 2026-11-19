@@ -7,6 +7,10 @@ import com.diniy.duit.core.util.DateTimeFormatters
 import com.diniy.duit.domain.calculator.FinanceSummaryCalculator
 import com.diniy.duit.domain.calculator.ObligationCalculator
 import com.diniy.duit.domain.calculator.SavingsCalculator
+import com.diniy.duit.domain.calculator.BudgetCalculator
+import com.diniy.duit.domain.model.Budget
+import com.diniy.duit.domain.model.BudgetPeriodType
+import com.diniy.duit.domain.model.Category
 import com.diniy.duit.domain.model.CommissionRecord
 import com.diniy.duit.domain.model.Commitment
 import com.diniy.duit.domain.model.CommitmentStatus
@@ -84,6 +88,23 @@ data class SavingsGoalsWidgetData(
     val activeGoalsCount: Int
 )
 
+/** Days until the next payday, only when the user's salary cycle actually defines one. */
+data class WidgetPaydayInfo(val daysUntil: Long, val label: String)
+
+data class WidgetWalletItem(val name: String, val balanceSen: Long, val typeLabel: String)
+
+data class WalletsWidgetData(val wallets: List<WidgetWalletItem>, val totalBalanceSen: Long)
+
+data class WidgetBudgetItem(
+    val name: String,
+    val limitSen: Long,
+    val spentSen: Long,
+    val remainingSen: Long,
+    val overspentSen: Long,
+    val progressFraction: Float,
+    val usedPercentDisplay: String
+)
+
 data class QuickAddWidgetData(
     val hasActiveWallets: Boolean,
     val isAppLockEnabled: Boolean
@@ -104,7 +125,12 @@ data class DuitWidgetsSnapshot(
     val balance: BalanceWidgetData,
     val upcomingPayments: UpcomingPaymentsWidgetData,
     val savingsGoals: SavingsGoalsWidgetData,
-    val quickAdd: QuickAddWidgetData
+    val quickAdd: QuickAddWidgetData,
+    val walletsData: WalletsWidgetData = WalletsWidgetData(emptyList(), 0L),
+    val budgets: List<WidgetBudgetItem> = emptyList(),
+    /** Expense totals for the last 7 days, oldest first, today last. Transfers excluded. */
+    val spendingLast7DaysSen: List<Long> = emptyList(),
+    val payday: WidgetPaydayInfo? = null
 ) {
     fun formatMoney(amountSen: Long, includePlusSign: Boolean = false): String =
         if (shouldMaskAmounts) PrivacyMask.MASKED_MYR
@@ -132,7 +158,9 @@ object WidgetSnapshotCalculator {
         security: SecurityConfigSnapshot,
         themeMode: ThemeMode,
         today: LocalDate = LocalDate.now(),
-        nowEpochMs: Long = System.currentTimeMillis()
+        nowEpochMs: Long = System.currentTimeMillis(),
+        budgets: List<Budget> = emptyList(),
+        categories: List<Category> = emptyList()
     ): DuitWidgetsSnapshot {
         val privacySettings = PrivacySettings(
             hideSensitiveBalances = security.hideSensitiveBalances,
@@ -261,6 +289,42 @@ object WidgetSnapshotCalculator {
             allocations = savingsAllocations
         )
 
+        // Budgets of the current period only (same rule as budget notifications), most-used first.
+        val cyclesById = if (activeCycle != null) mapOf(activeCycle.id to activeCycle) else emptyMap()
+        val categoriesById = categories.associateBy { it.id }
+        val currentYm = java.time.YearMonth.from(today).toString()
+        val budgetItems = budgets
+            .filter { b ->
+                !b.isArchived && b.limitSen > 0L && when (b.periodType) {
+                    BudgetPeriodType.MONTHLY -> b.yearMonth == currentYm
+                    BudgetPeriodType.SALARY_CYCLE -> activeCycle != null && b.salaryCycleId == activeCycle.id
+                }
+            }
+            .map { BudgetCalculator.calculateBudgetProgress(it, transactions, cyclesById, categoriesById) }
+            .sortedByDescending { it.progressFraction }
+            .map {
+                WidgetBudgetItem(it.budget.name, it.limitSen, it.spentSen, it.remainingSen, it.overspentSen, it.progressFraction, it.usedPercentDisplay)
+            }
+
+        val activeWallets = wallets.filter { !it.isArchived }
+
+        val zone = java.time.ZoneId.systemDefault()
+        val expenseByDay = transactions
+            .filter { it.type == com.diniy.duit.domain.model.TransactionType.EXPENSE }
+            .groupBy { java.time.Instant.ofEpochMilli(it.occurredAtEpochMs).atZone(zone).toLocalDate() }
+            .mapValues { (_, txs) -> txs.sumOf { it.amountSen } }
+        val last7 = (6 downTo 0).map { back -> expenseByDay[today.minusDays(back.toLong())] ?: 0L }
+
+        val todayEpoch = today.toEpochDay()
+        val payday = when {
+            activeCycle == null -> null
+            activeCycle.paydayEpochDay >= todayEpoch ->
+                WidgetPaydayInfo(activeCycle.paydayEpochDay - todayEpoch, "Until next salary")
+            !activeCycle.isOpenEnded && activeCycle.endDateEpochDay >= todayEpoch ->
+                WidgetPaydayInfo(activeCycle.endDateEpochDay + 1 - todayEpoch, "Until your next cycle")
+            else -> null
+        }
+
         return DuitWidgetsSnapshot(
             themeMode = themeMode,
             isAppLockEnabled = security.isAppLockEnabled,
@@ -297,7 +361,15 @@ object WidgetSnapshotCalculator {
             quickAdd = QuickAddWidgetData(
                 hasActiveWallets = wallets.any { !it.isArchived },
                 isAppLockEnabled = security.isAppLockEnabled
-            )
+            ),
+            walletsData = WalletsWidgetData(
+                wallets = activeWallets.sortedByDescending { it.balanceSen }
+                    .map { WidgetWalletItem(it.name, it.balanceSen, it.type.name.lowercase().replaceFirstChar { c -> c.uppercase() }) },
+                totalBalanceSen = summary.totalBalanceSen
+            ),
+            budgets = budgetItems,
+            spendingLast7DaysSen = last7,
+            payday = payday
         )
     }
 }

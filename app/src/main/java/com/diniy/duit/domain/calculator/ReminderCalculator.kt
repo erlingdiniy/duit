@@ -71,6 +71,12 @@ data class ReminderEvaluationResult(
 object ReminderCalculator {
 
     private const val UPCOMING_WINDOW_DAYS = 14L
+    private val DAILY_TITLES = listOf("Hey, money buddy! ☀️", "Anything to log today? ✍️", "Let's catch up! 🌼", "Little habits add up ✨")
+    private val DAILY_BODIES = listOf(
+        "A little spending check-in today? Let's keep things tidy.",
+        "Your money diary is ready whenever you are.",
+        "Got a transaction to record? Add it in a few taps."
+    )
 
     fun stableNotificationId(category: NotificationCategory, entityId: Long): Int {
         val raw = "${category.name}:$entityId".hashCode()
@@ -226,19 +232,19 @@ object ReminderCalculator {
                     deepLink = NotificationDeepLink.PLANNING_COMMITMENTS,
                     allowOverdue = true,
                     buildDetailedCopy = { isOverdue, daysLeft ->
-                        if (isOverdue) {
-                            "Overdue bill · ${c.title}" to "${MyrFormatter.format(remaining)} was due $dueStr"
-                        } else {
-                            val timing = duePhrase(daysLeft)
-                            "Bill $timing · ${c.title}" to "${MyrFormatter.format(remaining)} due $dueStr"
+                        when {
+                            isOverdue -> "Payment overdue" to "Your ${c.title} payment is overdue. Check its status."
+                            daysLeft == 0L -> "Today's the due date" to "Your ${c.title} payment is due today."
+                            daysLeft == 1L -> "Tomorrow's the day! 📅" to "Your ${c.title} payment is due tomorrow."
+                            else -> "Psst, a bill is coming! 🔔" to
+                                "Your ${c.title} bill of ${MyrFormatter.format(remaining)} is due in $daysLeft days."
                         }
                     },
                     buildPrivateCopy = { isOverdue, daysLeft ->
-                        if (isOverdue) {
-                            "Overdue commitment reminder" to "An unpaid commitment is overdue. Open duit. to review."
-                        } else {
-                            val timing = duePhrase(daysLeft)
-                            "Commitment $timing" to "You have a scheduled commitment $timing ($dueStr)."
+                        when {
+                            isOverdue -> "Payment overdue" to "A payment is overdue. Open duit. to check its status."
+                            daysLeft == 0L -> "Today's the due date" to "A payment is due today."
+                            else -> "A bill is coming" to "A payment is due ${duePhrase(daysLeft)}. Open duit. to view."
                         }
                     }
                 )
@@ -264,16 +270,14 @@ object ReminderCalculator {
                         if (isOverdue) {
                             "Overdue ${plan.providerName} · ${plan.title}" to "Instalment #${nextInst.index} (${MyrFormatter.format(nextInst.remainingSen)}) was due $dueStr"
                         } else {
-                            val timing = duePhrase(daysLeft)
-                            "${plan.providerName} instalment $timing" to "${plan.title} · ${MyrFormatter.format(nextInst.remainingSen)} due $dueStr"
+                            "An installment is coming" to "Your ${plan.title} payment is due soon."
                         }
                     },
                     buildPrivateCopy = { isOverdue, daysLeft ->
                         if (isOverdue) {
                             "Overdue PayLater instalment" to "A PayLater instalment is past due. Open duit. to review."
                         } else {
-                            val timing = duePhrase(daysLeft)
-                            "PayLater instalment $timing" to "You have a PayLater instalment scheduled $timing ($dueStr)."
+                            "An installment is coming" to "A payment is due soon. Open duit. to view."
                         }
                     }
                 )
@@ -304,16 +308,14 @@ object ReminderCalculator {
                         if (isOverdue) {
                             "Overdue debt repayment · ${debt.counterpartyName}" to "${MyrFormatter.format(targetSen)} was due $dueStr"
                         } else {
-                            val timing = duePhrase(daysLeft)
-                            "Debt repayment $timing · ${debt.counterpartyName}" to "${MyrFormatter.format(targetSen)} scheduled for $dueStr"
+                            "An installment is coming" to "Your ${debt.counterpartyName} payment is due soon."
                         }
                     },
                     buildPrivateCopy = { isOverdue, daysLeft ->
                         if (isOverdue) {
                             "Overdue repayment reminder" to "A scheduled debt repayment is past due. Open duit. to review."
                         } else {
-                            val timing = duePhrase(daysLeft)
-                            "Scheduled repayment $timing" to "You have a scheduled debt repayment $timing ($dueStr)."
+                            "An installment is coming" to "A payment is due soon. Open duit. to view."
                         }
                     }
                 )
@@ -358,12 +360,10 @@ object ReminderCalculator {
                 deepLink = NotificationDeepLink.PLANNING_SALARY,
                 allowOverdue = false,
                 buildDetailedCopy = { _, daysLeft ->
-                    val timing = duePhrase(daysLeft)
-                    "Salary cycle payday $timing" to "Expected payday for ${activeCycle.label} is $paydayStr. Record salary income to start the next cycle."
+                    "Payday check-in! 💸" to "Time to check whether your salary has arrived."
                 },
                 buildPrivateCopy = { _, daysLeft ->
-                    val timing = duePhrase(daysLeft)
-                    "Salary cycle reminder" to "Expected payday check-in is $timing ($paydayStr)."
+                    "Payday check-in! 💸" to "Time to check whether your salary has arrived."
                 }
             )
         }
@@ -388,20 +388,10 @@ object ReminderCalculator {
                     deepLink = NotificationDeepLink.PLANNING_COMMISSIONS,
                     allowOverdue = true,
                     buildDetailedCopy = { isOverdue, daysLeft ->
-                        if (isOverdue) {
-                            "Commission payout pending · ${comm.title}" to "Expected $dateStr (${MyrFormatter.format(remaining)} awaiting payout)"
-                        } else {
-                            val timing = duePhrase(daysLeft)
-                            "Commission payout $timing · ${comm.title}" to "${MyrFormatter.format(remaining)} expected $dateStr"
-                        }
+                        "Commission check-in ✨" to "Got a commission to record? Add it to duit."
                     },
                     buildPrivateCopy = { isOverdue, daysLeft ->
-                        if (isOverdue) {
-                            "Pending commission reminder" to "An expected commission payout date has passed. Open duit. to update status."
-                        } else {
-                            val timing = duePhrase(daysLeft)
-                            "Commission payout $timing" to "An expected commission payout is scheduled $timing ($dateStr)."
-                        }
+                        "Commission check-in ✨" to "Got a commission to record? Add it to duit."
                     }
                 )
             }
@@ -436,9 +426,17 @@ object ReminderCalculator {
                         .maxByOrNull { it.percent }
                         ?: return@forEach
 
-                    val notifId = stableNotificationId(NotificationCategory.BUDGETS, budget.id * 1000L + crossed.percent)
+                    val over = pct > 100L && BudgetAlertThreshold.PERCENT_100 in settings.enabledBudgetThresholds
+                    val tier = if (over) 101 else crossed.percent
+                    val notifId = stableNotificationId(NotificationCategory.BUDGETS, budget.id * 1000L + tier)
                     activeIds += notifId
-                    val dedupKey = "BUDGETS:${budget.id}:${budget.yearMonth.ifBlank { budget.salaryCycleId ?: 0L }}:T${crossed.percent}"
+                    val dedupKey = "BUDGETS:${budget.id}:${budget.yearMonth.ifBlank { budget.salaryCycleId ?: 0L }}:T$tier"
+                    val (bTitle, bBody) = when {
+                        over -> "Over your budget" to "Your ${budget.name} spending has exceeded its budget."
+                        crossed == BudgetAlertThreshold.PERCENT_100 -> "Budget limit reached" to "You've reached your ${budget.name} budget limit."
+                        crossed == BudgetAlertThreshold.PERCENT_50 -> "Looking good so far! ✨" to "You've used 50% of your ${budget.name} budget."
+                        else -> "A little budget nudge 👀" to "You've used ${crossed.label} of your ${budget.name} budget."
+                    }
                     dueNow += ReminderCandidate(
                         dedupKey = dedupKey,
                         notificationId = notifId,
@@ -452,12 +450,90 @@ object ReminderCalculator {
                         isOverdue = crossed == BudgetAlertThreshold.PERCENT_100,
                         amountSen = progress.spentSen,
                         deepLink = NotificationDeepLink.PLANNING_BUDGETS,
-                        detailedTitle = "Budget ${crossed.label} alert · ${budget.name}",
-                        detailedBody = "${MyrFormatter.format(progress.spentSen)} of ${MyrFormatter.format(budget.limitSen)} used (${progress.usedPercentDisplay})",
-                        privateTitle = "Budget threshold reached (${crossed.label})",
-                        privateBody = "One of your tracked budgets has reached ${crossed.label}. Open duit. to review."
+                        detailedTitle = bTitle,
+                        detailedBody = bBody,
+                        privateTitle = if (over || crossed == BudgetAlertThreshold.PERCENT_100) bTitle else "Budget check-in",
+                        privateBody = "One of your budgets needs a look. Open duit. to review."
                     )
                 }
+        }
+
+        // 8. Savings milestones (25/50/75/100%). Only when funds were moved in the last 2 days, so an
+        // update never replays old milestones; dedup via history key per goal + milestone.
+        if (NotificationCategory.SAVINGS_GOALS in settings.enabledCategories) {
+            savingsGoals.filter { it.targetAmountSen > 0L && it.status != SavingsGoalStatus.ARCHIVED }.forEach { goal ->
+                val goalAllocs = savingsAllocations.filter { it.goalId == goal.id }
+                val latest = goalAllocs.maxOfOrNull { it.updatedAtEpochMs } ?: return@forEach
+                if (nowMs - latest > 2 * 86_400_000L) return@forEach
+                val saved = goalAllocs.filter { it.allocatedSen > 0L }.sumOf { it.allocatedSen }
+                val pct = saved * 100L / goal.targetAmountSen
+                val milestone = listOf(25, 50, 75, 100).lastOrNull { pct >= it } ?: return@forEach
+                val (mTitle, mBody) = when (milestone) {
+                    25 -> "Tiny steps, big dreams! 🌱" to "Your ${goal.name} savings goal reached 25%."
+                    50 -> "Halfway there! 🎉" to "Your ${goal.name} savings goal reached 50%."
+                    75 -> "Almost there! ⭐" to "Your ${goal.name} savings goal reached 75%."
+                    else -> "You did it! 🥳" to "Your ${goal.name} savings goal is complete!"
+                }
+                val notifId = stableNotificationId(NotificationCategory.SAVINGS_GOALS, goal.id * 1000L + milestone)
+                activeIds += notifId
+                dueNow += ReminderCandidate(
+                    dedupKey = "SAVINGS_GOALS:${goal.id}:M$milestone",
+                    notificationId = notifId, category = NotificationCategory.SAVINGS_GOALS, entityId = goal.id,
+                    itemTitle = goal.name, targetEpochDay = todayEpochDay, reminderEpochDay = todayEpochDay,
+                    triggerAtEpochMs = nowMs, offsetDaysBefore = 0, isOverdue = false, amountSen = null,
+                    deepLink = NotificationDeepLink.PLANNING_GOALS,
+                    detailedTitle = mTitle, detailedBody = mBody,
+                    privateTitle = mTitle, privateBody = "A savings goal hit a milestone. Open duit. to see it."
+                )
+            }
+        }
+
+        // 9. Daily check-in (rotating copy; skipped today if something was already logged today).
+        if (NotificationCategory.DAILY in settings.enabledCategories) {
+            val dailyId = stableNotificationId(NotificationCategory.DAILY, 0L)
+            val loggedToday = transactions.any {
+                Instant.ofEpochMilli(it.occurredAtEpochMs).atZone(zoneId).toLocalDate() == todayDate
+            }
+            for (day in todayEpochDay..todayEpochDay + 1) {
+                if (day == todayEpochDay && loggedToday) continue
+                val triggerMs = ZonedDateTime.of(LocalDate.ofEpochDay(day), reminderTime, zoneId).toInstant().toEpochMilli()
+                val title = DAILY_TITLES[(day % DAILY_TITLES.size).toInt()]
+                val body = DAILY_BODIES[(day % DAILY_BODIES.size).toInt()]
+                val c = ReminderCandidate(
+                    dedupKey = "DAILY:$day", notificationId = dailyId, category = NotificationCategory.DAILY,
+                    entityId = 0L, itemTitle = "Daily check-in", targetEpochDay = day, reminderEpochDay = day,
+                    triggerAtEpochMs = triggerMs, offsetDaysBefore = 0, isOverdue = false, amountSen = null,
+                    deepLink = NotificationDeepLink.HOME_ADD_TRANSACTION,
+                    detailedTitle = title, detailedBody = body, privateTitle = title, privateBody = body
+                )
+                activeIds += dailyId
+                // Only today's slot may fire now: a missed earlier slot is never replayed later.
+                if (triggerMs <= nowMs && day == todayEpochDay) dueNow += c else if (triggerMs > nowMs) upcoming += c
+            }
+        }
+
+        // 10. Monthly recap: first 3 days of a month, only if last month really has transactions.
+        if (NotificationCategory.GENERAL in settings.enabledCategories && todayDate.dayOfMonth <= 3) {
+            val prev = YearMonth.from(todayDate).minusMonths(1)
+            val hasData = transactions.any {
+                YearMonth.from(Instant.ofEpochMilli(it.occurredAtEpochMs).atZone(zoneId).toLocalDate()) == prev
+            }
+            val triggerMs = ZonedDateTime.of(todayDate, reminderTime, zoneId).toInstant().toEpochMilli()
+            if (hasData && triggerMs <= nowMs) {
+                val id = stableNotificationId(NotificationCategory.GENERAL, 0L)
+                val monthName = prev.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+                activeIds += id
+                dueNow += ReminderCandidate(
+                    dedupKey = "GENERAL:RECAP:$prev", notificationId = id, category = NotificationCategory.GENERAL,
+                    entityId = 0L, itemTitle = "Monthly recap", targetEpochDay = todayEpochDay,
+                    reminderEpochDay = todayEpochDay, triggerAtEpochMs = triggerMs, offsetDaysBefore = 0,
+                    isOverdue = false, amountSen = null, deepLink = NotificationDeepLink.INSIGHTS,
+                    detailedTitle = "Your money recap is ready 📊",
+                    detailedBody = "Take a look at your spending and income for $monthName.",
+                    privateTitle = "Your money recap is ready 📊",
+                    privateBody = "Take a look at your spending and income for $monthName."
+                )
+            }
         }
 
         val sortedDueNow = dueNow.sortedWith(compareBy<ReminderCandidate> { !it.isOverdue }.thenBy { it.targetEpochDay })

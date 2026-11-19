@@ -47,27 +47,28 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 
+// Candy Bubble 2.0: Aqua=Mint, Lavender=Coral, Sky=Yellow, Peach=Peach. Names kept for existing call sites.
 object PrismaticWidgetPalette {
-    val Aqua = Color(0xFF42CDBB)
-    val Lavender = Color(0xFF9A83E8)
-    val SkyBlue = Color(0xFF75B9ED)
-    val Peach = Color(0xFFF3B78B)
-    val Slate = Color(0xFF263A55)
+    val Aqua = Color(0xFF79DCC6)
+    val Lavender = Color(0xFFFF836B)
+    val SkyBlue = Color(0xFFFFB84D)
+    val Peach = Color(0xFFFFB88D)
+    val Slate = Color(0xFF263B43)
 
-    val TextPrimaryLight = Color(0xFF17273C)
-    val TextPrimaryDark = Color(0xFFF3F8FF)
-    val TextSecondaryLight = Color(0xFF536882)
-    val TextSecondaryDark = Color(0xFFB3C5DB)
-    val AquaTextLight = Color(0xFF138F80)
-    val AquaTextDark = Color(0xFF5CE3D1)
-    val LavenderTextLight = Color(0xFF6B53C5)
-    val LavenderTextDark = Color(0xFFB6A4F5)
+    val TextPrimaryLight = Color(0xFF263B43)
+    val TextPrimaryDark = Color(0xFFFFF4E9)
+    val TextSecondaryLight = Color(0xFF55696F)
+    val TextSecondaryDark = Color(0xFFBCCACD)
+    val AquaTextLight = Color(0xFF16806D)
+    val AquaTextDark = Color(0xFF79DCC6)
+    val LavenderTextLight = Color(0xFFD14B33)
+    val LavenderTextDark = Color(0xFFFF9D88)
     val PeachTextLight = Color(0xFFB85D2B)
     val PeachTextDark = Color(0xFFF7C39D)
-    val SkyTextLight = Color(0xFF2B7AB8)
-    val SkyTextDark = Color(0xFF8CC8F5)
-    val TrackLight = Color(0xFFD8E7F3)
-    val TrackDark = Color(0xFF2F4461)
+    val SkyTextLight = Color(0xFF9A5B00)
+    val SkyTextDark = Color(0xFFFFC76E)
+    val TrackLight = Color(0xFFF3DCC6)
+    val TrackDark = Color(0xFF3A545C)
 }
 
 data class ResolvedWidgetTheme(
@@ -118,7 +119,8 @@ data class ResolvedWidgetTheme(
 
 abstract class DuitGlanceWidgetBase : GlanceAppWidget() {
 
-    override val sizeMode: SizeMode = SizeMode.Responsive(WidgetLayoutPolicy.RESPONSIVE_SIZES)
+    // Candy cards lay out against the real launcher cell size (Phase 11N).
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     @Composable
     protected abstract fun Content(snapshot: DuitWidgetsSnapshot, theme: ResolvedWidgetTheme)

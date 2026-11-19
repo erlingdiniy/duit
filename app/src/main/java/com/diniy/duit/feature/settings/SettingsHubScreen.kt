@@ -38,6 +38,8 @@ import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Backup
+import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DashboardCustomize
 import androidx.compose.material.icons.rounded.Info
@@ -93,7 +95,9 @@ enum class SettingsHubRoute {
     FINANCIAL,
     BACKUP_RESTORE,
     DATA_MANAGEMENT,
-    ABOUT
+    ABOUT,
+    FEATURE_GUIDE,
+    APP_PERMISSIONS
 }
 
 @Composable
@@ -108,7 +112,10 @@ fun SettingsHubContainerScreen(
     onOpenNotificationCentre: () -> Unit = {},
     onOpenCategories: () -> Unit,
     onVerifyPin: suspend (String) -> Boolean,
-    viewModel: SettingsViewModel
+    viewModel: SettingsViewModel,
+    onReplayTour: () -> Unit = {},
+    hasOsNotificationPermission: Boolean = false,
+    onPermissionUpdated: () -> Unit = {}
 ) {
     when (route) {
         SettingsHubRoute.HUB -> SettingsHubOverviewScreen(
@@ -171,6 +178,18 @@ fun SettingsHubContainerScreen(
             viewModel = viewModel
         )
         SettingsHubRoute.ABOUT -> AboutDuitScreen(
+            onBack = { onNavigateRoute(SettingsHubRoute.HUB) }
+        )
+        SettingsHubRoute.FEATURE_GUIDE -> FeatureGuideScreen(
+            onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onReplayTour = onReplayTour
+        )
+        SettingsHubRoute.APP_PERMISSIONS -> AppPermissionsScreen(
+            hasOsNotificationPermission = hasOsNotificationPermission,
+            biometricAvailability = uiState.securityState.biometricAvailability,
+            isBiometricAuthEnabled = uiState.securityState.isBiometricEnabled,
+            onPermissionUpdated = onPermissionUpdated,
+            onOpenSecuritySettings = onOpenSecurity,
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) }
         )
     }
@@ -275,6 +294,20 @@ private fun SettingsHubOverviewScreen(
                         title = "Data Management",
                         subtitle = "${uiState.storageSummary.totalFinancialRecords} records on this device · export and tools",
                         onClick = { onSelectRoute(SettingsHubRoute.DATA_MANAGEMENT) }
+                    )
+                    SettingsGroupedRowItem(
+                        icon = Icons.Rounded.AutoStories,
+                        accent = colors.sunny,
+                        title = "Getting Started & Feature Guide",
+                        subtitle = "Learn how to use duit. · Replay tour",
+                        onClick = { onSelectRoute(SettingsHubRoute.FEATURE_GUIDE) }
+                    )
+                    SettingsGroupedRowItem(
+                        icon = Icons.Rounded.VerifiedUser,
+                        accent = colors.aqua,
+                        title = "App Permissions",
+                        subtitle = "Notifications, biometrics and storage",
+                        onClick = { onSelectRoute(SettingsHubRoute.APP_PERMISSIONS) }
                     )
                     SettingsGroupedRowItem(
                         icon = Icons.Rounded.Info,

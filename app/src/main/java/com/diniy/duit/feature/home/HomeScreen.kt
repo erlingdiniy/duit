@@ -346,6 +346,7 @@ fun HomeScreen(
         )
     }
 
+    val celebrate = com.diniy.duit.core.ui.components.LocalCandyCelebrate.current
     if (showAddWalletSheet) {
         AddWalletSheet(
             onSaveWallet = { name, type, openingBalance, excludedFromSafe, includeInTotal, accent, onValidationError ->
@@ -356,7 +357,7 @@ fun HomeScreen(
                     excludedFromSafe,
                     includeInTotal,
                     accent,
-                    { showAddWalletSheet = false },
+                    { showAddWalletSheet = false; celebrate("Wallet created") },
                     onValidationError
                 )
             },

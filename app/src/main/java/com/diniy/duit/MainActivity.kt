@@ -158,7 +158,8 @@ class MainActivity : FragmentActivity() {
                         DuitAppShell(
                             container = container,
                             appLockState = appLockState,
-                            onTriggerBiometric = triggerBiometricPrompt
+                            onTriggerBiometric = triggerBiometricPrompt,
+                            updatesReady = splashDone
                         )
                         }
                         // App Lock / Home renders underneath, so the splash never delays startup.

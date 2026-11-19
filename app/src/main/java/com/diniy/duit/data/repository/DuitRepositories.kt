@@ -269,6 +269,10 @@ interface UserPreferencesRepository {
     suspend fun resetCommissionFormulaConfig()
     suspend fun applyPortableSettings(snapshot: AppSettingsSnapshot)
     suspend fun restoreDefaultPreferences()
+    // Defaults treat an unknown state as an existing user (never onboards) and keep test fakes compiling.
+    fun observeOnboardingCompleted(): Flow<Boolean?> = kotlinx.coroutines.flow.flowOf(true)
+    suspend fun setOnboardingCompleted(completed: Boolean) = Unit
+    suspend fun hasStoredPreferences(): Boolean = true
 }
 
 class OfflineFirstFinanceRepository(
@@ -2280,4 +2284,12 @@ class OfflineUserPreferencesRepository(
 
     override suspend fun restoreDefaultPreferences() =
         dataStore.restoreDefaultPreferences()
+
+    override fun observeOnboardingCompleted(): Flow<Boolean?> =
+        dataStore.onboardingCompletedFlow
+
+    override suspend fun setOnboardingCompleted(completed: Boolean) =
+        dataStore.setOnboardingCompleted(completed)
+
+    override suspend fun hasStoredPreferences(): Boolean = dataStore.hasStoredPreferences()
 }

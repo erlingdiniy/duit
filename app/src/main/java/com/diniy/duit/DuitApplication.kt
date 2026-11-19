@@ -145,7 +145,9 @@ class DuitContainer(application: Application) {
             savingsRepository = savingsRepository,
             obligationRepository = obligationRepository,
             securityRepository = securityRepository,
-            userPreferencesRepository = userPreferencesRepository
+            userPreferencesRepository = userPreferencesRepository,
+            budgetRepository = budgetRepository,
+            categoryRepository = categoryRepository
         )
     }
     val widgetUpdateCoordinator: WidgetUpdateCoordinator by lazy {

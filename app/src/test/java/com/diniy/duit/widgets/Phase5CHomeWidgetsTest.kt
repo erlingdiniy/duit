@@ -572,10 +572,11 @@ class Phase5CHomeWidgetsTest {
         }
 
         // Verify receiver recreation instantiates cleanly.
-        assertEquals(WidgetLayoutPolicy.RESPONSIVE_SIZES, DuitBalanceWidgetReceiver().glanceAppWidget.sizeMode.let { (it as androidx.glance.appwidget.SizeMode.Responsive).sizes })
-        assertEquals(WidgetLayoutPolicy.RESPONSIVE_SIZES, DuitUpcomingPaymentsWidgetReceiver().glanceAppWidget.sizeMode.let { (it as androidx.glance.appwidget.SizeMode.Responsive).sizes })
-        assertEquals(WidgetLayoutPolicy.RESPONSIVE_SIZES, DuitSavingsGoalsWidgetReceiver().glanceAppWidget.sizeMode.let { (it as androidx.glance.appwidget.SizeMode.Responsive).sizes })
-        assertEquals(WidgetLayoutPolicy.RESPONSIVE_SIZES, DuitQuickAddWidgetReceiver().glanceAppWidget.sizeMode.let { (it as androidx.glance.appwidget.SizeMode.Responsive).sizes })
+        // Safe to Spend (Phase 11N recovery) lays out against the real cell size.
+        assertEquals(androidx.glance.appwidget.SizeMode.Exact, DuitBalanceWidgetReceiver().glanceAppWidget.sizeMode)
+        assertEquals(androidx.glance.appwidget.SizeMode.Exact, DuitUpcomingPaymentsWidgetReceiver().glanceAppWidget.sizeMode)
+        assertEquals(androidx.glance.appwidget.SizeMode.Exact, DuitSavingsGoalsWidgetReceiver().glanceAppWidget.sizeMode)
+        assertEquals(androidx.glance.appwidget.SizeMode.Exact, DuitQuickAddWidgetReceiver().glanceAppWidget.sizeMode)
         assertTrue(ComponentName(context, DuitQuickAddWidgetReceiver::class.java).className.isNotBlank())
     }
 }

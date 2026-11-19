@@ -37,15 +37,31 @@ enum class NotificationCategory(
     ),
     BUDGETS(
         displayName = "Budget Threshold Alerts",
-        description = "Notify when budget spending crosses 80%, 90%, or 100%",
+        description = "Notify when budget spending crosses 50%, 80%, 90%, or 100%",
         channelId = "duit_budgets"
-    )
+    ),
+    DAILY(
+        displayName = "Daily Reminders",
+        description = "A gentle daily check-in to log your spending",
+        channelId = "duit_daily"
+    ),
+    GENERAL(
+        displayName = "General Updates",
+        description = "Monthly money recap",
+        channelId = "duit_general"
+    );
+
+    companion object {
+        /** Daily check-in and recap are opt-in so updating never starts new daily pings. */
+        val DEFAULT_ENABLED: Set<NotificationCategory> = entries.toSet() - DAILY - GENERAL
+    }
 }
 
 enum class BudgetAlertThreshold(
     val percent: Int,
     val label: String
 ) {
+    PERCENT_50(50, "50%"),
     PERCENT_80(80, "80%"),
     PERCENT_90(90, "90%"),
     PERCENT_100(100, "100%")
@@ -69,12 +85,14 @@ enum class NotificationDeepLink(val planningTabKey: String) {
     PLANNING_GOALS("GOALS"),
     PLANNING_BUDGETS("BUDGETS"),
     PLANNING_SALARY("SALARY"),
-    PLANNING_COMMISSIONS("COMMISSIONS")
+    PLANNING_COMMISSIONS("COMMISSIONS"),
+    HOME_ADD_TRANSACTION(""),
+    INSIGHTS("")
 }
 
 data class NotificationSettingsSnapshot(
     val masterEnabled: Boolean = true,
-    val enabledCategories: Set<NotificationCategory> = NotificationCategory.entries.toSet(),
+    val enabledCategories: Set<NotificationCategory> = NotificationCategory.DEFAULT_ENABLED,
     val enabledOffsets: Set<ReminderOffset> = setOf(
         ReminderOffset.DAYS_7,
         ReminderOffset.DAYS_3,

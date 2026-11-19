@@ -118,15 +118,15 @@ class AndroidNotificationHelper(
 
         // Lock-screen public notification never exposes amounts or personal titles.
         val publicNotification = NotificationCompat.Builder(appContext, candidate.category.channelId)
-            .setSmallIcon(R.drawable.ic_solar_planning)
+            .setSmallIcon(R.drawable.ic_stat_duit)
             .setContentTitle("duit. reminder")
-            .setContentText("You have an upcoming financial reminder. Unlock to view.")
+            .setContentText("You have a reminder. Unlock to view.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()
 
         val notification = NotificationCompat.Builder(appContext, candidate.category.channelId)
-            .setSmallIcon(R.drawable.ic_solar_planning)
+            .setSmallIcon(R.drawable.ic_stat_duit)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -148,7 +148,7 @@ class AndroidNotificationHelper(
         val channelId = resolveUsableTestChannelId() ?: return TestNotificationResult.PERMISSION_DENIED
 
         val notification = NotificationCompat.Builder(appContext, channelId)
-            .setSmallIcon(R.drawable.ic_solar_planning)
+            .setSmallIcon(R.drawable.ic_stat_duit)
             .setContentTitle(TEST_NOTIFICATION_TITLE)
             .setContentText(TEST_NOTIFICATION_MESSAGE)
             .setStyle(NotificationCompat.BigTextStyle().bigText(TEST_NOTIFICATION_MESSAGE))

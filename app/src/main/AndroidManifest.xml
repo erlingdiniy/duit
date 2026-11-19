@@ -7,7 +7,7 @@
 
     <application
         android:name=".DuitApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -87,6 +87,102 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duit_quick_add_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.DuitWalletsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_wallets_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duit_wallets_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.DuitBudgetWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_budget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duit_budget_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.DuitPulseWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_pulse_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duit_pulse_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.DuitPaydayWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_payday_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duit_payday_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.DuitSummaryWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_summary_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duit_summary_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.DuitCommitmentsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_commitments_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duit_commitments_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.DuitBuddyWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_buddy_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duit_buddy_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.DuitPrivacyWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_privacy_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duit_privacy_widget_info" />
         </receiver>
     </application>
 

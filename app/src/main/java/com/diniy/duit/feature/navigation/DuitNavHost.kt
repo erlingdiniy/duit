@@ -2,6 +2,14 @@
 
 package com.diniy.duit.feature.navigation
 
+import com.diniy.duit.domain.model.Wallet
+import com.diniy.duit.domain.model.WalletType
+import com.diniy.duit.update.EditionUpdatePrompt
+import com.diniy.duit.feature.onboarding.FirstTimeSetupScreen
+import com.diniy.duit.feature.onboarding.OnboardingGate
+import com.diniy.duit.feature.onboarding.OnboardingScreen
+import com.diniy.duit.feature.onboarding.OnboardingStage
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.input.pointer.pointerInput
@@ -114,7 +122,8 @@ fun DuitAppShell(
     container: DuitContainer,
     appLockState: AppLockUiState,
     onTriggerBiometric: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    updatesReady: Boolean = false
 ) {
     val lockManager = container.appLockManager
 
@@ -146,6 +155,7 @@ fun DuitAppShell(
     var showSecuritySettings by rememberSaveable { mutableStateOf(false) }
     var showNotificationCentre by rememberSaveable { mutableStateOf(false) }
     var showNotificationSettings by rememberSaveable { mutableStateOf(false) }
+    var showReplayTour by rememberSaveable { mutableStateOf(false) }
     var activePinFlowMode by rememberSaveable { mutableStateOf<PinFlowMode?>(null) }
     var requestedPlanningTab by rememberSaveable { mutableStateOf<PlanningSectionTab?>(null) }
     var requestCommissionSection by rememberSaveable { mutableStateOf(false) }
@@ -198,6 +208,100 @@ fun DuitAppShell(
         )
     )
     val notificationState by notificationViewModel.uiState.collectAsStateWithLifecycle()
+
+    // Phase 11L: first-run gate. Only a genuine new install sees onboarding (see OnboardingGate).
+    var onboardingStage by rememberSaveable { mutableStateOf(OnboardingStage.UNKNOWN) }
+    var setupSaving by remember { mutableStateOf(false) }
+    var setupError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        if (onboardingStage != OnboardingStage.UNKNOWN) return@LaunchedEffect
+        val prefs = container.userPreferencesRepository
+        val decision = runCatching {
+            val flag = prefs.observeOnboardingCompleted().first()
+            if (flag == true) {
+                false
+            } else {
+                val records = container.backupRestoreCoordinator.loadStorageSummary().totalFinancialRecords
+                OnboardingGate.isNewUser(flag, records, prefs.hasStoredPreferences(), appLockState.isAppLockEnabled)
+            }
+        }.getOrDefault(false) // on any error, never onboard
+        if (decision) {
+            onboardingStage = OnboardingStage.TOUR
+        } else {
+            // Existing install: remember it so deleting all wallets later can never trigger onboarding.
+            runCatching { prefs.setOnboardingCompleted(true) }
+            onboardingStage = OnboardingStage.DONE
+        }
+    }
+
+    if (showReplayTour) {
+        // Replay is view-only: it never touches data, permissions, PIN or the completion flag.
+        OnboardingScreen(
+            onFinishTour = { showReplayTour = false },
+            onProceedToSetup = { showReplayTour = false },
+            isReplayTour = true
+        )
+        return
+    }
+
+    when (onboardingStage) {
+        OnboardingStage.TOUR -> {
+            OnboardingScreen(
+                onFinishTour = { onboardingStage = OnboardingStage.SETUP },
+                onProceedToSetup = { onboardingStage = OnboardingStage.SETUP }
+            )
+            return
+        }
+        OnboardingStage.SETUP -> {
+            // System Back returns to the tour instead of leaving the app mid-setup.
+            androidx.activity.compose.BackHandler { onboardingStage = OnboardingStage.TOUR }
+            FirstTimeSetupScreen(
+                hasOsNotificationPermission = notificationState.hasOsPermission,
+                onPermissionUpdated = notificationViewModel::refreshPermissionAndSync,
+                onCompleteSetup = { name, type, balanceSen, enableNotifications, accent ->
+                    if (!setupSaving) {
+                        setupSaving = true
+                        setupError = null
+                        coroutineScope.launch {
+                            runCatching {
+                                val now = System.currentTimeMillis()
+                                container.walletRepository.upsertWallet(
+                                    Wallet(
+                                        id = 0L,
+                                        name = name,
+                                        type = type,
+                                        balanceSen = balanceSen,
+                                        isExcludedFromSafeToSpend = type == WalletType.SAVINGS,
+                                        accentToken = accent,
+                                        createdAtEpochMs = now,
+                                        updatedAtEpochMs = now,
+                                        isIncludedInTotalBalance = true,
+                                        isArchived = false
+                                    )
+                                )
+                                container.userPreferencesRepository.setOnboardingCompleted(true)
+                            }.onSuccess {
+                                if (enableNotifications) notificationViewModel.setMasterEnabled(true)
+                                onboardingStage = OnboardingStage.DONE
+                            }.onFailure {
+                                setupError = "Couldn't save your wallet. Please try again."
+                            }
+                            setupSaving = false
+                        }
+                    }
+                },
+                onSkipSetup = {
+                    coroutineScope.launch {
+                        runCatching { container.userPreferencesRepository.setOnboardingCompleted(true) }
+                        onboardingStage = OnboardingStage.DONE
+                    }
+                },
+                errorMessage = setupError
+            )
+            return
+        }
+        else -> Unit
+    }
 
     if (activePinFlowMode != null) {
         PinSetupScreen(
@@ -303,7 +407,10 @@ fun DuitAppShell(
                 navigateToRoute(DuitRoute.ACTIVITY)
             },
             onVerifyPin = lockManager::verifyCurrentPin,
-            viewModel = settingsViewModel
+            viewModel = settingsViewModel,
+            onReplayTour = { showReplayTour = true },
+            hasOsNotificationPermission = notificationState.hasOsPermission,
+            onPermissionUpdated = notificationViewModel::refreshPermissionAndSync
         )
         return
     }
@@ -315,7 +422,9 @@ fun DuitAppShell(
         NotificationDeepLink.PLANNING_BUDGETS -> PlanningSectionTab.BUDGETS
         NotificationDeepLink.PLANNING_GOALS,
         NotificationDeepLink.PLANNING_SALARY,
-        NotificationDeepLink.PLANNING_COMMISSIONS -> PlanningSectionTab.GOALS
+        NotificationDeepLink.PLANNING_COMMISSIONS,
+        NotificationDeepLink.HOME_ADD_TRANSACTION,
+        NotificationDeepLink.INSIGHTS -> PlanningSectionTab.GOALS
     }
 
     if (showNotificationCentre) {
@@ -335,6 +444,8 @@ fun DuitAppShell(
         return
     }
 
+    if (updatesReady && onboardingStage == OnboardingStage.DONE) EditionUpdatePrompt()
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: DuitRoute.HOME
 
@@ -342,6 +453,7 @@ fun DuitAppShell(
     LaunchedEffect(pendingDeepLink, backStackEntry) {
         val target = pendingDeepLink ?: return@LaunchedEffect
         if (backStackEntry == null) return@LaunchedEffect
+        if (target.planningTabKey.isEmpty()) return@LaunchedEffect // handled by the effect below
         container.setPendingDeepLink(null)
         requestedPlanningTab = resolvePlanningTab(target)
         navController.navigate(DuitRoute.PLANNING) {
@@ -355,6 +467,19 @@ fun DuitAppShell(
     // Shared transaction / category / wallet modal state
     var showTransactionEditor by rememberSaveable { mutableStateOf(false) }
     var showQuickAddSheet by rememberSaveable { mutableStateOf(false) }
+    // Home/Insights notification taps; runs only after App Lock, like the planning links above.
+    LaunchedEffect(pendingDeepLink, backStackEntry) {
+        val target = pendingDeepLink?.takeIf { it.planningTabKey.isEmpty() } ?: return@LaunchedEffect
+        if (backStackEntry == null) return@LaunchedEffect
+        container.setPendingDeepLink(null)
+        val route = if (target == NotificationDeepLink.INSIGHTS) DuitRoute.INSIGHTS else DuitRoute.HOME
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+        if (target == NotificationDeepLink.HOME_ADD_TRANSACTION) showQuickAddSheet = true
+    }
     var editorInitialType by rememberSaveable { mutableStateOf(TransactionType.EXPENSE) }
     var editingTransactionId by rememberSaveable { mutableStateOf<Long?>(null) }
 
@@ -477,6 +602,10 @@ fun DuitAppShell(
             }
             WidgetDeepLink.PLANNING_GOALS -> {
                 requestedPlanningTab = PlanningSectionTab.GOALS
+                navigateToRoute(DuitRoute.PLANNING)
+            }
+            WidgetDeepLink.PLANNING_BUDGETS_LINK -> {
+                requestedPlanningTab = PlanningSectionTab.BUDGETS
                 navigateToRoute(DuitRoute.PLANNING)
             }
             WidgetDeepLink.INSIGHTS -> navigateToRoute(DuitRoute.INSIGHTS)

@@ -59,7 +59,7 @@ internal fun SpatialColorTokens.toPrismaticGlassTokens(): PrismaticGlassTokens =
     onAquaContainer = onIncomeContainer,
     lavenderAccent = lavender,
     lavenderContainer = lavender.copy(alpha = if (isDark) 0.22f else 0.18f),
-    onLavenderContainer = if (isDark) Color(0xFFEADDFF) else PrismaticPalette.DeepTeal,
+    onLavenderContainer = if (isDark) PrismaticPalette.Cream else PrismaticPalette.DeepTeal,
     skyBlueAccent = skyBlue,
     skyBlueContainer = skyBlue.copy(alpha = 0.20f),
     onSkyBlueContainer = onSavingsContainer,

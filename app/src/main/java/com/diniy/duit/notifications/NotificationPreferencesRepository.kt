@@ -74,7 +74,7 @@ class DataStoreNotificationPreferencesRepository(context: Context) : Notificatio
         .map { prefs ->
             val rawCats = prefs[Keys.ENABLED_CATEGORIES]
             val categories = if (rawCats == null) {
-                NotificationCategory.entries.toSet()
+                NotificationCategory.DEFAULT_ENABLED
             } else {
                 rawCats.mapNotNull { name -> NotificationCategory.entries.firstOrNull { it.name == name } }.toSet()
             }
@@ -112,7 +112,7 @@ class DataStoreNotificationPreferencesRepository(context: Context) : Notificatio
     override suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
         dataStore.edit { prefs ->
             val current = prefs[Keys.ENABLED_CATEGORIES]
-                ?: NotificationCategory.entries.map { it.name }.toSet()
+                ?: NotificationCategory.DEFAULT_ENABLED.map { it.name }.toSet()
             prefs[Keys.ENABLED_CATEGORIES] = if (enabled) current + category.name else current - category.name
         }
     }

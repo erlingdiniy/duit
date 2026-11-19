@@ -26,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,9 +110,23 @@ fun PrismaticEmptyStateCard(
 ) {
     val glass = LocalPrismaticGlass.current
 
+    // Gentle one-time entrance (220 ms); skipped under Reduce Motion.
+    val reduced = rememberReducedMotionEnabled()
+    var entered by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(reduced) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { entered = true }
+    val enter by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = prismaticTween(reduced, 220),
+        label = "empty_state_enter"
+    )
     CandyBubbleCard(
         tone = CandyTone.Peach,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                alpha = enter
+                translationY = (1f - enter) * 24f
+            },
         contentPadding = PaddingValues(18.dp)
     ) {
         Row(verticalAlignment = Alignment.Top) {

@@ -1,5 +1,6 @@
 package com.diniy.duit.data.preferences
 
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -46,6 +47,7 @@ class UserPreferencesDataStore(context: Context) {
         val COMMISSION_THRESHOLD_SEN = longPreferencesKey("commission_threshold_sen")
         val COMMISSION_RATE_BPS = intPreferencesKey("commission_rate_bps")
         val COMMISSION_FLAT_BONUS_SEN = longPreferencesKey("commission_flat_bonus_sen")
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
     val appSettings: Flow<AppSettingsSnapshot> = dataStore.data
@@ -94,9 +96,27 @@ class UserPreferencesDataStore(context: Context) {
                     minimumSalesThresholdSen = prefs[Keys.COMMISSION_THRESHOLD_SEN] ?: 0L,
                     rateBps = prefs[Keys.COMMISSION_RATE_BPS] ?: 0,
                     flatBonusSen = prefs[Keys.COMMISSION_FLAT_BONUS_SEN] ?: 0L
-                )
+                ),
+                hasCompletedOnboarding = prefs[Keys.ONBOARDING_COMPLETED] ?: false
             )
         }
+
+    val onboardingCompletedFlow: Flow<Boolean?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { prefs -> prefs[Keys.ONBOARDING_COMPLETED] }
+
+    /** True if anything other than the onboarding flag was ever stored (user settings or a restore). */
+    suspend fun hasStoredPreferences(): Boolean =
+        dataStore.data
+            .catch { exception -> if (exception is IOException) emit(emptyPreferences()) else throw exception }
+            .first()
+            .asMap().keys.any { it != Keys.ONBOARDING_COMPLETED }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
+    }
 
     val themeMode: Flow<ThemeMode> = appSettings.map { it.themeMode }
 
@@ -215,6 +235,7 @@ class UserPreferencesDataStore(context: Context) {
             prefs[Keys.COMMISSION_THRESHOLD_SEN] = snapshot.commissionFormulaConfig.minimumSalesThresholdSen
             prefs[Keys.COMMISSION_RATE_BPS] = snapshot.commissionFormulaConfig.rateBps
             prefs[Keys.COMMISSION_FLAT_BONUS_SEN] = snapshot.commissionFormulaConfig.flatBonusSen
+            prefs[Keys.ONBOARDING_COMPLETED] = true
         }
     }
 

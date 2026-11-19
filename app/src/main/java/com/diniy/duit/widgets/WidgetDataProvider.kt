@@ -1,5 +1,7 @@
 package com.diniy.duit.widgets
 
+import com.diniy.duit.data.repository.BudgetRepository
+import com.diniy.duit.data.repository.CategoryRepository
 import com.diniy.duit.data.repository.CommissionRepository
 import com.diniy.duit.data.repository.ObligationRepository
 import com.diniy.duit.data.repository.PlanningRepository
@@ -21,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 
 class WidgetDataProvider(
@@ -31,7 +34,9 @@ class WidgetDataProvider(
     private val savingsRepository: SavingsRepository,
     private val obligationRepository: ObligationRepository,
     private val securityRepository: SecurityRepository,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val budgetRepository: BudgetRepository? = null,
+    private val categoryRepository: CategoryRepository? = null
 ) {
     private val coreFlow = combine(
         walletRepository.observeWallets(),
@@ -52,12 +57,18 @@ class WidgetDataProvider(
         ObligationSavingsBundle(allocs, goals, plans, debts)
     }
 
+    private val budgetFlow = combine(
+        budgetRepository?.observeBudgets() ?: flowOf(emptyList()),
+        categoryRepository?.observeCategories() ?: flowOf(emptyList())
+    ) { budgets, categories -> budgets to categories }
+
     fun observeSnapshot(): Flow<DuitWidgetsSnapshot> = combine(
         coreFlow,
         obligationAndSavingsFlow,
         securityRepository.observeSecurityConfig(),
-        userPreferencesRepository.observeThemeMode()
-    ) { core, obl, security, themeMode ->
+        userPreferencesRepository.observeThemeMode(),
+        budgetFlow
+    ) { core, obl, security, themeMode, budgetBundle ->
         WidgetSnapshotCalculator.build(
             wallets = core.wallets,
             transactions = core.transactions,
@@ -69,7 +80,9 @@ class WidgetDataProvider(
             debts = obl.debts,
             activeCycle = core.activeCycle,
             security = security,
-            themeMode = themeMode
+            themeMode = themeMode,
+            budgets = budgetBundle.first,
+            categories = budgetBundle.second
         )
     }.flowOn(Dispatchers.IO)
 

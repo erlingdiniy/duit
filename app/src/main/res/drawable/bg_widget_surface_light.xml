@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <corners android:radius="24dp" />
-    <gradient
-        android:angle="135"
-        android:startColor="#F4FAFEFF"
-        android:centerColor="#EEF1F8FD"
-        android:endColor="#EBECF6F9" />
-    <stroke
-        android:width="1dp"
-        android:color="#C2D9EAF6" />
-</shape>
+<!-- Candy Bubble 2.0 card: soft gradient plus three layered bubbles. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="28dp" />
+            <gradient android:angle="135" android:startColor="#FFFFF4E9" android:centerColor="#FFFFEEDD" android:endColor="#FFFFE6D0" />
+            <stroke android:width="1dp" android:color="#FFF3CDB0" />
+        </shape>
+    </item>
+    <item android:gravity="top|end" android:width="84dp" android:height="84dp" android:top="6dp" android:end="6dp">
+        <shape android:shape="oval"><solid android:color="#33FF836B" /></shape>
+    </item>
+    <item android:gravity="top|end" android:width="40dp" android:height="40dp" android:top="58dp" android:end="62dp">
+        <shape android:shape="oval"><solid android:color="#3379DCC6" /></shape>
+    </item>
+    <item android:gravity="bottom|start" android:width="46dp" android:height="46dp" android:bottom="8dp" android:start="8dp">
+        <shape android:shape="oval"><solid android:color="#33FFB84D" /></shape>
+    </item>
+</layer-list>

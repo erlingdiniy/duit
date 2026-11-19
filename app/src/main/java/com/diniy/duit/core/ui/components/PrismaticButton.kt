@@ -20,6 +20,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,8 +71,16 @@ fun PrismaticButton(
         }
 
         PrismaticButtonVariant.Ghost -> {
+            // Same short squish as the sticker buttons (spring, none under Reduce Motion).
+            val interaction = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            val pressed = interaction.collectIsPressedAsState().value
+            val reduced = rememberReducedMotionEnabled()
+            val scale = androidx.compose.animation.core.animateFloatAsState(
+                if (pressed && !reduced) 0.95f else 1f, prismaticSpring(reduced), label = "ghost_btn_scale"
+            ).value
             TextButton(
                 onClick = onClick,
+                interactionSource = interaction,
                 enabled = isInteractive,
                 shape = shape,
                 contentPadding = contentPadding,
@@ -79,6 +89,7 @@ fun PrismaticButton(
                     disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 modifier = modifier
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
                     .heightIn(min = 48.dp)
                     .semantics(mergeDescendants = true) {}
             ) {

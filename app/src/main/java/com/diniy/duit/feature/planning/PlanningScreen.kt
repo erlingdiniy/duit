@@ -1098,6 +1098,7 @@ fun PlanningScreen(
                     {
                         showGoalEditor = false
                         editingGoalId = null
+                        celebrate("Goal saved")
                     },
                     onError
                 )
@@ -1245,6 +1246,7 @@ fun PlanningScreen(
                     {
                         showBudgetEditor = false
                         editingBudgetId = null
+                        celebrate("Budget saved")
                     },
                     onError
                 )
@@ -1296,7 +1298,7 @@ fun PlanningScreen(
             existing = editingCommitment,
             categories = uiState.categories,
             onSave = { item, onError ->
-                onSaveCommitmentDetail(item, { showCommitmentEditor = false; editingCommitmentId = null }, onError)
+                onSaveCommitmentDetail(item, { showCommitmentEditor = false; editingCommitmentId = null; celebrate("Bill saved") }, onError)
             },
             onDismiss = { showCommitmentEditor = false; editingCommitmentId = null }
         )
@@ -1342,7 +1344,7 @@ fun PlanningScreen(
         PayLaterEditorSheet(
             existing = editingPlan,
             onSave = { plan, onError ->
-                onSavePayLaterPlan(plan, { showPayLaterEditor = false; editingPayLaterId = null }, onError)
+                onSavePayLaterPlan(plan, { showPayLaterEditor = false; editingPayLaterId = null; celebrate("PayLater plan saved") }, onError)
             },
             onDismiss = { showPayLaterEditor = false; editingPayLaterId = null }
         )
@@ -1382,7 +1384,7 @@ fun PlanningScreen(
         DebtEditorSheet(
             existing = editingDebt,
             onSave = { debt, onError ->
-                onSaveDebt(debt, { showDebtEditor = false; editingDebtId = null }, onError)
+                onSaveDebt(debt, { showDebtEditor = false; editingDebtId = null; celebrate("Debt saved") }, onError)
             },
             onDismiss = { showDebtEditor = false; editingDebtId = null }
         )

@@ -5,6 +5,15 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val betaRepository = providers.gradleProperty("duitBetaRepository").orElse("").get()
+require(betaRepository.isEmpty() || betaRepository.matches(Regex("[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+"))) {
+    "duitBetaRepository must be a GitHub owner/repository slug"
+}
+val betaVersionCode = providers.gradleProperty("duitBetaVersionCode").orElse("1").get().toInt()
+require(betaVersionCode in 1..2100000000)
+val betaVersionName = providers.gradleProperty("duitBetaVersionName").orElse("0.1.0-beta").get()
+val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
+
 android {
     namespace = "com.diniy.duit"
     compileSdk = 35
@@ -19,13 +28,54 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (betaKeyStore != null) {
+            create("beta") {
+                storeFile = file(betaKeyStore)
+                storePassword = providers.environmentVariable("DUIT_BETA_STORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("DUIT_BETA_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("DUIT_BETA_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 compiles Compose to fast, optimised code; debug builds feel noticeably slower (Phase 11P).
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        create("beta") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".beta"
+            signingConfig = signingConfigs.findByName("beta")
+            matchingFallbacks += listOf("release")
+            buildConfigField("String", "BETA_REPOSITORY", "\"$betaRepository\"")
+        }
+        // Release-like build for on-device performance checks. Separate app ID, so it never touches
+        // the installed app or its data; signed with the debug key so it can be sideloaded.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".bench"
+            matchingFallbacks += listOf("release")
+        }
+        // Everyday sideload build: release speed (R8), same app ID and debug key as the debug build,
+        // so it installs over the existing app and keeps its data.
+        create("fluid") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
+    }
+
+    buildTypes.configureEach {
+        if (name != "beta") {
+            sourceSets.getByName(name).java.srcDir("src/noUpdater/java")
         }
     }
 
@@ -42,6 +92,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {
@@ -53,6 +104,15 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("beta")) { variant ->
+        variant.outputs.forEach { output ->
+            output.versionCode.set(betaVersionCode)
+            output.versionName.set(betaVersionName)
         }
     }
 }

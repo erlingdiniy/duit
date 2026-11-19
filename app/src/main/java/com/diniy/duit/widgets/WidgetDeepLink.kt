@@ -10,6 +10,7 @@ enum class WidgetDeepLink(val actionName: String) {
     ACTIVITY("com.diniy.duit.widget.ACTION_ACTIVITY"),
     PLANNING_COMMITMENTS("com.diniy.duit.widget.ACTION_PLANNING_COMMITMENTS"),
     PLANNING_GOALS("com.diniy.duit.widget.ACTION_PLANNING_GOALS"),
+    PLANNING_BUDGETS_LINK("com.diniy.duit.widget.ACTION_PLANNING_BUDGETS"),
     INSIGHTS("com.diniy.duit.widget.ACTION_INSIGHTS"),
     QUICK_ADD_EXPENSE("com.diniy.duit.widget.ACTION_QUICK_ADD_EXPENSE"),
     QUICK_ADD_INCOME("com.diniy.duit.widget.ACTION_QUICK_ADD_INCOME"),

@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -167,7 +168,8 @@ class HomeViewModel(
                 errorMessage = throwable.message ?: "Unable to read local ledger data."
             )
         )
-    }.stateIn(
+    // Financial state is derived off the main thread so DB writes never stall frames (Phase 11P).
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = HomeUiState(isLoading = true)

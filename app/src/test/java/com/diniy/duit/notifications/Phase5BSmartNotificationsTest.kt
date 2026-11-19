@@ -383,7 +383,7 @@ class Phase5BSmartNotificationsTest {
         assertTrue(offEval.dueNowCandidates.isEmpty())
         assertTrue(offEval.upcomingCandidates.isEmpty())
 
-        val catOff = NotificationSettingsSnapshot(enabledCategories = NotificationCategory.entries.toSet() - NotificationCategory.COMMITMENTS)
+        val catOff = NotificationSettingsSnapshot(enabledCategories = NotificationCategory.DEFAULT_ENABLED - NotificationCategory.COMMITMENTS)
         val catEval = ReminderCalculator.evaluate(catOff, listOf(comm), emptyList(), emptyList(), emptyList(), emptyList(), null, emptyList(), nowInstant, klZone)
         assertTrue(catEval.dueNowCandidates.isEmpty())
 
