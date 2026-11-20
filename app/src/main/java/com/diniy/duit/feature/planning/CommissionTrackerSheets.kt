@@ -589,7 +589,7 @@ fun RecordCommissionPaymentSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(checked = markAsFull, onCheckedChange = null)
+                Switch(checked = markAsFull, onCheckedChange = null, colors = com.diniy.duit.core.ui.components.candySwitchColors())
             }
 
             PrismaticTextField(

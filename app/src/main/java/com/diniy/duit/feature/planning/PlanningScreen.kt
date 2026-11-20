@@ -193,6 +193,8 @@ fun PlanningScreen(
     }
     var showCycleSheet by rememberSaveable { mutableStateOf(false) }
     val celebrate = com.diniy.duit.core.ui.components.LocalCandyCelebrate.current
+    // v1.1.1 (public edition): success feedback for money actions that had none. Personal edition unchanged.
+    val celebratePublic: (String) -> Unit = { if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) celebrate(it) }
     // Phase 7B: one Bills & Commitments section visible at a time (less scrolling).
     var billsSection by rememberSaveable { mutableStateOf(BillsSection.BILLS) }
     androidx.compose.runtime.LaunchedEffect(requestCommissionSection) {
@@ -373,7 +375,8 @@ fun PlanningScreen(
                             PrismaticEmptyStateCard(
                                 iconRes = R.drawable.ic_solar_planning,
                                 title = "Start your first savings goal",
-                                message = "Reserve funds inside spending wallets or link money held in protected savings vaults without double-counting.",
+                                message = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Save for something that matters, like a trip or an emergency fund. Money you set aside is kept out of Safe to Spend."
+                                else "Reserve funds inside spending wallets or link money held in protected savings vaults without double-counting.",
                                 actionLabel = if (!uiState.isSamplePreview) "Create Goal" else "View Sample",
                                 onActionClick = {
                                     if (!uiState.isSamplePreview) {
@@ -505,7 +508,8 @@ fun PlanningScreen(
                             PrismaticEmptyStateCard(
                                 iconRes = R.drawable.ic_solar_planning,
                                 title = "No budgets for ${uiState.budgetOverview.periodLabel}",
-                                message = "Create an overall cap or category spending limits. Budgets never modify wallet balances or Safe to Spend.",
+                                message = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Set a limit for all spending or for one category. We'll warn you at 80% and 100%. Budgets never change your balances."
+                                else "Create an overall cap or category spending limits. Budgets never modify wallet balances or Safe to Spend.",
                                 actionLabel = if (!uiState.isSamplePreview) "Create Budget" else "View Sample",
                                 onActionClick = {
                                     if (!uiState.isSamplePreview) {
@@ -957,8 +961,9 @@ fun PlanningScreen(
                         item(key = "commissions_empty", contentType = "empty") {
                             PrismaticEmptyStateCard(
                                 iconRes = R.drawable.ic_solar_calculator,
-                                title = "Track Company, Lenovo, ASUS & Acer payouts",
-                                message = "Record irregular or partial commissions from any source. Only actual net payouts received credit your wallet.",
+                                title = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "No commission recorded yet" else "Track Company, Lenovo, ASUS & Acer payouts",
+                                message = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Record commission from any source, including partial payouts. Only money you've actually received is added to your wallet."
+                                else "Record irregular or partial commissions from any source. Only actual net payouts received credit your wallet.",
                                 actionLabel = "Add Commission",
                                 onActionClick = {
                                     editingCommissionId = null
@@ -1047,6 +1052,7 @@ fun PlanningScreen(
                     {
                         showCommissionEditor = false
                         editingCommissionId = null
+                        celebratePublic("Commission saved")
                     },
                     onError
                 )
@@ -1080,7 +1086,7 @@ fun PlanningScreen(
                     onRecordPayment(
                         payment,
                         markFull,
-                        { payingCommissionId = null },
+                        { payingCommissionId = null; celebratePublic("Payout recorded") },
                         onError
                     )
                 },
@@ -1201,7 +1207,7 @@ fun PlanningScreen(
                     amountSen,
                     note,
                     submissionId,
-                    { actionSheetMode = null },
+                    { actionSheetMode = null; celebratePublic("Moved back to your wallet") },
                     onError
                 )
             },
@@ -1213,7 +1219,7 @@ fun PlanningScreen(
                     amountSen,
                     note,
                     submissionId,
-                    { actionSheetMode = null },
+                    { actionSheetMode = null; celebratePublic("Moved to spending") },
                     onError
                 )
             },
@@ -1225,7 +1231,7 @@ fun PlanningScreen(
                     amountSen,
                     note,
                     submissionId,
-                    { actionSheetMode = null },
+                    { actionSheetMode = null; celebratePublic("Funds reassigned") },
                     onError
                 )
             },
@@ -1365,7 +1371,7 @@ fun PlanningScreen(
                 },
                 isPreview = uiState.isSamplePreview,
                 onRecordPayment = { id, wId, amt, note, paidAt, subId, onError ->
-                    onRecordPayLaterPayment(id, wId, amt, note, paidAt, subId, { inspectedPayLaterId = null }, onError)
+                    onRecordPayLaterPayment(id, wId, amt, note, paidAt, subId, { inspectedPayLaterId = null; celebratePublic("Payment recorded") }, onError)
                 },
                 onEdit = {
                     inspectedPayLaterId = null
@@ -1405,7 +1411,7 @@ fun PlanningScreen(
                 },
                 isPreview = uiState.isSamplePreview,
                 onRecordSettlement = { id, wId, amt, note, paidAt, subId, onError ->
-                    onRecordDebtSettlement(id, wId, amt, note, paidAt, subId, { inspectedDebtId = null }, onError)
+                    onRecordDebtSettlement(id, wId, amt, note, paidAt, subId, { inspectedDebtId = null; celebratePublic("Repayment recorded") }, onError)
                 },
                 onEdit = {
                     inspectedDebtId = null

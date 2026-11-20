@@ -24,7 +24,7 @@ import kotlin.time.Duration.Companion.minutes
 
 /** Why an update stopped. Drives friendly copy and whether a retry is offered. */
 internal enum class UpdateProblem(val canRetry: Boolean) {
-    NETWORK(true), SERVER(true), INVALID_APK(true), STORAGE(true), INSTALL(true),
+    NETWORK(true), TIMEOUT(true), SERVER(true), INVALID_APK(true), STORAGE(true), INSTALL(true),
     SIGNATURE(false), // a different signer can never install over this app; retrying cannot help
     GENERIC(true)
 }
@@ -32,8 +32,9 @@ internal enum class UpdateProblem(val canRetry: Boolean) {
 internal fun classifyUpdateFailure(error: Throwable): UpdateProblem {
     val message = error.message.orEmpty()
     return when {
+        error is java.net.SocketTimeoutException -> UpdateProblem.TIMEOUT
         error is java.net.UnknownHostException || error is java.net.ConnectException ||
-            error is java.net.SocketTimeoutException || error is javax.net.ssl.SSLException -> UpdateProblem.NETWORK
+            error is javax.net.ssl.SSLException -> UpdateProblem.NETWORK
         "ENOSPC" in message || "No space" in message -> UpdateProblem.STORAGE
         "signer does not match" in message -> UpdateProblem.SIGNATURE
         "integrity" in message || "Invalid APK" in message || "exceeds its declared size" in message -> UpdateProblem.INVALID_APK
@@ -162,8 +163,11 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
             } catch (error: Exception) {
                 // A failed check must leave the app usable.
                 recordCheck(
-                    if (classifyUpdateFailure(error) == UpdateProblem.NETWORK) "Couldn't check: you're offline"
-                    else "Couldn't check: GitHub is unavailable"
+                    when (classifyUpdateFailure(error)) {
+                        UpdateProblem.NETWORK -> "Couldn't check: you're offline"
+                        UpdateProblem.TIMEOUT -> "Couldn't check: the connection timed out"
+                        else -> "Couldn't check: GitHub is unavailable"
+                    }
                 )
             } finally {
                 mutableChecking.value = false

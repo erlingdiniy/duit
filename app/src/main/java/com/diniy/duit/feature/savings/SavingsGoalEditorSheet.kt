@@ -1,5 +1,10 @@
 package com.diniy.duit.feature.savings
 
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -81,11 +86,17 @@ fun SavingsGoalEditorSheet(
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
-    PrismaticModalBottomSheet(
-        title = if (existingGoal == null) "New Savings Goal" else "Edit Savings Goal",
-        subtitle = "Set a Ringgit target with an optional timeline and accent.",
-        onDismissRequest = onDismiss
-    ) {
+    // Public edition: a multi-field form gets a full screen; the personal edition keeps its sheet.
+    val title = if (existingGoal == null) "New Savings Goal" else "Edit Savings Goal"
+    val subtitle = "Set a Ringgit target with an optional timeline and accent."
+    val container: @Composable (@Composable ColumnScope.() -> Unit) -> Unit = { body ->
+        if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+            com.diniy.duit.core.ui.components.CandyFullScreenForm(title = title, subtitle = subtitle, onDismissRequest = onDismiss, content = body)
+        } else {
+            PrismaticModalBottomSheet(title = title, subtitle = subtitle, onDismissRequest = onDismiss, content = body)
+        }
+    }
+    container {
         if (errorMessage != null) {
             PrismaticErrorBanner(
                 message = errorMessage!!,
@@ -180,7 +191,14 @@ fun SavingsGoalEditorSheet(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             SavingsIconMapper.selectableIcons.forEach { (key, label) ->
-                FilterChip(
+                if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                    com.diniy.duit.core.ui.components.SpatialGlassPill(
+                        label = label,
+                        selected = iconKey == key,
+                        onClick = { iconKey = key },
+                        leadingIcon = { Icon(SavingsIconMapper.iconFor(key), contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    )
+                } else FilterChip(
                     selected = iconKey == key,
                     onClick = { iconKey = key },
                     label = { Text(label) },
@@ -209,7 +227,24 @@ fun SavingsGoalEditorSheet(
         ) {
             PrismaticAccentToken.entries.forEach { token ->
                 val (accentColor, _, _) = SavingsIconMapper.accentColors(token)
-                FilterChip(
+                val tokenName = token.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+                if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                    val selected = accentToken == token
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .then(
+                                if (selected) Modifier.border(3.dp, com.diniy.duit.core.ui.theme.SpatialTheme.colors.primaryText, CircleShape)
+                                else Modifier
+                            )
+                            .selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton, onClick = { accentToken = token })
+                            .semantics { contentDescription = "$tokenName colour" }
+                    ) {
+                        Box(Modifier.size(32.dp).clip(CircleShape).background(accentColor))
+                    }
+                } else FilterChip(
                     selected = accentToken == token,
                     onClick = { accentToken = token },
                     label = {

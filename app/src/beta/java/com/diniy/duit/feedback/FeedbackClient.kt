@@ -22,7 +22,7 @@ internal enum class FeedbackCategory(val emoji: String, val label: String, val a
 internal sealed interface FeedbackResult {
     data object Sent : FeedbackResult
     data class Rejected(val code: String) : FeedbackResult
-    data class Failed(val offline: Boolean) : FeedbackResult
+    data class Failed(val offline: Boolean, val timedOut: Boolean = false) : FeedbackResult
 }
 
 internal object FeedbackRules {
@@ -95,8 +95,10 @@ internal class AppsScriptFeedbackSender(private val context: Context) : Feedback
             try {
                 parseFeedbackResponse(post(URI(endpoint), payload))
             } catch (error: IOException) {
-                FeedbackResult.Failed(offline = error is java.net.UnknownHostException ||
-                    error is java.net.ConnectException || error is java.net.SocketTimeoutException)
+                FeedbackResult.Failed(
+                    offline = error is java.net.UnknownHostException || error is java.net.ConnectException,
+                    timedOut = error is java.net.SocketTimeoutException
+                )
             }
         }
 

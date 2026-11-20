@@ -422,14 +422,14 @@ private fun NotifSwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = androidx.compose.material3.SwitchDefaults.colors(
+            colors = com.diniy.duit.core.ui.components.candySwitchColors(personal = androidx.compose.material3.SwitchDefaults.colors(
                 checkedTrackColor = colors.coral,
                 checkedThumbColor = Color.White,
                 checkedBorderColor = colors.sticker,
                 uncheckedTrackColor = colors.baseSurface,
                 uncheckedThumbColor = colors.secondaryText,
                 uncheckedBorderColor = Color.Transparent
-            )
+            ))
         )
     }
 }

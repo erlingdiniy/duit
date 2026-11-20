@@ -32,6 +32,71 @@ enum class ActivityFilter(val label: String) {
     TRANSFER("Transfers")
 }
 
+/** Quick date windows for Activity search; [matches] uses the transaction's local calendar date. */
+enum class ActivityDateRange(val label: String) {
+    ALL_TIME("All time"),
+    LAST_7_DAYS("Last 7 days"),
+    THIS_MONTH("This month"),
+    LAST_MONTH("Last month"),
+    LAST_90_DAYS("Last 90 days");
+
+    fun matches(date: LocalDate, today: LocalDate): Boolean = when (this) {
+        ALL_TIME -> true
+        LAST_7_DAYS -> !date.isBefore(today.minusDays(6)) && !date.isAfter(today)
+        THIS_MONTH -> date.year == today.year && date.month == today.month
+        LAST_MONTH -> today.minusMonths(1).let { date.year == it.year && date.month == it.month }
+        LAST_90_DAYS -> !date.isBefore(today.minusDays(89)) && !date.isAfter(today)
+    }
+}
+
+/** Extra Activity filters (category name, wallet, date). Display-only: records are never changed. */
+data class ActivityExtraFilters(
+    val category: String? = null,
+    val walletId: Long? = null,
+    val dateRange: ActivityDateRange = ActivityDateRange.ALL_TIME
+) {
+    val isActive: Boolean get() = category != null || walletId != null || dateRange != ActivityDateRange.ALL_TIME
+
+    /** Clears a wallet or category choice that no longer exists, so a stale filter can't hide everything. */
+    fun sanitized(walletIds: Set<Long>, categoryOptions: List<String>): ActivityExtraFilters = copy(
+        walletId = walletId?.takeIf { it in walletIds },
+        category = category?.takeIf { chosen -> categoryOptions.any { it.equals(chosen, ignoreCase = true) } }
+    )
+}
+
+/**
+ * Pure search used by Activity. Keyword matches title, category, note, wallet names or the amount
+ * (e.g. "24.80" or "24"); a transfer matches a wallet filter on either side.
+ */
+fun filterActivity(
+    transactions: List<FinanceTransaction>,
+    type: ActivityFilter,
+    query: String,
+    extra: ActivityExtraFilters,
+    walletsById: Map<Long, Wallet>,
+    today: LocalDate
+): List<FinanceTransaction> {
+    val q = query.trim().lowercase()
+    return transactions.filter { tx ->
+        val typeOk = when (type) {
+            ActivityFilter.ALL -> true
+            ActivityFilter.INCOME -> tx.type == TransactionType.INCOME
+            ActivityFilter.EXPENSE -> tx.type == TransactionType.EXPENSE
+            ActivityFilter.TRANSFER -> tx.type == TransactionType.TRANSFER
+        }
+        typeOk &&
+            (extra.category == null || tx.category.equals(extra.category, ignoreCase = true)) &&
+            (extra.walletId == null || tx.walletId == extra.walletId || tx.targetWalletId == extra.walletId) &&
+            extra.dateRange.matches(DateTimeFormatters.toLocalDate(tx.occurredAtEpochMs), today) &&
+            (q.isEmpty() || tx.title.lowercase().contains(q) || tx.category.lowercase().contains(q) ||
+                tx.note.lowercase().contains(q) ||
+                walletsById[tx.walletId]?.name?.lowercase()?.contains(q) == true ||
+                tx.targetWalletId?.let { walletsById[it]?.name?.lowercase()?.contains(q) } == true ||
+                // Amount search is a public-edition addition; the personal edition keeps its original matching.
+                (com.diniy.duit.BuildConfig.PUBLIC_EDITION && String.format(java.util.Locale.ROOT, "%d.%02d", tx.amountSen / 100, tx.amountSen % 100).contains(q)))
+    }
+}
+
 data class ActivityDateSection(
     val date: LocalDate,
     val headerLabel: String,
@@ -49,7 +114,10 @@ data class ActivityUiState(
     val wallets: List<Wallet> = emptyList(),
     val walletsById: Map<Long, Wallet> = emptyMap(),
     val categories: List<Category> = emptyList(),
-    val categoriesById: Map<Long, Category> = emptyMap()
+    val categoriesById: Map<Long, Category> = emptyMap(),
+    val extraFilters: ActivityExtraFilters = ActivityExtraFilters(),
+    /** Category names that actually appear in this ledger, for the Category filter. */
+    val categoryOptions: List<String> = emptyList()
 )
 
 class ActivityViewModel(
@@ -62,6 +130,8 @@ class ActivityViewModel(
 
     private val filterFlow = MutableStateFlow(ActivityFilter.ALL)
     private val searchQueryFlow = MutableStateFlow("")
+    private val extraFiltersFlow = MutableStateFlow(ActivityExtraFilters())
+    private val criteriaFlow = combine(filterFlow, searchQueryFlow, extraFiltersFlow) { f, q, e -> Triple(f, q, e) }
     private val submittingFlow = MutableStateFlow(false)
     private val errorFlow = MutableStateFlow<String?>(null)
 
@@ -82,36 +152,17 @@ class ActivityViewModel(
 
     val uiState: StateFlow<ActivityUiState> = combine(
         baseDataFlow,
-        filterFlow,
-        searchQueryFlow,
+        criteriaFlow,
         submittingFlow,
         errorFlow
-    ) { base, filter, query, isSubmitting, error ->
+    ) { base, (filter, query, rawExtra), isSubmitting, error ->
         val sourceTx = if (base.isPreview) SamplePreviewData.transactions else base.transactions
         val sourceWallets = if (base.isPreview) SamplePreviewData.wallets else base.wallets
         val walletsById = sourceWallets.associateBy { it.id }
-        val trimmedQuery = query.trim().lowercase()
-
-        val filteredByType = when (filter) {
-            ActivityFilter.ALL -> sourceTx
-            ActivityFilter.INCOME -> sourceTx.filter { it.type == TransactionType.INCOME }
-            ActivityFilter.EXPENSE -> sourceTx.filter { it.type == TransactionType.EXPENSE }
-            ActivityFilter.TRANSFER -> sourceTx.filter { it.type == TransactionType.TRANSFER }
-        }
-
-        val filtered = if (trimmedQuery.isEmpty()) {
-            filteredByType
-        } else {
-            filteredByType.filter { tx ->
-                val srcName = walletsById[tx.walletId]?.name?.lowercase().orEmpty()
-                val dstName = tx.targetWalletId?.let { walletsById[it]?.name?.lowercase() }.orEmpty()
-                tx.title.lowercase().contains(trimmedQuery) ||
-                    tx.category.lowercase().contains(trimmedQuery) ||
-                    tx.note.lowercase().contains(trimmedQuery) ||
-                    srcName.contains(trimmedQuery) ||
-                    dstName.contains(trimmedQuery)
-            }
-        }
+        // 2. One entry per category name, whatever its letter case.
+        val categoryOptions = sourceTx.map { it.category }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }.sorted()
+        val extra = rawExtra.sanitized(walletsById.keys, categoryOptions)
+        val filtered = filterActivity(sourceTx, filter, query, extra, walletsById, LocalDate.now())
 
         val today = LocalDate.now()
         val sections = filtered
@@ -133,6 +184,8 @@ class ActivityViewModel(
             isSamplePreview = base.isPreview,
             selectedFilter = filter,
             searchQuery = query,
+            extraFilters = extra,
+            categoryOptions = categoryOptions,
             dateSections = sections,
             wallets = sourceWallets,
             walletsById = walletsById,
@@ -155,6 +208,10 @@ class ActivityViewModel(
 
     fun selectFilter(filter: ActivityFilter) {
         filterFlow.value = filter
+    }
+
+    fun updateExtraFilters(filters: ActivityExtraFilters) {
+        extraFiltersFlow.value = filters
     }
 
     fun updateSearchQuery(query: String) {

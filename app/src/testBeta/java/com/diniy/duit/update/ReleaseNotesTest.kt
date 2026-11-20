@@ -87,6 +87,8 @@ class ReleaseNotesTest {
     @Test
     fun failures_areClassified_andSignatureNeverOffersRetry() {
         assertEquals(UpdateProblem.NETWORK, classifyUpdateFailure(UnknownHostException("api.github.com")))
+        assertEquals(UpdateProblem.TIMEOUT, classifyUpdateFailure(java.net.SocketTimeoutException("Read timed out")))
+        assertTrue(UpdateProblem.TIMEOUT.canRetry)
         assertEquals(UpdateProblem.SIGNATURE, classifyUpdateFailure(IOException("APK package, version or signer does not match this beta update")))
         assertEquals(UpdateProblem.INVALID_APK, classifyUpdateFailure(IOException("APK integrity check failed")))
         assertEquals(UpdateProblem.SERVER, classifyUpdateFailure(IOException("GitHub update request failed (HTTP 503)")))

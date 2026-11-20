@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -245,6 +246,15 @@ class DuitContainer(application: Application) {
                 .collectLatest {
                     widgetUpdateCoordinator.refreshAllWidgetsNow()
                 }
+        }
+        if (com.diniy.duit.BuildConfig.OPTIONAL_COMMISSION) {
+            applicationScope.launch {
+                userPreferencesRepository.observeAppSettings()
+                    .map { it.commissionFeatureEnabled }
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .collectLatest { reminderScheduler.enqueueImmediateSync() }
+            }
         }
         applicationScope.launch {
             userPreferencesRepository.observeThemeMode()

@@ -262,7 +262,11 @@ class SettingsViewModel(
                 busyFlow.value = false
                 restoreStageFlow.value = RestoreStage.Idle
                 storageSummaryFlow.value = updatedSummary
-                feedbackFlow.value = "Backup restored cleanly (${stage.bundle.preview.transactionCount} transactions, ${stage.bundle.preview.walletCount} wallets)." to null
+                val preview = stage.bundle.preview
+                feedbackFlow.value = (
+                    if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Backup restored cleanly (${countLabel(preview.transactionCount, "transaction", "transactions")}, ${countLabel(preview.walletCount, "wallet", "wallets")})."
+                    else "Backup restored cleanly (${preview.transactionCount} transactions, ${preview.walletCount} wallets)."
+                    ) to null
             }.onFailure { err ->
                 busyFlow.value = false
                 feedbackFlow.value = null to (err.message ?: "Restore failed cleanly. Existing database preserved.")

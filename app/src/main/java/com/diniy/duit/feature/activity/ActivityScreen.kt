@@ -1,5 +1,8 @@
 package com.diniy.duit.feature.activity
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import com.diniy.duit.core.ui.components.CandyIconBlob
 import com.diniy.duit.core.ui.components.CandyMoneyText
 import com.diniy.duit.core.ui.components.CandyStatusBadge
@@ -74,6 +77,7 @@ fun ActivityScreen(
     contentPadding: PaddingValues,
     onSelectFilter: (ActivityFilter) -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    onExtraFiltersChange: (ActivityExtraFilters) -> Unit = {},
     onOpenNewTransaction: (TransactionType) -> Unit,
     onSelectTransaction: (FinanceTransaction) -> Unit,
     onOpenCategories: () -> Unit,
@@ -213,6 +217,40 @@ fun ActivityScreen(
             }
         }
 
+        // Public edition: category, wallet and date filters (display-only; records are never changed).
+        if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+            item(key = "extra_filters", contentType = "filters") {
+                val extra = uiState.extraFilters
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterMenuPill(
+                        label = extra.category ?: "Category",
+                        active = extra.category != null,
+                        options = listOf<Pair<String, String?>>("All categories" to null) + uiState.categoryOptions.map { it to it },
+                        onSelect = { onExtraFiltersChange(extra.copy(category = it)) }
+                    )
+                    FilterMenuPill(
+                        label = extra.walletId?.let { uiState.walletsById[it]?.name } ?: "Wallet",
+                        active = extra.walletId != null,
+                        options = listOf<Pair<String, Long?>>("All wallets" to null) + uiState.wallets.map { it.name to it.id },
+                        onSelect = { onExtraFiltersChange(extra.copy(walletId = it)) }
+                    )
+                    FilterMenuPill(
+                        label = if (extra.dateRange == ActivityDateRange.ALL_TIME) "Date" else extra.dateRange.label,
+                        active = extra.dateRange != ActivityDateRange.ALL_TIME,
+                        options = ActivityDateRange.entries.map { it.label to it },
+                        onSelect = { onExtraFiltersChange(extra.copy(dateRange = it)) }
+                    )
+                    if (extra.isActive) {
+                        SpatialGlassPill(label = "Clear", onClick = { onExtraFiltersChange(ActivityExtraFilters()) })
+                    }
+                }
+            }
+        }
+
         // 4. Grouped Date Sections with Compact Transaction Rows & Subtle Dividers
         when {
             uiState.isLoading -> {
@@ -222,7 +260,7 @@ fun ActivityScreen(
             uiState.dateSections.isEmpty() -> {
                 item(key = "empty", contentType = "empty") {
                     val hasActiveSearch = uiState.searchQuery.isNotBlank() ||
-                        uiState.selectedFilter != ActivityFilter.ALL
+                        uiState.selectedFilter != ActivityFilter.ALL || uiState.extraFilters.isActive
                     PrismaticEmptyStateCard(
                         iconRes = R.drawable.ic_solar_activity,
                         title = if (hasActiveSearch) {
@@ -231,19 +269,26 @@ fun ActivityScreen(
                             "No activity yet"
                         },
                         message = if (hasActiveSearch) {
-                            "Try clearing your search or switching the filter pill above."
+                            "Try a different search, or clear the filters above."
                         } else {
-                            "Record income, expenses, or wallet transfers. Transfers move funds between wallets without inflating cashflow totals."
+                            if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Every ringgit you record shows up here. Add an expense, income or transfer to get started."
+                            else "Record income, expenses, or wallet transfers. Transfers move funds between wallets without inflating cashflow totals."
                         },
-                        actionLabel = if (!hasActiveSearch && !uiState.isSamplePreview) {
-                            "Add Transaction"
-                        } else {
-                            null
+                        actionLabel = when {
+                            !hasActiveSearch && !uiState.isSamplePreview -> "Add Transaction"
+                            hasActiveSearch && com.diniy.duit.BuildConfig.PUBLIC_EDITION -> "Clear search & filters"
+                            else -> null
                         },
-                        onActionClick = if (!hasActiveSearch && !uiState.isSamplePreview) {
-                            { onOpenNewTransaction(TransactionType.EXPENSE) }
-                        } else {
-                            null
+                        onActionClick = when {
+                            !hasActiveSearch && !uiState.isSamplePreview -> { { onOpenNewTransaction(TransactionType.EXPENSE) } }
+                            hasActiveSearch && com.diniy.duit.BuildConfig.PUBLIC_EDITION -> {
+                                {
+                                    onSearchQueryChange("")
+                                    onSelectFilter(ActivityFilter.ALL)
+                                    onExtraFiltersChange(ActivityExtraFilters())
+                                }
+                            }
+                            else -> null
                         },
                         secondaryActionLabel = if (!uiState.isSamplePreview && !hasActiveSearch) {
                             "View Sample"
@@ -421,6 +466,33 @@ private fun SpatialCompactTransactionRow(
                 CandyStatusBadge("Transfer", CandyTone.Sunny)
             } else {
                 Text(timeLabel, style = typography.caption, color = colors.secondaryText, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** A pill that opens a small menu of choices; shows the current choice as its label. */
+@Composable
+private fun <T> FilterMenuPill(label: String, active: Boolean, options: List<Pair<String, T>>, onSelect: (T) -> Unit) {
+    var open by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
+    androidx.compose.foundation.layout.Box {
+        SpatialGlassPill(
+            label = "$label ▾",
+            selected = active,
+            onClick = { open = true },
+            modifier = Modifier.semantics { contentDescription = "Filter by $label" }
+        )
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { (text, value) ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(text) },
+                    onClick = {
+                        open = false
+                        haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onSelect(value)
+                    }
+                )
             }
         }
     }

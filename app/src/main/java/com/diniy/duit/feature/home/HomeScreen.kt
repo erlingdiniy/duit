@@ -300,7 +300,8 @@ fun HomeScreen(
                                     PrismaticEmptyStateCard(
                                         iconRes = R.drawable.ic_solar_wallet,
                                         title = "Ready for your first wallet",
-                                        message = "Add a bank account, e-wallet, or cash wallet to track your Ringgit balance privately on-device.",
+                                        message = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Add where you keep your money, like a bank account, e-wallet or cash. Your balances stay on this phone."
+                                        else "Add a bank account, e-wallet, or cash wallet to track your Ringgit balance privately on-device.",
                                         actionLabel = "Add Wallet",
                                         onActionClick = { showAddWalletSheet = true },
                                         secondaryActionLabel = "View Sample",
@@ -1122,7 +1123,8 @@ private fun AllWalletsBottomSheet(
                 leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(14.dp))
+            // Room for the button's soft shadow before the first section title.
+            Spacer(Modifier.height(if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) 20.dp else 14.dp))
         }
 
         if (activeWallets.isNotEmpty()) {

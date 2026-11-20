@@ -268,7 +268,8 @@ private fun SettingsHubOverviewScreen(
                         accent = colors.aqua,
                         title = "Notifications",
                         subtitle = if (uiState.notificationSettings.masterEnabled) {
-                            "${uiState.notificationSettings.enabledCategories.size} categories · ${uiState.notificationSettings.formattedReminderTime}"
+                            (if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) countLabel(uiState.notificationSettings.enabledCategories.size, "category", "categories")
+                            else "${uiState.notificationSettings.enabledCategories.size} categories") + " · ${uiState.notificationSettings.formattedReminderTime}"
                         } else {
                             "Smart reminders paused"
                         },
@@ -660,7 +661,7 @@ private fun DashboardCustomizationScreen(
                         IconButton(onClick = { onMove(section, +1) }, enabled = idx < order.lastIndex) {
                             Icon(Icons.Rounded.ArrowDownward, contentDescription = "Move ${section.title} down")
                         }
-                        Switch(checked = visible, onCheckedChange = { onSetVisible(section, it) })
+                        Switch(checked = visible, onCheckedChange = { onSetVisible(section, it) }, colors = com.diniy.duit.core.ui.components.candySwitchColors())
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -1267,11 +1268,16 @@ private fun SettingsGroupedSwitchItem(
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+    val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = { next ->
+                // Public edition: a light tick on toggle (uses the setting as it was before this tap).
+                if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.ToggleOn.takeIf { next } ?: androidx.compose.ui.hapticfeedback.HapticFeedbackType.ToggleOff)
+                onCheckedChange(next)
+            })
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1294,14 +1300,14 @@ private fun SettingsGroupedSwitchItem(
         Switch(
             checked = checked,
             onCheckedChange = null, // the whole row toggles (single, accessible target)
-            colors = androidx.compose.material3.SwitchDefaults.colors(
+            colors = com.diniy.duit.core.ui.components.candySwitchColors(personal = androidx.compose.material3.SwitchDefaults.colors(
                 checkedTrackColor = colors.coral,
                 checkedThumbColor = Color.White,
                 checkedBorderColor = colors.sticker,
                 uncheckedTrackColor = colors.baseSurface,
                 uncheckedThumbColor = colors.secondaryText,
                 uncheckedBorderColor = Color.Transparent
-            )
+            ))
         )
     }
 }
@@ -1328,14 +1334,14 @@ internal fun SettingsSwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = androidx.compose.material3.SwitchDefaults.colors(
+            colors = com.diniy.duit.core.ui.components.candySwitchColors(personal = androidx.compose.material3.SwitchDefaults.colors(
                 checkedTrackColor = colors.coral,
                 checkedThumbColor = Color.White,
                 checkedBorderColor = colors.sticker,
                 uncheckedTrackColor = colors.baseSurface,
                 uncheckedThumbColor = colors.secondaryText,
                 uncheckedBorderColor = Color.Transparent
-            )
+            ))
         )
     }
 }
@@ -1449,4 +1455,7 @@ internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRout
 internal const val PRIVACY_POLICY_URL = "https://github.com/erlingdiniy/duit-beta/blob/main/PRIVACY.md"
 
 /** "1 record", "2 records". */
-internal fun recordCountLabel(count: Int): String = if (count == 1) "1 record" else "$count records"
+internal fun recordCountLabel(count: Int): String = countLabel(count, "record", "records")
+
+/** "1 wallet", "0 wallets", "3 wallets". */
+internal fun countLabel(count: Int, one: String, many: String): String = "$count ${if (count == 1) one else many}"

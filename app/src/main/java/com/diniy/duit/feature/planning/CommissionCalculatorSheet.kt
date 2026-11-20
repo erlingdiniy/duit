@@ -173,7 +173,8 @@ fun CommissionCalculatorSheet(
                     }
                     Switch(
                         checked = config.isEnabled,
-                        onCheckedChange = null
+                        onCheckedChange = null,
+                        colors = com.diniy.duit.core.ui.components.candySwitchColors()
                     )
                 }
             }
@@ -248,7 +249,8 @@ fun CommissionCalculatorSheet(
                     )
                     Switch(
                         checked = enableOnSave,
-                        onCheckedChange = null
+                        onCheckedChange = null,
+                        colors = com.diniy.duit.core.ui.components.candySwitchColors()
                     )
                 }
             }

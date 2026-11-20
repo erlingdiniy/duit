@@ -467,7 +467,8 @@ fun TransactionEditorSheet(
                         }
                         Switch(
                             checked = startNewSalaryCycle,
-                            onCheckedChange = null
+                            onCheckedChange = null,
+                        colors = com.diniy.duit.core.ui.components.candySwitchColors()
                         )
                     }
                     if (startNewSalaryCycle) {

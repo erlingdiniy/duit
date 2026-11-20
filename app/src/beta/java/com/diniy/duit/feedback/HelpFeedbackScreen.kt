@@ -92,7 +92,9 @@ internal class FeedbackModel(
         viewModelScope.launch {
             mutableState.value = when (val result = sender.send(category, message, email)) {
                 FeedbackResult.Sent -> FeedbackUiState.Sent
-                is FeedbackResult.Failed -> if (result.offline) {
+                is FeedbackResult.Failed -> if (result.timedOut) {
+                    FeedbackUiState.Error("Connection timed out", "The server took too long to respond. Please try again.", canRetry = true)
+                } else if (result.offline) {
                     FeedbackUiState.Error("You're offline", "We couldn't reach the server. Check your connection and try again.", canRetry = true)
                 } else {
                     FeedbackUiState.Error("Couldn't send", "Something went wrong on the way. Please try again in a moment.", canRetry = true)

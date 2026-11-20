@@ -158,7 +158,7 @@ fun DuitTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = DuitTypography,
+            typography = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) DuitPublicTypography else DuitTypography,
             shapes = DuitShapes,
             content = content
         )

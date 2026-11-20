@@ -402,7 +402,8 @@ private fun SettingSwitchRow(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            colors = com.diniy.duit.core.ui.components.candySwitchColors()
         )
     }
 }

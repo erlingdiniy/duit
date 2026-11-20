@@ -229,7 +229,8 @@ fun SpatialGlassSurface(
         .then(
             if (sticker) {
                 Modifier.drawBehind {
-                    val o = (stickerOffset - stickerShift).toPx()
+                    // Public: the shadow stays put while the face slides onto it, so ink never peeks out top-left on press.
+                    val o = (if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) stickerOffset else stickerOffset - stickerShift).toPx()
                     val outlineShape = shape.createOutline(size, layoutDirection, this)
                     translate(left = o, top = o) { drawOutline(outlineShape, stickerInk) }
                 }
@@ -365,8 +366,14 @@ fun SpatialGlassButton(
     val shape = RoundedCornerShape(geometry.radiusMd)
     val isSticker = variant == SpatialButtonVariant.Primary && isInteractive
     val lastClickAt = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    // Public edition: soft Candy shadow (translucent ink, smaller lift, thinner tinted outline).
+    val softSticker = com.diniy.duit.BuildConfig.PUBLIC_EDITION
+    val stickerInk = if (softSticker) colors.sticker.copy(alpha = if (colors.isDark) 0.45f else 0.18f) else colors.sticker
+    val stickerOffset = if (softSticker) 3.dp else geometry.stickerOffset
+    val stickerBorder = if (softSticker) BorderStroke(1.5.dp, colors.sticker.copy(alpha = if (colors.isDark) 0.55f else 0.28f))
+        else BorderStroke(geometry.stickerBorder, colors.sticker)
     val stickerShift by animateDpAsState(
-        targetValue = if (isSticker && isPressed) geometry.stickerOffset - 1.dp else 0.dp,
+        targetValue = if (isSticker && isPressed) stickerOffset - 1.dp else 0.dp,
         animationSpec = prismaticSpring(
             reducedMotion = reducedMotion,
             dampingRatio = motion.pressDampingRatio,
@@ -374,15 +381,13 @@ fun SpatialGlassButton(
         ),
         label = "spatial_button_sticker_shift"
     )
-    val stickerInk = colors.sticker
-    val stickerOffset = geometry.stickerOffset
 
     val (bgColor, fgColor, borderStroke) = when (variant) {
         // Candy Pop: Primary is the Sticker Pop action (outline + hard offset shadow).
         SpatialButtonVariant.Primary -> Triple(
             if (isInteractive) colors.primaryAction else colors.baseSurface,
             if (isInteractive) colors.onPrimaryAction else colors.disabledText,
-            if (isInteractive) BorderStroke(geometry.stickerBorder, colors.sticker) else null
+            if (isInteractive) stickerBorder else null
         )
         SpatialButtonVariant.SecondaryGlass -> Triple(
             if (isInteractive) colors.glassSurfaceElevated else colors.glassSurfaceSubtle,
@@ -416,7 +421,8 @@ fun SpatialGlassButton(
             .then(
                 if (isSticker) {
                     Modifier.drawBehind {
-                        val o = (stickerOffset - stickerShift).toPx()
+                        // Public: the shadow stays put while the face slides onto it (no top-left ink flash on press).
+                        val o = (if (softSticker) stickerOffset else stickerOffset - stickerShift).toPx()
                         val outline = shape.createOutline(size, layoutDirection, this)
                         translate(left = o, top = o) { drawOutline(outline, stickerInk) }
                     }
@@ -569,7 +575,8 @@ fun SpatialGlassPill(
     }
 
     val pillModifier = modifier
-        .heightIn(min = if (onClick != null) 44.dp else geometry.pillHeight)
+        // Public edition: tappable pills meet the 48dp minimum touch target.
+        .heightIn(min = if (onClick != null) (if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) 48.dp else 44.dp) else geometry.pillHeight)
         .then(if (onClick != null) Modifier.minimumInteractiveComponentSize() else Modifier)
         .clip(shape)
         .background(resolvedContainer)
@@ -692,6 +699,7 @@ fun SpatialGlassBottomSheetSurface(
     val colors = SpatialTheme.colors
     val geometry = SpatialTheme.geometry
     val typography = SpatialTheme.typography
+    val publicSpacing = com.diniy.duit.BuildConfig.PUBLIC_EDITION
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -703,7 +711,7 @@ fun SpatialGlassBottomSheetSurface(
         dragHandle = {
             Box(
                 modifier = Modifier
-                    .padding(top = 12.dp, bottom = 10.dp)
+                    .padding(top = if (publicSpacing) 10.dp else 12.dp, bottom = if (publicSpacing) 14.dp else 10.dp)
                     .size(width = 48.dp, height = 6.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(colors.coral.copy(alpha = 0.7f))
@@ -731,14 +739,14 @@ fun SpatialGlassBottomSheetSurface(
                 modifier = Modifier.semantics { heading() }
             )
             if (!subtitle.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(if (publicSpacing) 6.dp else 4.dp))
                 Text(
                     text = subtitle,
                     style = typography.supportingInfo,
                     color = colors.secondaryText
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(if (publicSpacing) 20.dp else 16.dp))
             content()
         }
     }

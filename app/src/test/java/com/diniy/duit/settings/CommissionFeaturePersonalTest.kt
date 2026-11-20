@@ -38,5 +38,8 @@ class RecordCountLabelTest {
         org.junit.Assert.assertEquals("0 records", com.diniy.duit.feature.settings.recordCountLabel(0))
         org.junit.Assert.assertEquals("1 record", com.diniy.duit.feature.settings.recordCountLabel(1))
         org.junit.Assert.assertEquals("2 records", com.diniy.duit.feature.settings.recordCountLabel(2))
+        org.junit.Assert.assertEquals("1 category", com.diniy.duit.feature.settings.countLabel(1, "category", "categories"))
+        org.junit.Assert.assertEquals("7 categories", com.diniy.duit.feature.settings.countLabel(7, "category", "categories"))
+        org.junit.Assert.assertEquals("0 wallets", com.diniy.duit.feature.settings.countLabel(0, "wallet", "wallets"))
     }
 }

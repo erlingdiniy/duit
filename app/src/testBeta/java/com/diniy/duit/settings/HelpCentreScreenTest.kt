@@ -41,6 +41,11 @@ class HelpCentreScreenTest {
                 compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(topic.title))
                 compose.onNodeWithText(topic.title).assertExists()
             }
+            // TalkBack hears whether each guide is open.
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Backup & Restore"))
+            compose.onNode(hasText("Backup & Restore").and(
+                androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Collapsed")
+            )).assertExists()
             // Expand "Backup & Restore" and follow its link.
             compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Backup & Restore"))
             compose.onNodeWithText("Backup & Restore").performSemanticsAction(SemanticsActions.OnClick)

@@ -191,3 +191,24 @@ val DuitTypography = Typography(
         fontFeatureSettings = "tnum"
     )
 )
+
+/**
+ * Public edition: fills the two Material slots [DuitTypography] leaves at the platform default, so
+ * DatePicker headlines (headlineLarge) and the TimePicker clock (displayLarge) use the bundled fonts
+ * instead of the phone maker's system font. Sizes are Material's own defaults, so layouts don't shift.
+ */
+val DuitPublicTypography = DuitTypography.copy(
+    displayLarge = TextStyle(
+        fontFamily = CandyBodyFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 57.sp,
+        lineHeight = 64.sp,
+        fontFeatureSettings = "tnum"
+    ),
+    headlineLarge = TextStyle(
+        fontFamily = CandyDisplayFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 32.sp,
+        lineHeight = 40.sp
+    )
+)

@@ -793,6 +793,7 @@ fun DuitAppShell(
                                     contentPadding = screenPadding,
                                     onSelectFilter = activityViewModel::selectFilter,
                                     onSearchQueryChange = activityViewModel::updateSearchQuery,
+                                    onExtraFiltersChange = activityViewModel::updateExtraFilters,
                                     onOpenNewTransaction = openNewTransaction,
                                     onSelectTransaction = openTransactionDetail,
                                     onOpenCategories = {
@@ -883,7 +884,8 @@ fun DuitAppShell(
                                     onInspectCategory = insightsViewModel::openCategoryBreakdown,
                                     onDismissCategorySheet = insightsViewModel::dismissCategoryBreakdown,
                                     onEnablePreview = insightsViewModel::enableSamplePreview,
-                                    onExitPreview = insightsViewModel::exitSamplePreview
+                                    onExitPreview = insightsViewModel::exitSamplePreview,
+                                    onAddTransaction = { openNewTransaction(TransactionType.EXPENSE) }
                                 )
                             
                                                 }

@@ -105,6 +105,7 @@ fun InsightsScreen(
     onDismissCategorySheet: () -> Unit,
     onEnablePreview: () -> Unit,
     onExitPreview: () -> Unit,
+    onAddTransaction: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = SpatialTheme.colors
@@ -253,18 +254,33 @@ fun InsightsScreen(
                         SmartInsightsCard(insights = uiState.smartInsights)
                     }
 
-                    if (uiState.commissions.isEmpty() &&
-                        uiState.dailySales.isEmpty() &&
+                    // Hidden commission data doesn't count when Commission Tracking is off.
+                    if (((!commissionEnabled && com.diniy.duit.BuildConfig.PUBLIC_EDITION) ||
+                            (uiState.commissions.isEmpty() && uiState.dailySales.isEmpty())) &&
                         uiState.overview.totalIncomeSen == 0L &&
                         uiState.overview.totalExpenseSen == 0L
                     ) {
                         item(key = "empty_records", contentType = "empty") {
                             PrismaticEmptyStateCard(
                                 iconRes = R.drawable.ic_solar_insights,
-                                title = "Insights build from real history",
-                                message = "Charts and breakdowns reflect your recorded transactions, daily sales, and commissions.",
-                                actionLabel = if (!uiState.isSamplePreview) "View Sample" else null,
-                                onActionClick = if (!uiState.isSamplePreview) onEnablePreview else null
+                                title = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Nothing to chart for this period" else "Insights build from real history",
+                                message = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                                    "Insights appear once you record income or expenses in ${uiState.periodCashflow.periodLabel}. Try another period with the arrows above, or add a transaction."
+                                } else {
+                                    "Charts and breakdowns reflect your recorded transactions, daily sales, and commissions."
+                                },
+                                actionLabel = when {
+                                    uiState.isSamplePreview -> null
+                                    com.diniy.duit.BuildConfig.PUBLIC_EDITION -> "Add Transaction"
+                                    else -> "View Sample"
+                                },
+                                onActionClick = when {
+                                    uiState.isSamplePreview -> null
+                                    com.diniy.duit.BuildConfig.PUBLIC_EDITION -> onAddTransaction
+                                    else -> onEnablePreview
+                                },
+                                secondaryActionLabel = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION && !uiState.isSamplePreview) "View Sample" else null,
+                                onSecondaryActionClick = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION && !uiState.isSamplePreview) onEnablePreview else null
                             )
                         }
                     }

@@ -100,6 +100,7 @@ internal fun SupportContent(qrRes: Int, onSave: () -> Boolean, onShare: () -> Un
     val pop = remember { Animatable(if (reduced) 1f else 0.6f) }
     LaunchedEffect(Unit) { if (!reduced) pop.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)) }
     var saveMessage by remember { mutableStateOf<String?>(null) }
+    val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
     val qrBitmap = remember(qrRes) {
         if (qrRes == 0) null
         else runCatching { context.resources.openRawResource(qrRes).use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull()
@@ -170,7 +171,11 @@ internal fun SupportContent(qrRes: Int, onSave: () -> Boolean, onShare: () -> Un
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     PrismaticButton(
                         text = "Save QR",
-                        onClick = { saveMessage = if (onSave()) "Saved to Pictures/duit." else "Couldn't save the QR. Please try again." },
+                        onClick = {
+                            val saved = onSave()
+                            if (saved) haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+                            saveMessage = if (saved) "Saved to Pictures/duit." else "Couldn't save the QR. Please try again."
+                        },
                         enabled = hasQr,
                         variant = PrismaticButtonVariant.Secondary,
                         modifier = Modifier.weight(1f)

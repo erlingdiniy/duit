@@ -557,6 +557,8 @@ private data class ProblemCopy(val icon: ImageVector, val title: String, val mes
 private fun problemCopy(problem: UpdateProblem): ProblemCopy = when (problem) {
     UpdateProblem.NETWORK -> ProblemCopy(Icons.Rounded.CloudOff, "You're offline",
         "We couldn't reach GitHub. Check your internet connection and try again.")
+    UpdateProblem.TIMEOUT -> ProblemCopy(Icons.Rounded.CloudOff, "The connection timed out",
+        "GitHub took too long to respond. Check your connection and try again.")
     UpdateProblem.SERVER -> ProblemCopy(Icons.Rounded.CloudOff, "GitHub is unavailable",
         "The update server didn't respond as expected. Please try again in a little while.")
     UpdateProblem.INVALID_APK -> ProblemCopy(Icons.Rounded.GppBad, "Download didn't check out",
