@@ -85,14 +85,13 @@ enum class PlanningSectionTab(val label: String) {
 fun PlanningSectionPillBar(
     selectedTab: PlanningSectionTab,
     onSelectTab: (PlanningSectionTab) -> Unit,
-    onOpenTaxRelief: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val geometry = com.diniy.duit.core.ui.theme.SpatialTheme.geometry
     val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
-    val scrollable = onOpenTaxRelief != null || androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.2f
+    val scrollable = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.35f
 
     Row(
         modifier = modifier
@@ -142,27 +141,6 @@ fun PlanningSectionPillBar(
                     text = tab.label,
                     style = typography.buttonLabel,
                     color = textColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-        if (onOpenTaxRelief != null) {
-            Box(
-                modifier = Modifier
-                    .heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(geometry.radiusPill))
-                    .clickable(role = Role.Tab) {
-                        haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                        onOpenTaxRelief()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Tax Relief",
-                    style = typography.buttonLabel,
-                    color = colors.secondaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

@@ -2,11 +2,13 @@ package com.diniy.duit.feature.planning
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.ui.text.style.TextOverflow
 import com.diniy.duit.core.ui.components.candyToneFor
 import com.diniy.duit.core.ui.components.candyTone
 import com.diniy.duit.core.ui.components.CandyTone
+import com.diniy.duit.core.ui.components.CandyIconBlob
 import com.diniy.duit.core.ui.components.CandyMoneyText
 import com.diniy.duit.core.ui.components.CandyStatusBadge
 import com.diniy.duit.core.ui.components.CandySticker
@@ -279,7 +281,7 @@ fun PlanningScreen(
                         modifier = Modifier.semantics { heading() }
                     )
                     Text(
-                        text = if (taxPocket != null) "Savings, budgets, bills & tax relief" else "Your savings, budgets & bills",
+                        text = "Savings, budgets & bills",
                         style = com.diniy.duit.core.ui.theme.SpatialTheme.typography.supportingInfo,
                         color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.secondaryText,
                         maxLines = 1,
@@ -321,9 +323,65 @@ fun PlanningScreen(
         item(key = "planning_tabs", contentType = "pill_tabs") {
             PlanningSectionPillBar(
                 selectedTab = selectedSectionTab,
-                onSelectTab = { selectedSectionTab = it },
-                onOpenTaxRelief = if (taxPocket != null) ({ showTaxPocket = true }) else null
+                onSelectTab = { selectedSectionTab = it }
             )
+        }
+
+        if (taxPocket != null) {
+            item(key = "my_tax_pocket_shortcut", contentType = "shortcut_card") {
+                val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+                val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+                CandyBubbleCard(
+                    tone = CandyTone.Mint,
+                    decor = CandyDecor.Corner,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                    onClick = { showTaxPocket = true },
+                    onClickLabel = "Open My Tax Pocket"
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CandyIconBlob(
+                            icon = androidx.compose.material.icons.Icons.Rounded.ReceiptLong,
+                            tone = CandyTone.Mint,
+                            size = 38.dp,
+                            tilt = -4f,
+                            solid = true
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "My Tax Pocket",
+                                style = typography.transactionDescription,
+                                color = colors.primaryText,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Tax relief & receipts",
+                                style = typography.caption,
+                                color = colors.secondaryText,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(colors.baseSurface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                tint = colors.primaryText,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         item(key = "preview_banner", contentType = "banner") {
