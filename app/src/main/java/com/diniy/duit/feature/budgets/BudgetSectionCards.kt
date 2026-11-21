@@ -16,6 +16,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,27 +76,30 @@ import com.diniy.duit.feature.transactions.CategoryIconMapper
 import java.time.YearMonth
 
 enum class PlanningSectionTab(val label: String) {
-    GOALS("Goals"),
+    GOALS("Savings"),
     BUDGETS("Budgets"),
-    COMMITMENTS("Bills")
+    COMMITMENTS("Bills & Debt")
 }
 
 @Composable
 fun PlanningSectionPillBar(
     selectedTab: PlanningSectionTab,
     onSelectTab: (PlanningSectionTab) -> Unit,
+    onOpenTaxRelief: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val geometry = com.diniy.duit.core.ui.theme.SpatialTheme.geometry
     val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
+    val scrollable = onOpenTaxRelief != null || androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.2f
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(geometry.radiusPill))
             .background(if (colors.isDark) colors.glassSurfaceSubtle else colors.baseSurface)
+            .then(if (scrollable) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
             .padding(5.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -110,7 +115,7 @@ fun PlanningSectionPillBar(
             )
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .then(if (scrollable) Modifier else Modifier.weight(1f))
                     .heightIn(min = 44.dp)
                     .then(
                         if (selected) {
@@ -130,13 +135,34 @@ fun PlanningSectionPillBar(
                         if (!selected) haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                         onSelectTab(tab)
                     }
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                    .padding(horizontal = if (scrollable) 14.dp else 8.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = tab.label,
                     style = typography.buttonLabel,
                     color = textColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (onOpenTaxRelief != null) {
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(geometry.radiusPill))
+                    .clickable(role = Role.Tab) {
+                        haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onOpenTaxRelief()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Tax Relief",
+                    style = typography.buttonLabel,
+                    color = colors.secondaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

@@ -118,12 +118,14 @@ fun ActivityScreen(
                     )
                     Text(
                         text = if (totalCount > 0) {
-                            "$totalCount transaction(s) · Income, expenses & transfers"
+                            "$totalCount recorded · Transactions & transfers"
                         } else {
-                            "Income, expenses & internal wallet transfers"
+                            "Transactions, transfers & receipts"
                         },
                         style = typography.supportingInfo,
-                        color = colors.secondaryText
+                        color = colors.secondaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 // Phase 11F: mint bubble buttons (Receipt Vault in public edition + Categories).
@@ -238,6 +240,13 @@ fun ActivityScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (onOpenReceiptVault != null) {
+                        SpatialGlassPill(
+                            label = "Receipt Vault",
+                            accentColor = colors.coral,
+                            onClick = onOpenReceiptVault
+                        )
+                    }
                     FilterMenuPill(
                         label = extra.category ?: "Category",
                         active = extra.category != null,

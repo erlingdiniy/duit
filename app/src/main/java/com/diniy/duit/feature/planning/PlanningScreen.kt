@@ -241,6 +241,16 @@ fun PlanningScreen(
     var debtFilterDirection by rememberSaveable { mutableStateOf<DebtDirection?>(null) }
     var showArchivedDebts by rememberSaveable { mutableStateOf(false) }
 
+    androidx.activity.compose.BackHandler(
+        enabled = !showTaxPocket && (showChallenges || selectedSectionTab != PlanningSectionTab.GOALS || billsSection != BillsSection.BILLS)
+    ) {
+        when {
+            selectedSectionTab == PlanningSectionTab.GOALS && showChallenges -> showChallenges = false
+            selectedSectionTab == PlanningSectionTab.COMMITMENTS && billsSection != BillsSection.BILLS -> billsSection = BillsSection.BILLS
+            else -> selectedSectionTab = PlanningSectionTab.GOALS
+        }
+    }
+
     if (showTaxPocket && taxPocket != null) {
         com.diniy.duit.feature.tax.MyTaxPocketScreen(
             binding = taxPocket,
@@ -269,7 +279,7 @@ fun PlanningScreen(
                         modifier = Modifier.semantics { heading() }
                     )
                     Text(
-                        text = "Your goals, budgets & bills",
+                        text = if (taxPocket != null) "Savings, budgets, bills & tax relief" else "Your savings, budgets & bills",
                         style = com.diniy.duit.core.ui.theme.SpatialTheme.typography.supportingInfo,
                         color = com.diniy.duit.core.ui.theme.SpatialTheme.colors.secondaryText,
                         maxLines = 1,
@@ -305,20 +315,14 @@ fun PlanningScreen(
                     accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.lavender,
                     onClick = onOpenCategories
                 )
-                if (taxPocket != null) {
-                    com.diniy.duit.core.ui.components.SpatialGlassPill(
-                        label = "Tax Relief",
-                        accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.aqua,
-                        onClick = { showTaxPocket = true }
-                    )
-                }
             }
         }
 
         item(key = "planning_tabs", contentType = "pill_tabs") {
             PlanningSectionPillBar(
                 selectedTab = selectedSectionTab,
-                onSelectTab = { selectedSectionTab = it }
+                onSelectTab = { selectedSectionTab = it },
+                onOpenTaxRelief = if (taxPocket != null) ({ showTaxPocket = true }) else null
             )
         }
 
@@ -386,7 +390,7 @@ fun PlanningScreen(
                                         )
                                     }
                                     PrismaticButton(
-                                        text = "+ New Goal",
+                                        text = "New Goal",
                                         onClick = {
                                             editingGoalId = null
                                             showGoalEditor = true

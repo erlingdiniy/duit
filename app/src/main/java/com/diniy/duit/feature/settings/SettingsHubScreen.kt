@@ -124,11 +124,16 @@ fun SettingsHubContainerScreen(
     hasOsNotificationPermission: Boolean = false,
     onPermissionUpdated: () -> Unit = {}
 ) {
+    var financialOpenedFromHub by rememberSaveable { mutableStateOf(false) }
+
     when (route) {
         SettingsHubRoute.HUB -> SettingsHubOverviewScreen(
             uiState = uiState,
             onBack = onBackToApp,
-            onSelectRoute = onNavigateRoute,
+            onSelectRoute = { next ->
+                if (next == SettingsHubRoute.FINANCIAL) financialOpenedFromHub = true
+                onNavigateRoute(next)
+            },
             onOpenNotifications = onOpenNotifications,
             onOpenNotificationCentre = onOpenNotificationCentre,
             onOpenSecurity = onOpenSecurity,
@@ -161,10 +166,17 @@ fun SettingsHubContainerScreen(
             onRestoreDefault = viewModel::restoreDefaultDashboardLayout,
             onClearFeedback = viewModel::clearFeedback
         )
-        // Money preferences are opened from Planning; Back returns to the app.
+        // Money preferences can be opened from Settings Hub or directly from Planning.
         SettingsHubRoute.FINANCIAL -> FinancialPreferencesScreen(
             uiState = uiState,
-            onBack = onBackToApp,
+            onBack = {
+                if (financialOpenedFromHub) {
+                    financialOpenedFromHub = false
+                    onNavigateRoute(SettingsHubRoute.HUB)
+                } else {
+                    onBackToApp()
+                }
+            },
             onSetDefaultWallet = viewModel::setDefaultWalletId,
             onSetBudgetPeriod = viewModel::setDefaultBudgetPeriodType,
             onSetAutoAdvanceRecurring = viewModel::setAutoAdvanceRecurringCommitments,
@@ -246,10 +258,9 @@ private fun SettingsHubOverviewScreen(
         errorMessage = uiState.errorMessage,
         onClearFeedback = {}
     ) {
-        // Phase 7A: exactly six destinations. Motion, Home layout live in Appearance;
-        // Notification Centre in Notifications; money preferences in Planning.
+        // Phase 9: organized into clear categories (Preferences, Security & Privacy, Backup & Data, Help & About).
         item(key = "group_personal") {
-            com.diniy.duit.core.ui.components.SpatialGlassSection(title = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Make It Yours" else "Make it yours") {
+            com.diniy.duit.core.ui.components.SpatialGlassSection(title = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) "Preferences" else "Make it yours") {
                 com.diniy.duit.core.ui.components.SpatialGlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
@@ -263,6 +274,16 @@ private fun SettingsHubOverviewScreen(
                         subtitle = "${app.themeMode.label} theme · Home layout",
                         onClick = { onSelectRoute(SettingsHubRoute.APPEARANCE) }
                     )
+                    if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                        val budgetPeriodLabel = if (app.defaultBudgetPeriodType == BudgetPeriodType.MONTHLY) "Monthly" else "Salary cycle"
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.AccountBalanceWallet,
+                            accent = colors.sunny,
+                            title = "Money Preferences",
+                            subtitle = "$defaultWalletName · $budgetPeriodLabel budgets",
+                            onClick = { onSelectRoute(SettingsHubRoute.FINANCIAL) }
+                        )
+                    }
                     SettingsGroupedRowItem(
                         icon = Icons.Rounded.Notifications,
                         accent = colors.aqua,
@@ -275,18 +296,19 @@ private fun SettingsHubOverviewScreen(
                         },
                         onClick = onOpenNotifications
                     )
-                    SettingsGroupedRowItem(
-                        icon = Icons.Rounded.Shield,
-                        accent = colors.sunny,
-                        title = "Security",
-                        subtitle = buildString {
-                            append(if (uiState.securityState.isAppLockEnabled) "PIN lock on" else "PIN lock off")
-                            append(" · ")
-                            append(if (uiState.securityState.privacySettings.isAnyMaskActive) "Amounts hidden" else "Amounts visible")
-                        },
-                        onClick = onOpenSecurity
-                    )
-                    // Phase 11J: haptics moved here from the removed Motion & Haptics screen
+                    if (!com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Shield,
+                            accent = colors.sunny,
+                            title = "Security",
+                            subtitle = buildString {
+                                append(if (uiState.securityState.isAppLockEnabled) "PIN lock on" else "PIN lock off")
+                                append(" · ")
+                                append(if (uiState.securityState.privacySettings.isAnyMaskActive) "Amounts hidden" else "Amounts visible")
+                            },
+                            onClick = onOpenSecurity
+                        )
+                    }
                     SettingsGroupedSwitchItem(
                         icon = Icons.Rounded.Vibration,
                         accent = colors.peach,
@@ -295,58 +317,43 @@ private fun SettingsHubOverviewScreen(
                         checked = app.hapticFeedbackEnabled,
                         onCheckedChange = onSetHaptics
                     )
+                    if (com.diniy.duit.BuildConfig.PUBLIC_EDITION && com.diniy.duit.BuildConfig.OPTIONAL_COMMISSION) {
+                        SettingsGroupedSwitchItem(
+                            icon = Icons.Rounded.Calculate,
+                            accent = colors.lavender,
+                            title = "Commission Tracking",
+                            subtitle = if (app.commissionFeatureEnabled) {
+                                "Sales, commission and payouts in Planning, Quick Add and Insights"
+                            } else {
+                                "Off. Turn on to track sales and commission. Saved records are kept"
+                            },
+                            checked = app.commissionFeatureEnabled,
+                            onCheckedChange = onSetCommissionFeature
+                        )
+                    }
                 }
             }
         }
 
         if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
-            // Public edition layout (v1.1.0): grouped cards with matching rows, padding and touch targets.
-            if (com.diniy.duit.BuildConfig.OPTIONAL_COMMISSION) {
-                item(key = "group_optional_features") {
-                    com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Optional Features") {
-                        com.diniy.duit.core.ui.components.SpatialGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
-                ) {
-                            SettingsGroupedSwitchItem(
-                                icon = Icons.Rounded.Calculate,
-                                accent = colors.lavender,
-                                title = "Commission Tracking",
-                                subtitle = if (app.commissionFeatureEnabled) {
-                                    "Sales, commission and payouts in Planning, Quick Add and Insights"
-                                } else {
-                                    "Off. Turn on to track sales and commission. Saved records are kept"
-                                },
-                                checked = app.commissionFeatureEnabled,
-                                onCheckedChange = onSetCommissionFeature
-                            )
-                        }
-                    }
-                }
-            }
-            item(key = "group_data") {
-                com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Your Data") {
+            item(key = "group_security_privacy") {
+                com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Security & Privacy") {
                     com.diniy.duit.core.ui.components.SpatialGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
-                ) {
+                        modifier = Modifier.fillMaxWidth(),
+                        tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                        contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
+                    ) {
                         SettingsGroupedRowItem(
-                            icon = Icons.Rounded.Backup,
-                            accent = colors.skyBlue,
-                            title = "Backup & Restore",
-                            subtitle = "Encrypted local backup and safe restore",
-                            onClick = { onSelectRoute(SettingsHubRoute.BACKUP_RESTORE) }
-                        )
-                        SettingsGroupedRowItem(
-                            icon = Icons.Rounded.Storage,
-                            accent = colors.peach,
-                            title = "Data Management",
-                            subtitle = recordCountLabel(uiState.storageSummary.totalFinancialRecords) + " on this device · Export and tools",
-                            onClick = { onSelectRoute(SettingsHubRoute.DATA_MANAGEMENT) }
+                            icon = Icons.Rounded.Shield,
+                            accent = colors.sunny,
+                            title = "Security",
+                            subtitle = buildString {
+                                append(if (uiState.securityState.isAppLockEnabled) "PIN lock on" else "PIN lock off")
+                                append(" · ")
+                                append(if (uiState.securityState.privacySettings.isAnyMaskActive) "Amounts hidden" else "Amounts visible")
+                            },
+                            onClick = onOpenSecurity
                         )
                         SettingsGroupedRowItem(
                             icon = Icons.Rounded.Shield,
@@ -365,8 +372,33 @@ private fun SettingsHubOverviewScreen(
                     }
                 }
             }
+            item(key = "group_data") {
+                com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Backup & Data") {
+                    com.diniy.duit.core.ui.components.SpatialGlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                        contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)
+                    ) {
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Backup,
+                            accent = colors.skyBlue,
+                            title = "Backup & Restore",
+                            subtitle = "Encrypted local backup and safe restore",
+                            onClick = { onSelectRoute(SettingsHubRoute.BACKUP_RESTORE) }
+                        )
+                        SettingsGroupedRowItem(
+                            icon = Icons.Rounded.Storage,
+                            accent = colors.peach,
+                            title = "Data Management",
+                            subtitle = recordCountLabel(uiState.storageSummary.totalFinancialRecords) + " on this device · Export and tools",
+                            onClick = { onSelectRoute(SettingsHubRoute.DATA_MANAGEMENT) }
+                        )
+                    }
+                }
+            }
             item(key = "group_help") {
-                com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Help & Support") {
+                com.diniy.duit.core.ui.components.SpatialGlassSection(title = "Help & About") {
                     com.diniy.duit.core.ui.components.SpatialGlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,

@@ -242,7 +242,20 @@ fun HomeScreen(
                 }
 
                 val hiddenSections = uiState.appSettings.hiddenDashboardSections
-                val orderedSections = uiState.appSettings.dashboardSectionOrder
+                val rawOrder = uiState.appSettings.dashboardSectionOrder
+                val isDefaultOrder = rawOrder == DashboardSectionKey.entries.toList()
+                // Phase 9: default Home order prioritizes Safe to Spend -> Balances -> Upcoming bills -> Recent activity -> Wallets.
+                val orderedSections = if (isDefaultOrder) {
+                    listOf(
+                        DashboardSectionKey.SECONDARY_METRICS,
+                        DashboardSectionKey.QUICK_ACTIONS,
+                        DashboardSectionKey.PENDING_COMMISSIONS,
+                        DashboardSectionKey.UPCOMING_COMMITMENTS,
+                        DashboardSectionKey.WALLETS
+                    )
+                } else {
+                    rawOrder
+                }
 
                 orderedSections.filter { it !in hiddenSections }.forEach { section ->
                     when (section) {
@@ -296,8 +309,20 @@ fun HomeScreen(
                             }
                         }
 
-                        // 7. Compact Wallet Preview + Recent Transactions
+                        // 7. Recent Activity + Compact Wallet Preview
                         DashboardSectionKey.WALLETS -> {
+                            if (uiState.transactions.isNotEmpty()) {
+                                item(key = "recent_transactions_section", contentType = "recent_transactions") {
+                                    SpatialRecentTransactionsPreviewSection(
+                                        transactions = uiState.transactions.take(3),
+                                        walletsById = walletsById,
+                                        isSamplePreview = uiState.isSamplePreview,
+                                        onSelectTransaction = onSelectTransaction,
+                                        onViewAllActivity = onOpenActivity
+                                    )
+                                }
+                            }
+
                             if (uiState.wallets.isEmpty() && uiState.archivedWallets.isEmpty() && !uiState.isSamplePreview) {
                                 item(key = "empty_ledger", contentType = "empty") {
                                     PrismaticEmptyStateCard(
@@ -320,18 +345,6 @@ fun HomeScreen(
                                         onSelectWallet = onSelectWallet,
                                         onAddWallet = { showAddWalletSheet = true },
                                         onViewAllWallets = { showAllWalletsSheet = true }
-                                    )
-                                }
-                            }
-
-                            if (uiState.transactions.isNotEmpty()) {
-                                item(key = "recent_transactions_section", contentType = "recent_transactions") {
-                                    SpatialRecentTransactionsPreviewSection(
-                                        transactions = uiState.transactions.take(4),
-                                        walletsById = walletsById,
-                                        isSamplePreview = uiState.isSamplePreview,
-                                        onSelectTransaction = onSelectTransaction,
-                                        onViewAllActivity = onOpenActivity
                                     )
                                 }
                             }
@@ -792,13 +805,12 @@ private fun SpatialUpcomingPaymentsPreviewSection(
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
     val privacy = LocalPrivacySettings.current
-    val previewItems = commitments.take(4)
+    val previewItems = commitments.take(3)
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         CandySectionHeader(
             title = if (isSamplePreview) "Coming up · Sample" else "Coming up",
             count = commitments.size,
-            subtitle = "This cycle's bills are reserved; later ones aren't yet",
             actionLabel = "All bills",
             onAction = onViewAllCommitments
         )

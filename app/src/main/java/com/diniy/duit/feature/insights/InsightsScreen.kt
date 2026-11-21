@@ -117,6 +117,13 @@ fun InsightsScreen(
     var selectedTab by rememberSaveable { mutableStateOf(InsightsSectionTab.OVERVIEW) }
     var showPersonality by rememberSaveable { mutableStateOf(false) }
     var showLittleWins by rememberSaveable { mutableStateOf(false) }
+
+    androidx.activity.compose.BackHandler(
+        enabled = !showPersonality && !showLittleWins && selectedTab != InsightsSectionTab.OVERVIEW
+    ) {
+        selectedTab = InsightsSectionTab.OVERVIEW
+    }
+
     if (showPersonality && personality != null) {
         com.diniy.duit.feature.personality.MoneyPersonalityScreen(
             state = personality.state,
@@ -252,17 +259,30 @@ fun InsightsScreen(
 
             when (selectedTab) {
                 InsightsSectionTab.OVERVIEW -> {
-                    if (personality != null) item(key = "money_personality", contentType = "personality") {
-                        com.diniy.duit.feature.personality.MoneyPersonalityTeaserCard(personality.state, onOpen = { showPersonality = true })
-                    }
-                    if (littleWins != null) item(key = "little_wins_club", contentType = "little_wins") {
-                        com.diniy.duit.feature.wins.LittleWinsTeaserCard(littleWins.state, onOpen = { showLittleWins = true })
-                    }
                     item(key = "financial_overview", contentType = "overview") {
                         FinancialOverviewHeroCard(
                             overview = uiState.overview,
                             isSamplePreview = uiState.isSamplePreview
                         )
+                    }
+
+                    if (personality != null || littleWins != null) {
+                        item(key = "habits_milestones_header", contentType = "section_header") {
+                            com.diniy.duit.core.ui.components.CandySectionHeader(
+                                title = "Habits & Wins"
+                            )
+                        }
+                        if (personality != null) item(key = "money_personality", contentType = "personality") {
+                            com.diniy.duit.feature.personality.MoneyPersonalityTeaserCard(personality.state, onOpen = { showPersonality = true })
+                        }
+                        if (littleWins != null) item(key = "little_wins_club", contentType = "little_wins") {
+                            com.diniy.duit.feature.wins.LittleWinsTeaserCard(littleWins.state, onOpen = { showLittleWins = true })
+                        }
+                        item(key = "trends_analytics_header", contentType = "section_header") {
+                            com.diniy.duit.core.ui.components.CandySectionHeader(
+                                title = "Trends & Breakdown"
+                            )
+                        }
                     }
 
                     item(key = "income_vs_expenses", contentType = "cashflow_chart") {
