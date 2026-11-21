@@ -7,6 +7,8 @@ import com.diniy.duit.data.local.DuitDatabase
 import com.diniy.duit.data.local.dao.DefaultCategorySeed
 import com.diniy.duit.data.local.dao.DefaultCommissionSourceSeed
 import com.diniy.duit.data.local.entity.CategoryEntity
+import com.diniy.duit.data.local.entity.toDomain
+import com.diniy.duit.data.local.entity.toEntity
 import com.diniy.duit.data.local.entity.CommissionSourceEntity
 import com.diniy.duit.data.local.entity.DebtEntity
 import com.diniy.duit.data.local.entity.ObligationPaymentEntity
@@ -104,6 +106,10 @@ interface PlanningRepository {
     fun observeSalaryCycles(): Flow<List<SalaryCycle>>
     fun observeActiveCycle(): Flow<SalaryCycle?>
     fun observeCommitments(): Flow<List<Commitment>>
+    fun observeMoneyReminders(): Flow<List<com.diniy.duit.domain.model.MoneyReminder>>
+    /** Inserts when id == 0, else updates. Touches only money_reminders. */
+    suspend fun saveMoneyReminder(reminder: com.diniy.duit.domain.model.MoneyReminder): Long
+    suspend fun deleteMoneyReminder(id: Long)
     suspend fun upsertSalaryCycle(cycle: SalaryCycle): Long
     suspend fun recordSalaryTransactionAndStartCycle(
         transaction: FinanceTransaction,
@@ -601,6 +607,17 @@ class OfflineFirstFinanceRepository(
 
     override fun observeCommitments(): Flow<List<Commitment>> =
         commitmentDao.observeAll().map { entities -> entities.map { it.toDomain() } }
+
+    override fun observeMoneyReminders(): Flow<List<com.diniy.duit.domain.model.MoneyReminder>> =
+        database.moneyReminderDao().observeAll().map { entities -> entities.map { it.toDomain() } }
+
+    override suspend fun saveMoneyReminder(reminder: com.diniy.duit.domain.model.MoneyReminder): Long {
+        val dao = database.moneyReminderDao()
+        val entity = reminder.toEntity()
+        return if (reminder.id == 0L) dao.insert(entity) else { dao.update(entity); reminder.id }
+    }
+
+    override suspend fun deleteMoneyReminder(id: Long) = database.moneyReminderDao().deleteById(id)
 
     override suspend fun upsertSalaryCycle(cycle: SalaryCycle): Long =
         salaryCycleDao.upsert(cycle.toEntity())

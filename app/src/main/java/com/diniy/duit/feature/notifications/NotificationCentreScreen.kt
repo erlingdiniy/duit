@@ -85,7 +85,8 @@ fun NotificationCentreScreen(
     onMarkAsRead: (Long) -> Unit,
     onMarkAllAsRead: () -> Unit,
     onClearHistory: () -> Unit,
-    onNavigateToTarget: (NotificationDeepLink) -> Unit,
+    /** Target plus the item's date, so a Money Reminder opens the Calendar on that day. */
+    onNavigateToTarget: (NotificationDeepLink, Long?) -> Unit,
     onPermissionUpdated: () -> Unit
 ) {
     val glass = LocalPrismaticGlass.current
@@ -201,7 +202,7 @@ fun NotificationCentreScreen(
                     ReminderCandidateCard(
                         candidate = item,
                         maskAmounts = privacySettings.isAnyMaskActive,
-                        onClick = { onNavigateToTarget(item.deepLink) }
+                        onClick = { onNavigateToTarget(item.deepLink, item.targetEpochDay) }
                     )
                 }
             }
@@ -248,7 +249,7 @@ fun NotificationCentreScreen(
                     ReminderCandidateCard(
                         candidate = item,
                         maskAmounts = privacySettings.isAnyMaskActive,
-                        onClick = { onNavigateToTarget(item.deepLink) }
+                        onClick = { onNavigateToTarget(item.deepLink, item.targetEpochDay) }
                     )
                 }
             }
@@ -302,7 +303,7 @@ fun NotificationCentreScreen(
                         maskAmounts = privacySettings.isAnyMaskActive,
                         onClick = {
                             if (!entry.isRead) onMarkAsRead(entry.id)
-                            onNavigateToTarget(entry.deepLink)
+                            onNavigateToTarget(entry.deepLink, entry.targetEpochDay)
                         }
                     )
                 }

@@ -4,7 +4,11 @@ import com.diniy.duit.domain.calculator.ObligationCalculator
 import com.diniy.duit.domain.model.Commitment
 import com.diniy.duit.domain.model.CommitmentFrequency
 import com.diniy.duit.domain.model.CommitmentStatus
+import com.diniy.duit.domain.model.DebtDirection
+import com.diniy.duit.domain.model.DebtRecord
 import com.diniy.duit.domain.model.FinanceTransaction
+import com.diniy.duit.domain.model.PayLaterPlan
+import com.diniy.duit.domain.model.MoneyReminder
 import com.diniy.duit.domain.model.SalaryCycle
 import com.diniy.duit.domain.model.SavingsGoal
 import com.diniy.duit.domain.model.SavingsGoalStatus
@@ -13,10 +17,10 @@ import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 
-enum class CalendarEventType { INCOME_DATE, BILL, TRANSACTION, GOAL_DEADLINE }
+enum class CalendarEventType { INCOME_DATE, BILL, TRANSACTION, GOAL_DEADLINE, REMINDER }
 
 /** EXPECTED/UPCOMING/DUE are plans only; RECEIVED/PAID mark plans already settled by a real transaction. */
-enum class CalendarEventStatus { EXPECTED, RECEIVED, UPCOMING, PAID, RECORDED, DUE, COMPLETED }
+enum class CalendarEventStatus { EXPECTED, RECEIVED, UPCOMING, PAID, RECORDED, DUE, COMPLETED, REMINDER }
 
 data class CalendarEvent(
     /** Stable unique key, e.g. "bill:12:20410", so the same occurrence is never shown twice. */
@@ -41,7 +45,7 @@ data class CalendarMonth(
 )
 
 /**
- * Pure, read-only projection of one month for the Smart Money Calendar (event types 1-5).
+ * Pure, read-only projection of one month for the Smart Money Calendar (event types 1-6).
  * It never writes or creates transactions: salary dates, bills and goal deadlines are informational.
  */
 object CalendarEventProjector {
@@ -57,7 +61,10 @@ object CalendarEventProjector {
         salaryCycles: List<SalaryCycle>,
         commitments: List<Commitment>,
         goals: List<SavingsGoal>,
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        reminders: List<MoneyReminder> = emptyList(),
+        payLaterPlans: List<PayLaterPlan> = emptyList(),
+        debts: List<DebtRecord> = emptyList()
     ): CalendarMonth {
         val first = month.atDay(1).toEpochDay()
         val last = month.atEndOfMonth().toEpochDay()
@@ -101,6 +108,37 @@ object CalendarEventProjector {
             }
         }
 
+        // 2b. PayLater instalments: same schedule as Planning; covered ones show as paid, never as expenses.
+        val activeCycle = salaryCycles.firstOrNull { it.isActive }
+        payLaterPlans.filter { !it.isArchived }.forEach { plan ->
+            ObligationCalculator.summarizePayLater(plan, activeCycle, month.atDay(1)).schedule
+                .filter { it.dueDateEpochDay in inMonth }
+                .forEach { inst ->
+                    events += CalendarEvent(
+                        key = "paylater:${plan.id}:${inst.index}",
+                        type = CalendarEventType.BILL,
+                        epochDay = inst.dueDateEpochDay,
+                        title = "${plan.providerName} · ${plan.title}",
+                        amountSen = if (inst.isCovered) inst.amountSen else inst.remainingSen,
+                        status = if (inst.isCovered) CalendarEventStatus.PAID else CalendarEventStatus.UPCOMING
+                    )
+                }
+        }
+
+        // 2c. Personal debts I owe with a due date (receivables and undated debts are left out, as in reminders).
+        debts.filter { !it.isArchived && it.direction == DebtDirection.I_OWE && it.dueDateEpochDay in inMonth }.forEach { debt ->
+            val outstanding = (debt.originalAmountSen - debt.paidSen.coerceAtLeast(0L)).coerceAtLeast(0L)
+            events += CalendarEvent(
+                key = "debt:${debt.id}",
+                type = CalendarEventType.BILL,
+                epochDay = debt.dueDateEpochDay!!,
+                title = debt.title.ifBlank { debt.counterpartyName },
+                amountSen = if (outstanding == 0L) debt.originalAmountSen
+                    else (debt.scheduledRepaymentSen?.takeIf { it > 0L } ?: outstanding).coerceAtMost(outstanding),
+                status = if (outstanding == 0L) CalendarEventStatus.PAID else CalendarEventStatus.UPCOMING
+            )
+        }
+
         // 3. Daily transactions (transfers shown, but tagged so they never count as income or expense).
         val monthTransactions = transactions
             .distinctBy { it.id }
@@ -128,6 +166,20 @@ object CalendarEventProjector {
                 amountSen = g.targetAmountSen,
                 status = if (g.status == SavingsGoalStatus.COMPLETED) CalendarEventStatus.COMPLETED else CalendarEventStatus.DUE
             )
+        }
+
+        // 6. Custom money reminders: informational, never an amount, transaction or balance change.
+        reminders.forEach { r ->
+            r.occurrencesBetween(first, last).forEach { day ->
+                events += CalendarEvent(
+                    key = "reminder:${r.id}:$day",
+                    type = CalendarEventType.REMINDER,
+                    epochDay = day,
+                    title = r.title,
+                    amountSen = null,
+                    status = CalendarEventStatus.REMINDER
+                )
+            }
         }
 
         // 4. Daily money summary: recorded income and expenses only.

@@ -10,6 +10,7 @@ import com.diniy.duit.data.local.entity.CommissionSourceEntity
 import com.diniy.duit.data.local.entity.CommitmentEntity
 import com.diniy.duit.data.local.entity.DailySalesRecordEntity
 import com.diniy.duit.data.local.entity.DebtEntity
+import com.diniy.duit.data.local.entity.MoneyReminderEntity
 import com.diniy.duit.data.local.entity.NotificationHistoryEntity
 import com.diniy.duit.data.local.entity.ObligationPaymentEntity
 import com.diniy.duit.data.local.entity.PayLaterPlanEntity
@@ -133,7 +134,14 @@ object BackupSerializer {
 
         val ledger = decodeLedger(ledgerJson)
         validateRelationalIntegrity(ledger)
-        val preferences = decodePreferences(prefsJson)
+        // Backups from before schema v10 predate Money Reminders: keep that category on, like a fresh install.
+        val preferences = decodePreferences(prefsJson).let { p ->
+            if (payloadSchema >= 10) p else p.copy(
+                notificationSettings = p.notificationSettings.copy(
+                    enabledCategories = p.notificationSettings.enabledCategories + NotificationCategory.MONEY_REMINDERS
+                )
+            )
+        }
         val preview = BackupPreviewSummary(
             formatVersion = header.formatVersion,
             dbSchemaVersion = payloadSchema,
@@ -489,6 +497,20 @@ object BackupSerializer {
                 })
             }
         })
+        put("moneyReminders", JSONArray().apply {
+            s.moneyReminders.forEach { r ->
+                put(JSONObject().apply {
+                    put("id", r.id)
+                    put("title", r.title)
+                    put("dateEpochDay", r.dateEpochDay)
+                    put("repeatFrequency", r.repeatFrequency.name)
+                    putNullable("customIntervalDays", r.customIntervalDays)
+                    put("note", r.note)
+                    put("createdAtEpochMs", r.createdAtEpochMs)
+                    put("updatedAtEpochMs", r.updatedAtEpochMs)
+                })
+            }
+        })
     }
 
     private fun decodeLedger(json: JSONObject): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
@@ -766,6 +788,20 @@ object BackupSerializer {
                 isRead = o.optBoolean("isRead", false),
                 deepLink = o.optString("deepLink", "PLANNING_COMMITMENTS"),
                 deliveredAtEpochMs = o.getLong("deliveredAtEpochMs")
+            )
+        },
+        // Absent in backups made before schema v10: restores as no reminders.
+        moneyReminders = json.optArrayObjects("moneyReminders").map { o ->
+            MoneyReminderEntity(
+                id = o.getLong("id"),
+                title = o.getString("title"),
+                dateEpochDay = o.getLong("dateEpochDay"),
+                repeatFrequency = runCatching { CommitmentFrequency.valueOf(o.optString("repeatFrequency")) }
+                    .getOrDefault(CommitmentFrequency.ONE_TIME),
+                customIntervalDays = o.optNullableInt("customIntervalDays"),
+                note = o.optString("note", ""),
+                createdAtEpochMs = o.optLong("createdAtEpochMs", 0L),
+                updatedAtEpochMs = o.optLong("updatedAtEpochMs", 0L)
             )
         }
     )

@@ -139,6 +139,9 @@ class DuitContainer(application: Application) {
         _pendingNotificationDeepLink.value = target
     }
 
+    /** Date a Money Reminder notification asked the Calendar to open (consumed with the CALENDAR link). */
+    var pendingCalendarEpochDay: Long? = null
+
     val widgetDataProvider: WidgetDataProvider by lazy {
         WidgetDataProvider(
             walletRepository = walletRepository,
@@ -201,7 +204,8 @@ class DuitContainer(application: Application) {
                     "commissions",
                     "transactions",
                     "budgets",
-                    "categories"
+                    "categories",
+                    "money_reminders"
                 )
             ) {
                 override fun onInvalidated(tables: Set<String>) {

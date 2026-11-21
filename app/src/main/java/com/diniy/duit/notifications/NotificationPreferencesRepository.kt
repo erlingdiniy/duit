@@ -59,6 +59,8 @@ class DataStoreNotificationPreferencesRepository(context: Context) : Notificatio
     private object Keys {
         val MASTER_ENABLED = booleanPreferencesKey("master_enabled")
         val ENABLED_CATEGORIES = stringSetPreferencesKey("enabled_categories")
+        /** True once the saved category set was written knowing MONEY_REMINDERS exists. */
+        val MONEY_REMINDERS_KNOWN = androidx.datastore.preferences.core.booleanPreferencesKey("money_reminders_known")
         val ENABLED_OFFSETS = stringSetPreferencesKey("enabled_offsets")
         val ENABLED_BUDGET_THRESHOLDS = stringSetPreferencesKey("enabled_budget_thresholds")
         val OVERDUE_ENABLED = booleanPreferencesKey("overdue_enabled")
@@ -76,7 +78,7 @@ class DataStoreNotificationPreferencesRepository(context: Context) : Notificatio
             val categories = if (rawCats == null) {
                 NotificationCategory.DEFAULT_ENABLED
             } else {
-                rawCats.mapNotNull { name -> NotificationCategory.entries.firstOrNull { it.name == name } }.toSet()
+                effectiveCategoryNames(prefs, rawCats).mapNotNull { name -> NotificationCategory.entries.firstOrNull { it.name == name } }.toSet()
             }
 
             val rawOffsets = prefs[Keys.ENABLED_OFFSETS]
@@ -105,15 +107,20 @@ class DataStoreNotificationPreferencesRepository(context: Context) : Notificatio
             )
         }
 
+    /** A set saved before Money Reminders existed turns the new category on, like a fresh install. */
+    private fun effectiveCategoryNames(prefs: androidx.datastore.preferences.core.Preferences, raw: Set<String>): Set<String> =
+        if (prefs[Keys.MONEY_REMINDERS_KNOWN] == true) raw else raw + NotificationCategory.MONEY_REMINDERS.name
+
     override suspend fun setMasterEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.MASTER_ENABLED] = enabled }
     }
 
     override suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
         dataStore.edit { prefs ->
-            val current = prefs[Keys.ENABLED_CATEGORIES]
+            val current = prefs[Keys.ENABLED_CATEGORIES]?.let { effectiveCategoryNames(prefs, it) }
                 ?: NotificationCategory.DEFAULT_ENABLED.map { it.name }.toSet()
             prefs[Keys.ENABLED_CATEGORIES] = if (enabled) current + category.name else current - category.name
+            prefs[Keys.MONEY_REMINDERS_KNOWN] = true
         }
     }
 
@@ -152,6 +159,7 @@ class DataStoreNotificationPreferencesRepository(context: Context) : Notificatio
         dataStore.edit { prefs ->
             prefs[Keys.MASTER_ENABLED] = snapshot.masterEnabled
             prefs[Keys.ENABLED_CATEGORIES] = snapshot.enabledCategories.map { it.name }.toSet()
+            prefs[Keys.MONEY_REMINDERS_KNOWN] = true
             prefs[Keys.ENABLED_OFFSETS] = snapshot.enabledOffsets.map { it.name }.toSet()
             prefs[Keys.ENABLED_BUDGET_THRESHOLDS] = snapshot.enabledBudgetThresholds.map { it.name }.toSet()
             prefs[Keys.OVERDUE_ENABLED] = snapshot.overdueEnabled

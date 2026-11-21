@@ -97,7 +97,8 @@ object ReminderCalculator {
         zoneId: ZoneId = ZoneId.systemDefault(),
         budgets: List<Budget> = emptyList(),
         transactions: List<FinanceTransaction> = emptyList(),
-        categories: List<Category> = emptyList()
+        categories: List<Category> = emptyList(),
+        moneyReminders: List<com.diniy.duit.domain.model.MoneyReminder> = emptyList()
     ): ReminderEvaluationResult {
         if (!settings.masterEnabled) {
             return ReminderEvaluationResult(
@@ -509,6 +510,35 @@ object ReminderCalculator {
                 activeIds += dailyId
                 // Only today's slot may fire now: a missed earlier slot is never replayed later.
                 if (triggerMs <= nowMs && day == todayEpochDay) dueNow += c else if (triggerMs > nowMs) upcoming += c
+            }
+        }
+
+        // 11. Custom money reminders: one alert at the reminder time on each occurrence day. Only
+        // today's slot may fire now (a missed past day is never replayed); later days stay upcoming.
+        if (NotificationCategory.MONEY_REMINDERS in settings.enabledCategories) {
+            for (reminder in moneyReminders) {
+                val notifId = stableNotificationId(NotificationCategory.MONEY_REMINDERS, reminder.id)
+                for (day in reminder.occurrencesBetween(todayEpochDay, todayEpochDay + UPCOMING_WINDOW_DAYS)) {
+                    // ZonedDateTime moves a time that falls in a DST gap forward, so it still fires once.
+                    val triggerMs = ZonedDateTime.of(LocalDate.ofEpochDay(day), reminderTime, zoneId).toInstant().toEpochMilli()
+                    val body = reminder.note.ifBlank { "Tap to see it in your Money Calendar." }
+                    val c = ReminderCandidate(
+                        dedupKey = "MONEY_REMINDERS:${reminder.id}:$day",
+                        notificationId = notifId, category = NotificationCategory.MONEY_REMINDERS,
+                        entityId = reminder.id, itemTitle = reminder.title, targetEpochDay = day, reminderEpochDay = day,
+                        triggerAtEpochMs = triggerMs, offsetDaysBefore = 0, isOverdue = false, amountSen = null,
+                        deepLink = NotificationDeepLink.CALENDAR,
+                        detailedTitle = "⏰ ${reminder.title}", detailedBody = body,
+                        privateTitle = "Money reminder ⏰", privateBody = "You have a reminder today. Unlock to view."
+                    )
+                    if (day == todayEpochDay && triggerMs <= nowMs) {
+                        dueNow += c
+                        activeIds += notifId
+                    } else if (triggerMs > nowMs) {
+                        upcoming += c
+                        activeIds += notifId
+                    }
+                }
             }
         }
 

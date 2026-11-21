@@ -72,6 +72,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -174,6 +175,7 @@ fun HomeScreen(
     onToggleBalanceVisibility: () -> Unit = {},
     unreadNotificationCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
+    onOpenCalendar: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showThemeSheet by rememberSaveable { mutableStateOf(false) }
@@ -202,7 +204,8 @@ fun HomeScreen(
                         onToggleBalanceVisibility()
                     },
                     onOpenNotifications = onOpenNotifications,
-                    onOpenSettingsHub = onOpenSettingsHub
+                    onOpenSettingsHub = onOpenSettingsHub,
+                    onOpenCalendar = onOpenCalendar
                 )
             }
 
@@ -391,7 +394,8 @@ private fun SpatialHomeHeader(
     unreadNotificationCount: Int,
     onToggleBalanceVisibility: () -> Unit,
     onOpenNotifications: () -> Unit,
-    onOpenSettingsHub: () -> Unit
+    onOpenSettingsHub: () -> Unit,
+    onOpenCalendar: (() -> Unit)? = null
 ) {
     // Experiment 01: privacy lives in the hero, notifications in Settings. Callbacks stay wired.
     val colors = SpatialTheme.colors
@@ -431,6 +435,14 @@ private fun SpatialHomeHeader(
             // Phase 11I: cycle subtitle removed; the cycle is shown inside the Safe to Spend card.
         }
 
+        if (onOpenCalendar != null) {
+            com.diniy.duit.core.ui.components.CandyMintIconButton(
+                icon = androidx.compose.material.icons.Icons.Rounded.CalendarMonth,
+                contentDescription = "Money Calendar",
+                onClick = onOpenCalendar
+            )
+            Spacer(Modifier.width(8.dp))
+        }
         HomeSettingsButton(onClick = onOpenSettingsHub)
     }
 }

@@ -6,6 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import com.diniy.duit.data.local.dao.MoneyReminderDao
+import com.diniy.duit.data.local.entity.MoneyReminderEntity
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.diniy.duit.data.local.converter.DuitTypeConverters
 import com.diniy.duit.data.local.dao.BackupDao
@@ -69,9 +71,10 @@ import com.diniy.duit.data.local.entity.WalletEntity
         PayLaterPlanEntity::class,
         DebtEntity::class,
         ObligationPaymentEntity::class,
-        NotificationHistoryEntity::class
+        NotificationHistoryEntity::class,
+        MoneyReminderEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(DuitTypeConverters::class)
@@ -95,6 +98,7 @@ abstract class DuitDatabase : RoomDatabase() {
     abstract fun notificationHistoryDao(): NotificationHistoryDao
     abstract fun obligationPaymentDao(): ObligationPaymentDao
     abstract fun backupDao(): BackupDao
+    abstract fun moneyReminderDao(): MoneyReminderDao
 
     companion object {
         private const val DATABASE_NAME = "duit_ledger.db"
@@ -487,6 +491,27 @@ abstract class DuitDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive: new money_reminders table only; every existing table and row is untouched. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `money_reminders` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `dateEpochDay` INTEGER NOT NULL,
+                        `repeatFrequency` TEXT NOT NULL DEFAULT 'ONE_TIME',
+                        `customIntervalDays` INTEGER DEFAULT NULL,
+                        `note` TEXT NOT NULL DEFAULT '',
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_money_reminders_dateEpochDay` ON `money_reminders` (`dateEpochDay`)")
+            }
+        }
+
         @Volatile
         private var instance: DuitDatabase? = null
 
@@ -505,7 +530,8 @@ abstract class DuitDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
-                        MIGRATION_8_9
+                        MIGRATION_8_9,
+                        MIGRATION_9_10
                     )
                     .build()
                     .also { instance = it }

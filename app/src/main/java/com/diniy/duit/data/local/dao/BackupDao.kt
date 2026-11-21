@@ -14,6 +14,7 @@ import com.diniy.duit.data.local.entity.CommissionSourceEntity
 import com.diniy.duit.data.local.entity.CommitmentEntity
 import com.diniy.duit.data.local.entity.DailySalesRecordEntity
 import com.diniy.duit.data.local.entity.DebtEntity
+import com.diniy.duit.data.local.entity.MoneyReminderEntity
 import com.diniy.duit.data.local.entity.NotificationHistoryEntity
 import com.diniy.duit.data.local.entity.ObligationPaymentEntity
 import com.diniy.duit.data.local.entity.PayLaterPlanEntity
@@ -42,7 +43,9 @@ data class LedgerDatabaseSnapshot(
     val debts: List<DebtEntity>,
     val obligationPayments: List<ObligationPaymentEntity>,
     val transactions: List<TransactionEntity>,
-    val notificationHistory: List<NotificationHistoryEntity>
+    val notificationHistory: List<NotificationHistoryEntity>,
+    /** Schema v10+. Older backups have none, so it defaults to empty on restore. */
+    val moneyReminders: List<MoneyReminderEntity> = emptyList()
 )
 
 @Dao
@@ -102,6 +105,9 @@ interface BackupDao {
     @Query("SELECT * FROM notification_history ORDER BY id ASC")
     suspend fun getAllNotificationHistory(): List<NotificationHistoryEntity>
 
+    @Query("SELECT * FROM money_reminders ORDER BY id ASC")
+    suspend fun getAllMoneyReminders(): List<MoneyReminderEntity>
+
     @Transaction
     suspend fun exportFullSnapshot(): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
         wallets = getAllWallets(),
@@ -121,7 +127,8 @@ interface BackupDao {
         debts = getAllDebts(),
         obligationPayments = getAllObligationPayments(),
         transactions = getAllTransactions(),
-        notificationHistory = getAllNotificationHistory()
+        notificationHistory = getAllNotificationHistory(),
+        moneyReminders = getAllMoneyReminders()
     )
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -177,6 +184,12 @@ interface BackupDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertNotificationHistory(items: List<NotificationHistoryEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertMoneyReminders(items: List<MoneyReminderEntity>)
+
+    @Query("DELETE FROM money_reminders")
+    suspend fun deleteAllMoneyReminders()
 
     @Query("DELETE FROM transactions")
     suspend fun deleteAllTransactions()
@@ -252,6 +265,7 @@ interface BackupDao {
         deleteAllCommissionSources()
         deleteAllCategories()
         deleteAllNotificationHistory()
+        deleteAllMoneyReminders()
         deleteAllWallets()
     }
 
@@ -277,5 +291,6 @@ interface BackupDao {
         insertCommissionRuleVersions(snapshot.commissionRuleVersions)
         insertDailySalesRecords(snapshot.dailySalesRecords)
         insertNotificationHistory(snapshot.notificationHistory)
+        insertMoneyReminders(snapshot.moneyReminders)
     }
 }

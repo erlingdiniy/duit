@@ -154,6 +154,8 @@ fun DuitAppShell(
     var settingsHubRoute by rememberSaveable { mutableStateOf(SettingsHubRoute.HUB) }
     var showSecuritySettings by rememberSaveable { mutableStateOf(false) }
     var showNotificationCentre by rememberSaveable { mutableStateOf(false) }
+    var showCalendar by rememberSaveable { mutableStateOf(false) }
+    var calendarFocusDay by rememberSaveable { mutableStateOf<Long?>(null) }
     var showNotificationSettings by rememberSaveable { mutableStateOf(false) }
     var showReplayTour by rememberSaveable { mutableStateOf(false) }
     var activePinFlowMode by rememberSaveable { mutableStateOf<PinFlowMode?>(null) }
@@ -424,7 +426,8 @@ fun DuitAppShell(
         NotificationDeepLink.PLANNING_SALARY,
         NotificationDeepLink.PLANNING_COMMISSIONS,
         NotificationDeepLink.HOME_ADD_TRANSACTION,
-        NotificationDeepLink.INSIGHTS -> PlanningSectionTab.GOALS
+        NotificationDeepLink.INSIGHTS,
+        NotificationDeepLink.CALENDAR -> PlanningSectionTab.GOALS
     }
 
     if (showNotificationCentre) {
@@ -435,11 +438,47 @@ fun DuitAppShell(
             onMarkAsRead = notificationViewModel::markAsRead,
             onMarkAllAsRead = notificationViewModel::markAllAsRead,
             onClearHistory = notificationViewModel::clearHistory,
-            onNavigateToTarget = { target ->
+            onNavigateToTarget = { target, epochDay ->
                 showNotificationCentre = false
+                if (target == NotificationDeepLink.CALENDAR) container.pendingCalendarEpochDay = epochDay
                 container.setPendingDeepLink(target)
             },
             onPermissionUpdated = notificationViewModel::refreshPermissionAndSync
+        )
+        return
+    }
+
+    if (showCalendar) {
+        val calendarViewModel: com.diniy.duit.feature.calendar.CalendarViewModel = viewModel(
+            factory = com.diniy.duit.feature.calendar.CalendarViewModel.factory(
+                transactionRepository = container.transactionRepository,
+                planningRepository = container.planningRepository,
+                savingsRepository = container.savingsRepository,
+                previewModeController = container.previewModeController,
+                obligationRepository = container.obligationRepository
+            )
+        )
+        val calendarState by calendarViewModel.uiState.collectAsStateWithLifecycle()
+        // A Money Reminder tap while the Calendar is already open just moves to that date.
+        LaunchedEffect(pendingDeepLink) {
+            if (pendingDeepLink == NotificationDeepLink.CALENDAR) {
+                container.setPendingDeepLink(null)
+                calendarFocusDay = container.pendingCalendarEpochDay.also { container.pendingCalendarEpochDay = null }
+            }
+        }
+        LaunchedEffect(calendarFocusDay) {
+            calendarFocusDay?.let { calendarViewModel.selectDay(it); calendarFocusDay = null }
+        }
+        com.diniy.duit.feature.calendar.CalendarScreen(
+            uiState = calendarState,
+            onBack = { showCalendar = false },
+            onPreviousMonth = calendarViewModel::previousMonth,
+            onNextMonth = calendarViewModel::nextMonth,
+            onToday = calendarViewModel::goToToday,
+            onSelectDay = calendarViewModel::selectDay,
+            onRetry = calendarViewModel::retry,
+            onSaveReminder = calendarViewModel::saveReminder,
+            onDeleteReminder = calendarViewModel::deleteReminder
         )
         return
     }
@@ -472,6 +511,11 @@ fun DuitAppShell(
         val target = pendingDeepLink?.takeIf { it.planningTabKey.isEmpty() } ?: return@LaunchedEffect
         if (backStackEntry == null) return@LaunchedEffect
         container.setPendingDeepLink(null)
+        if (target == NotificationDeepLink.CALENDAR) {
+            calendarFocusDay = container.pendingCalendarEpochDay.also { container.pendingCalendarEpochDay = null }
+            showCalendar = true
+            return@LaunchedEffect
+        }
         val route = if (target == NotificationDeepLink.INSIGHTS) DuitRoute.INSIGHTS else DuitRoute.HOME
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -783,7 +827,9 @@ fun DuitAppShell(
                                         }
                                     },
                                     unreadNotificationCount = notificationState.unreadCount,
-                                    onOpenNotifications = { showNotificationCentre = true }
+                                    onOpenNotifications = { showNotificationCentre = true },
+                                    // Smart Money Calendar: public edition only, like the other v1.1+ features.
+                                    onOpenCalendar = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) ({ showCalendar = true }) else null
                                 )
                             
                                                 }

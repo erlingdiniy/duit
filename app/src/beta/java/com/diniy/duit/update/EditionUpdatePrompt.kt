@@ -184,43 +184,13 @@ internal fun UpdateDialogs(model: BetaUpdateModel) {
 
 // ------------------------------------------------------------------------------------------------
 
-/** Candy card dialog: fades and scales in once (about 260 ms), never taller than the screen allows. */
+/** Shared Candy card dialog (core); kept as a name so the update states read as before. */
 @Composable
 private fun CandyUpdateDialog(
     onDismiss: () -> Unit,
     dismissible: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
-) {
-    val reduced = rememberReducedMotionEnabled()
-    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.86f).dp
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = dismissible
-        )
-    ) {
-        val enter = remember { Animatable(if (reduced) 1f else 0f) }
-        LaunchedEffect(Unit) { if (!reduced) enter.animateTo(1f, tween(260)) }
-        CandyBubbleCard(
-            tone = CandyTone.Peach,
-            shape = RoundedCornerShape(32.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(22.dp),
-            modifier = Modifier
-                .padding(horizontal = 20.dp)
-                .widthIn(max = 460.dp)
-                .fillMaxWidth()
-                .heightIn(max = maxHeight)
-                .graphicsLayer {
-                    alpha = enter.value
-                    val s = 0.92f + 0.08f * enter.value
-                    scaleX = s
-                    scaleY = s
-                }
-        ) { content() }
-    }
-}
+) = com.diniy.duit.core.ui.components.CandyDialog(onDismiss, dismissible, content)
 
 /** The dialog the GitHub update checker shows for an available update. */
 @Composable

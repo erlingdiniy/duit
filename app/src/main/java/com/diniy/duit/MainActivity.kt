@@ -39,8 +39,11 @@ class MainActivity : FragmentActivity() {
 
         val container = (application as DuitApplication).container
         val lockManager = container.appLockManager
-        extractNotificationDeepLink(intent)?.let { target ->
-            container.setPendingDeepLink(target)
+        // Only a fresh launch acts on the tap; a recreated activity (rotation, process restore) must not replay it.
+        if (savedInstanceState == null) {
+            extractNotificationDeepLink(intent)?.let { target ->
+                container.setPendingDeepLink(target)
+            }
         }
         WidgetDeepLink.extract(intent)?.let { target ->
             container.setPendingWidgetDeepLink(target)
@@ -191,6 +194,16 @@ class MainActivity : FragmentActivity() {
 
     private fun extractNotificationDeepLink(intent: Intent?): NotificationDeepLink? {
         val raw = intent?.getStringExtra(AndroidNotificationHelper.EXTRA_DEEP_LINK_TARGET) ?: return null
-        return NotificationDeepLink.entries.firstOrNull { it.name == raw }
+        val target = NotificationDeepLink.entries.firstOrNull { it.name == raw }
+        (application as DuitApplication).container.pendingCalendarEpochDay =
+            if (target == NotificationDeepLink.CALENDAR) calendarEpochDayOf(intent) else null
+        // Consumed: the same Intent object must not reopen this date later.
+        intent.removeExtra(AndroidNotificationHelper.EXTRA_DEEP_LINK_TARGET)
+        intent.removeExtra(AndroidNotificationHelper.EXTRA_TARGET_EPOCH_DAY)
+        return target
     }
 }
+
+/** The reminder occurrence date a Money Reminder notification carries, or null. */
+internal fun calendarEpochDayOf(intent: Intent): Long? =
+    intent.getLongExtra(AndroidNotificationHelper.EXTRA_TARGET_EPOCH_DAY, Long.MIN_VALUE).takeIf { it != Long.MIN_VALUE }

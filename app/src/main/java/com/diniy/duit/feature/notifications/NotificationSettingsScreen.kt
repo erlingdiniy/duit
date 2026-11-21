@@ -222,7 +222,7 @@ fun NotificationSettingsScreen(
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = colors.divider)
                     Text("Remind me about", style = typography.caption, color = colors.secondaryText, modifier = Modifier.padding(bottom = 2.dp))
-                    NotificationCategory.entries.forEach { category ->
+                    NotificationCategory.forThisEdition.forEach { category ->
                         NotifSwitchRow(
                             title = category.displayName,
                             subtitle = category.description,

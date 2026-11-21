@@ -71,7 +71,9 @@ class ReminderSyncEngine(
             zoneId = zoneId,
             budgets = budgetRepository?.observeBudgets()?.first() ?: emptyList(),
             transactions = transactionRepository?.observeTransactions()?.first() ?: emptyList(),
-            categories = categoryRepository?.observeCategories()?.first() ?: emptyList()
+            categories = categoryRepository?.observeCategories()?.first() ?: emptyList(),
+            // Money reminders belong to the public edition's Calendar.
+            moneyReminders = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) planningRepository.observeMoneyReminders().first() else emptyList()
         )
 
         val previouslyPostedIds = notificationHistoryDao.getAllDeliveredNotificationIds().toSet()

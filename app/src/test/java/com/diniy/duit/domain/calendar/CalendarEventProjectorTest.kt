@@ -132,4 +132,49 @@ class CalendarEventProjectorTest {
         assertEquals(listOf(CalendarEventStatus.DUE, CalendarEventStatus.COMPLETED), m.all().map { it.status })
         assertTrue(m.summaries.isEmpty())
     }
+
+    private fun payLater(paidSen: Long, archived: Boolean = false) = com.diniy.duit.domain.model.PayLaterPlan(
+        id = 8, title = "Phone", providerName = "Atome", purchaseAmountSen = 3_000, feeOrInterestSen = 0, paidSen = paidSen,
+        instalmentCount = 3, firstDueDateEpochDay = LocalDate.of(2026, 10, 5).toEpochDay(), nextDueDateEpochDay = day(5),
+        accentToken = PrismaticAccentToken.AQUA, note = "", isArchived = archived, createdAtEpochMs = 0, updatedAtEpochMs = 0
+    )
+
+    private fun debt(id: Long, dir: com.diniy.duit.domain.model.DebtDirection, due: Long?, paid: Long) = com.diniy.duit.domain.model.DebtRecord(
+        id = id, direction = dir, counterpartyName = "Aiman", title = "Loan $id", originalAmountSen = 50_000, paidSen = paid,
+        dueDateEpochDay = due, accentToken = PrismaticAccentToken.AQUA, note = "", isArchived = false,
+        createdAtEpochMs = 0, updatedAtEpochMs = 0, scheduledRepaymentSen = 20_000
+    )
+
+    @Test
+    fun payLaterInstalments_areBills_paidOrUpcoming_neverExpenses() {
+        // Oct instalment paid (1,000 of 3,000); Nov instalment still open.
+        val m = CalendarEventProjector.project(nov, emptyList(), emptyList(), emptyList(), emptyList(), kl, payLaterPlans = listOf(payLater(1_000)))
+        val inst = m.all().single()
+        assertEquals(CalendarEventType.BILL, inst.type)
+        assertEquals(day(5), inst.epochDay)
+        assertEquals(CalendarEventStatus.UPCOMING, inst.status)
+        assertEquals(1_000L, inst.amountSen)
+        assertTrue(m.summaries.isEmpty())
+        val paid = CalendarEventProjector.project(nov, emptyList(), emptyList(), emptyList(), emptyList(), kl, payLaterPlans = listOf(payLater(2_000)))
+        assertEquals(CalendarEventStatus.PAID, paid.all().single().status)
+        assertTrue(CalendarEventProjector.project(nov, emptyList(), emptyList(), emptyList(), emptyList(), kl,
+            payLaterPlans = listOf(payLater(0, archived = true))).eventsByDay.isEmpty())
+    }
+
+    @Test
+    fun debtsIOwe_withDueDates_areBills_receivablesAndUndatedAreNot() {
+        val owe = com.diniy.duit.domain.model.DebtDirection.I_OWE
+        val m = CalendarEventProjector.project(nov, emptyList(), emptyList(), emptyList(), emptyList(), kl, debts = listOf(
+            debt(1, owe, day(15), 0),
+            debt(2, owe, day(16), 50_000),
+            debt(3, com.diniy.duit.domain.model.DebtDirection.OWED_TO_ME, day(17), 0),
+            debt(4, owe, null, 0)
+        ))
+        val bills = m.all()
+        assertEquals(listOf("debt:1", "debt:2"), bills.map { it.key })
+        assertEquals(20_000L, bills[0].amountSen)
+        assertEquals(CalendarEventStatus.UPCOMING, bills[0].status)
+        assertEquals(CalendarEventStatus.PAID, bills[1].status)
+        assertTrue(m.summaries.isEmpty())
+    }
 }

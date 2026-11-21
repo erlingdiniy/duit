@@ -45,7 +45,7 @@ class AndroidNotificationHelper(
 
     fun ensureChannelsCreated() {
         val sysManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-        NotificationCategory.entries.forEach { category ->
+        NotificationCategory.forThisEdition.forEach { category ->
             val channel = NotificationChannel(
                 category.channelId,
                 category.displayName,
@@ -72,7 +72,8 @@ class AndroidNotificationHelper(
     private fun buildTapPendingIntent(
         requestCode: Int,
         deepLink: NotificationDeepLink? = null,
-        notificationId: Int? = null
+        notificationId: Int? = null,
+        targetEpochDay: Long? = null
     ): PendingIntent {
         val tapIntent = Intent(appContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -81,6 +82,11 @@ class AndroidNotificationHelper(
             }
             if (notificationId != null) {
                 putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+            }
+            if (targetEpochDay != null) {
+                putExtra(EXTRA_TARGET_EPOCH_DAY, targetEpochDay)
+                // Unique per occurrence: FLAG_UPDATE_CURRENT can never rewrite another notification's date.
+                data = android.net.Uri.parse("duit://notification/${notificationId ?: requestCode}/$targetEpochDay")
             }
         }
         return PendingIntent.getActivity(
@@ -113,7 +119,8 @@ class AndroidNotificationHelper(
         val pendingIntent = buildTapPendingIntent(
             requestCode = candidate.notificationId,
             deepLink = candidate.deepLink,
-            notificationId = candidate.notificationId
+            notificationId = candidate.notificationId,
+            targetEpochDay = candidate.targetEpochDay.takeIf { candidate.deepLink == NotificationDeepLink.CALENDAR }
         )
 
         // Lock-screen public notification never exposes amounts or personal titles.
@@ -179,6 +186,7 @@ class AndroidNotificationHelper(
     companion object {
         const val EXTRA_DEEP_LINK_TARGET = "extra_duit_deep_link_target"
         const val EXTRA_NOTIFICATION_ID = "extra_duit_notification_id"
+        const val EXTRA_TARGET_EPOCH_DAY = "extra_duit_target_epoch_day"
         const val TEST_NOTIFICATION_ID = -5001
         const val TEST_NOTIFICATION_TITLE = "duit. Test Notification"
         const val TEST_NOTIFICATION_MESSAGE = "Notifications are working correctly."

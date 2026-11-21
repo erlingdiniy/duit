@@ -40,6 +40,11 @@ enum class NotificationCategory(
         description = "Notify when budget spending crosses 50%, 80%, 90%, or 100%",
         channelId = "duit_budgets"
     ),
+    MONEY_REMINDERS(
+        displayName = "Money Reminders",
+        description = "Your own reminders from the Money Calendar",
+        channelId = "duit_money_reminders"
+    ),
     DAILY(
         displayName = "Daily Reminders",
         description = "A gentle daily check-in to log your spending",
@@ -54,6 +59,10 @@ enum class NotificationCategory(
     companion object {
         /** Daily check-in and recap are opt-in so updating never starts new daily pings. */
         val DEFAULT_ENABLED: Set<NotificationCategory> = entries.toSet() - DAILY - GENERAL
+
+        /** Money Reminders come with the public edition's Calendar; the personal edition never shows them. */
+        val forThisEdition: List<NotificationCategory>
+            get() = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) entries else entries - MONEY_REMINDERS
     }
 }
 
@@ -87,7 +96,9 @@ enum class NotificationDeepLink(val planningTabKey: String) {
     PLANNING_SALARY("SALARY"),
     PLANNING_COMMISSIONS("COMMISSIONS"),
     HOME_ADD_TRANSACTION(""),
-    INSIGHTS("")
+    INSIGHTS(""),
+    /** Opens the Money Calendar on the notification's date. */
+    CALENDAR("")
 }
 
 data class NotificationSettingsSnapshot(
