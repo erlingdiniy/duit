@@ -19,6 +19,10 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE walletId = :walletId OR targetWalletId = :walletId ORDER BY occurredAtEpochMs DESC, id DESC")
     fun observeForWallet(walletId: Long): Flow<List<TransactionEntity>>
 
+    /** Transactions in [startEpochMs, endEpochMs), e.g. one calendar month. Query only, no schema change. */
+    @Query("SELECT * FROM transactions WHERE occurredAtEpochMs >= :startEpochMs AND occurredAtEpochMs < :endEpochMs ORDER BY occurredAtEpochMs DESC, id DESC")
+    fun observeBetween(startEpochMs: Long, endEpochMs: Long): Flow<List<TransactionEntity>>
+
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getById(id: Long): TransactionEntity?
 

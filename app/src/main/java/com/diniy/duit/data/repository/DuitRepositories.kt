@@ -76,6 +76,7 @@ interface TransactionRepository {
     fun observeTransactions(): Flow<List<FinanceTransaction>>
     fun observeRecentTransactions(limit: Int): Flow<List<FinanceTransaction>>
     fun observeTransactionsForWallet(walletId: Long): Flow<List<FinanceTransaction>>
+    fun observeTransactionsBetween(startEpochMs: Long, endEpochMs: Long): Flow<List<FinanceTransaction>>
     suspend fun recordTransaction(transaction: FinanceTransaction): Long
     suspend fun updateTransaction(updated: FinanceTransaction)
     suspend fun deleteTransaction(transactionId: Long)
@@ -370,6 +371,9 @@ class OfflineFirstFinanceRepository(
 
     override fun observeTransactionsForWallet(walletId: Long): Flow<List<FinanceTransaction>> =
         transactionDao.observeForWallet(walletId).map { entities -> entities.map { it.toDomain() } }
+
+    override fun observeTransactionsBetween(startEpochMs: Long, endEpochMs: Long): Flow<List<FinanceTransaction>> =
+        transactionDao.observeBetween(startEpochMs, endEpochMs).map { entities -> entities.map { it.toDomain() } }
 
     override suspend fun recordTransaction(transaction: FinanceTransaction): Long {
         validateTransactionShape(transaction)
