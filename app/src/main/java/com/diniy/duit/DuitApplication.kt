@@ -60,7 +60,7 @@ import kotlinx.coroutines.withContext
 /**
  * Lightweight offline-first dependency container for duit.
  */
-class DuitContainer(application: Application) {
+class DuitContainer(private val application: Application) {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val database: DuitDatabase by lazy { DuitDatabase.getInstance(application) }
@@ -194,6 +194,7 @@ class DuitContainer(application: Application) {
 
     fun initializeNotificationsAndObservers() {
         androidNotificationHelper.ensureChannelsCreated()
+        com.diniy.duit.notifications.DeveloperBroadcasts.initialize(application)
         val reminderTables = setOf(
             "commitments",
             "paylater_plans",

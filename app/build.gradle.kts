@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+if (file("src/beta/google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 val betaRepository = providers.gradleProperty("duitBetaRepository").orElse("").get()
 require(betaRepository.isEmpty() || betaRepository.matches(Regex("[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+"))) {
     "duitBetaRepository must be a GitHub owner/repository slug"
@@ -150,6 +154,15 @@ androidComponents {
     }
 }
 
+// Keep Google Services strictly scoped to beta so personal/debug/release builds remain 100% offline.
+tasks.matching {
+    it.name.startsWith("process") &&
+        it.name.endsWith("GoogleServices") &&
+        !it.name.contains("Beta", ignoreCase = true)
+}.configureEach {
+    enabled = false
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.incremental", "true")
@@ -183,6 +196,10 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Phase 8: FCM Developer Broadcasts strictly for beta (public edition). Personal builds include zero Firebase SDK.
+    "betaImplementation"(platform(libs.firebase.bom))
+    "betaImplementation"(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

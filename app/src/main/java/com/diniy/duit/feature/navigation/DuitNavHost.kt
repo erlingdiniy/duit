@@ -427,6 +427,8 @@ fun DuitAppShell(
         NotificationDeepLink.PLANNING_GOALS,
         NotificationDeepLink.PLANNING_SALARY,
         NotificationDeepLink.PLANNING_COMMISSIONS,
+        NotificationDeepLink.HOME,
+        NotificationDeepLink.ACTIVITY,
         NotificationDeepLink.HOME_ADD_TRANSACTION,
         NotificationDeepLink.INSIGHTS,
         NotificationDeepLink.CALENDAR -> PlanningSectionTab.GOALS
@@ -530,7 +532,11 @@ fun DuitAppShell(
             showCalendar = true
             return@LaunchedEffect
         }
-        val route = if (target == NotificationDeepLink.INSIGHTS) DuitRoute.INSIGHTS else DuitRoute.HOME
+        val route = when (target) {
+            NotificationDeepLink.INSIGHTS -> DuitRoute.INSIGHTS
+            NotificationDeepLink.ACTIVITY -> DuitRoute.ACTIVITY
+            else -> DuitRoute.HOME
+        }
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true

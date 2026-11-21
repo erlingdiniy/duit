@@ -193,7 +193,10 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun extractNotificationDeepLink(intent: Intent?): NotificationDeepLink? {
-        val raw = intent?.getStringExtra(AndroidNotificationHelper.EXTRA_DEEP_LINK_TARGET) ?: return null
+        val raw = intent?.getStringExtra(AndroidNotificationHelper.EXTRA_DEEP_LINK_TARGET)
+        if (raw == null) {
+            return com.diniy.duit.notifications.DeveloperBroadcastSpec.extractBackgroundBroadcastDeepLink(intent)
+        }
         val target = NotificationDeepLink.entries.firstOrNull { it.name == raw }
         (application as DuitApplication).container.pendingCalendarEpochDay =
             if (target == NotificationDeepLink.CALENDAR) calendarEpochDayOf(intent) else null

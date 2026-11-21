@@ -95,6 +95,8 @@ enum class NotificationDeepLink(val planningTabKey: String) {
     PLANNING_BUDGETS("BUDGETS"),
     PLANNING_SALARY("SALARY"),
     PLANNING_COMMISSIONS("COMMISSIONS"),
+    HOME(""),
+    ACTIVITY(""),
     HOME_ADD_TRANSACTION(""),
     INSIGHTS(""),
     /** Opens the Money Calendar on the notification's date. */
