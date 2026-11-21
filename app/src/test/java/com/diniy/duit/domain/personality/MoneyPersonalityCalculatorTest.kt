@@ -100,4 +100,29 @@ class MoneyPersonalityCalculatorTest {
         val m = listOf(move(SavingsMovementType.ALLOCATE, 20_000, 2))
         repeat(3) { assertEquals(MoneyPersonality.SAVINGS_SUPERSTAR, (eval(t, m) as PersonalityResult.Assigned).personality) }
     }
+
+    @Test
+    fun internalSavingsMovements_duplicateIds_andRefundIncome_noDoubleCounting() {
+        val dupExpense = tx(TransactionType.EXPENSE, 1_000, 1, "A")
+        val salary = tx(TransactionType.INCOME, 100_000, 1, "Salary")
+        val refund = tx(TransactionType.INCOME, 50_000, 10, "Refund")
+        val base = spread(listOf("A", "B")) + dupExpense + dupExpense + salary
+        val deposit = move(SavingsMovementType.TRANSFER_AND_ALLOCATE, 20_000, 2)
+        val moves = listOf(
+            deposit,
+            deposit, // duplicate id must not count twice
+            move(SavingsMovementType.LINK_PROTECTED, 15_000, 3),
+            move(SavingsMovementType.TRANSFER_TO_SPENDING, 5_000, 4),
+            move(SavingsMovementType.REASSIGN, 40_000, 5, goal = 1, related = 2)
+        )
+        // Net saved = 20,000 + 15,000 - 5,000 = 30,000 (30% of 100,000 salary)
+        val r = eval(base, moves) as PersonalityResult.Assigned
+        assertEquals(MoneyPersonality.SAVINGS_SUPERSTAR, r.personality)
+        assertEquals(13, r.habits.expenseCount) // 12 spread + 1 deduplicated dupExpense
+        assertTrue(r.reasons.single().contains("30%"))
+        // Refund logged as income raises denominator to 150,000 -> 20% still passes cleanly, no crash or double count
+        val withRefund = eval(base + refund, moves) as PersonalityResult.Assigned
+        assertEquals(MoneyPersonality.SAVINGS_SUPERSTAR, withRefund.personality)
+        assertTrue(withRefund.reasons.single().contains("20%"))
+    }
 }

@@ -1,10 +1,16 @@
 package com.diniy.duit.feature.personality
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.Density
 import com.diniy.duit.core.ui.theme.DuitTheme
 import com.diniy.duit.domain.model.Budget
 import com.diniy.duit.domain.model.BudgetPeriodType
@@ -127,5 +133,44 @@ class MoneyPersonalityViewModelTest {
         rule.onNodeWithText("Share My Card").assertExists()
         val texts = (state.result as PersonalityResult.Assigned).reasons + MoneyPersonality.LITTLE_EXPLORER.tagline
         assertFalse(texts.any { it.contains("RM") })
+    }
+
+    @Test
+    fun screen_rendersInDarkModeAndLargeFont_withAccessibleControls() = runTest {
+        all.value = month(11, listOf("A", "B", "C", "D", "E", "F"))
+        val m = vm()
+        val state = m.uiState.value
+        Robolectric.buildActivity(ComponentActivity::class.java).setup().get().setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 2f, fontScale = 2f)) {
+                DuitTheme(themeMode = ThemeMode.DARK) { MoneyPersonalityScreen(state, {}, {}, {}, {}) }
+            }
+        }
+        rule.onNodeWithText("Little Explorer").assertExists()
+        rule.onNodeWithText("Share My Card").assertExists()
+        rule.onNodeWithContentDescription("Previous month").assertExists()
+        rule.onNodeWithContentDescription("Little Explorer mascot").assertExists()
+    }
+
+    @Test
+    fun shareCard_rendersPngInPrivateCache_andBuildsSafeImageIntent() {
+        val context = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        val ym = YearMonth.of(2026, 11)
+        MoneyPersonality.entries.forEach { personality ->
+            val file = MoneyPersonalityShareCard.writeCardToShareCache(context, personality, ym)
+            assertTrue(file.exists() && file.length() > 0L)
+            assertEquals("shared", file.parentFile?.name)
+            assertEquals("duit-money-personality.png", file.name)
+            val caption = MoneyPersonalityShareCard.shareCaption(personality, ym)
+            assertFalse(caption.contains("RM"))
+            assertTrue(caption.contains(personality.title))
+        }
+        val fakeUri = Uri.parse("content://com.diniy.duit.beta.supportqr/shared/duit-money-personality.png")
+        val caption = MoneyPersonalityShareCard.shareCaption(MoneyPersonality.HAPPY_FOODIE, ym)
+        val intent = MoneyPersonalityShareCard.buildImageShareIntent(fakeUri, caption)
+        assertEquals(Intent.ACTION_SEND, intent.action)
+        assertEquals("image/png", intent.type)
+        assertEquals(fakeUri, intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
+        assertTrue(intent.clipData != null)
+        assertTrue((intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0)
     }
 }
