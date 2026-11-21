@@ -14,7 +14,10 @@ import com.diniy.duit.data.local.entity.CommissionSourceEntity
 import com.diniy.duit.data.local.entity.CommitmentEntity
 import com.diniy.duit.data.local.entity.DailySalesRecordEntity
 import com.diniy.duit.data.local.entity.DebtEntity
+import com.diniy.duit.data.local.entity.ChallengeSkippedSlotEntity
+import com.diniy.duit.data.local.entity.ChallengeStickerEntity
 import com.diniy.duit.data.local.entity.MoneyReminderEntity
+import com.diniy.duit.data.local.entity.SavingsChallengeEntity
 import com.diniy.duit.data.local.entity.NotificationHistoryEntity
 import com.diniy.duit.data.local.entity.ObligationPaymentEntity
 import com.diniy.duit.data.local.entity.PayLaterPlanEntity
@@ -45,7 +48,11 @@ data class LedgerDatabaseSnapshot(
     val transactions: List<TransactionEntity>,
     val notificationHistory: List<NotificationHistoryEntity>,
     /** Schema v10+. Older backups have none, so it defaults to empty on restore. */
-    val moneyReminders: List<MoneyReminderEntity> = emptyList()
+    val moneyReminders: List<MoneyReminderEntity> = emptyList(),
+    /** Schema v11+. Older backups have none, so these default to empty on restore. */
+    val savingsChallenges: List<SavingsChallengeEntity> = emptyList(),
+    val challengeSkippedSlots: List<ChallengeSkippedSlotEntity> = emptyList(),
+    val challengeStickers: List<ChallengeStickerEntity> = emptyList()
 )
 
 @Dao
@@ -108,6 +115,15 @@ interface BackupDao {
     @Query("SELECT * FROM money_reminders ORDER BY id ASC")
     suspend fun getAllMoneyReminders(): List<MoneyReminderEntity>
 
+    @Query("SELECT * FROM savings_challenges ORDER BY id ASC")
+    suspend fun getAllSavingsChallenges(): List<SavingsChallengeEntity>
+
+    @Query("SELECT * FROM challenge_skipped_slots ORDER BY challengeId ASC, slotIndex ASC")
+    suspend fun getAllChallengeSkippedSlots(): List<ChallengeSkippedSlotEntity>
+
+    @Query("SELECT * FROM challenge_stickers ORDER BY id ASC")
+    suspend fun getAllChallengeStickers(): List<ChallengeStickerEntity>
+
     @Transaction
     suspend fun exportFullSnapshot(): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
         wallets = getAllWallets(),
@@ -128,7 +144,10 @@ interface BackupDao {
         obligationPayments = getAllObligationPayments(),
         transactions = getAllTransactions(),
         notificationHistory = getAllNotificationHistory(),
-        moneyReminders = getAllMoneyReminders()
+        moneyReminders = getAllMoneyReminders(),
+        savingsChallenges = getAllSavingsChallenges(),
+        challengeSkippedSlots = getAllChallengeSkippedSlots(),
+        challengeStickers = getAllChallengeStickers()
     )
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -191,6 +210,24 @@ interface BackupDao {
     @Query("DELETE FROM money_reminders")
     suspend fun deleteAllMoneyReminders()
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSavingsChallenges(items: List<SavingsChallengeEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertChallengeSkippedSlots(items: List<ChallengeSkippedSlotEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertChallengeStickers(items: List<ChallengeStickerEntity>)
+
+    @Query("DELETE FROM challenge_skipped_slots")
+    suspend fun deleteAllChallengeSkippedSlots()
+
+    @Query("DELETE FROM savings_challenges")
+    suspend fun deleteAllSavingsChallenges()
+
+    @Query("DELETE FROM challenge_stickers")
+    suspend fun deleteAllChallengeStickers()
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAllTransactions()
 
@@ -251,6 +288,10 @@ interface BackupDao {
         deleteAllTransactions()
         deleteAllSavingsAllocations()
         deleteAllSavingsMovements()
+        // Challenges reference goals, so they go before savings_goals.
+        deleteAllChallengeSkippedSlots()
+        deleteAllSavingsChallenges()
+        deleteAllChallengeStickers()
         deleteAllObligationPayments()
         deleteAllBudgets()
         deleteAllCommissionPayments()
@@ -292,5 +333,8 @@ interface BackupDao {
         insertDailySalesRecords(snapshot.dailySalesRecords)
         insertNotificationHistory(snapshot.notificationHistory)
         insertMoneyReminders(snapshot.moneyReminders)
+        insertSavingsChallenges(snapshot.savingsChallenges)
+        insertChallengeSkippedSlots(snapshot.challengeSkippedSlots)
+        insertChallengeStickers(snapshot.challengeStickers)
     }
 }

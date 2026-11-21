@@ -8,6 +8,7 @@ import com.diniy.duit.data.local.dao.DefaultCategorySeed
 import com.diniy.duit.data.local.dao.DefaultCommissionSourceSeed
 import com.diniy.duit.data.local.entity.CategoryEntity
 import com.diniy.duit.data.local.entity.toDomain
+import com.diniy.duit.data.local.entity.stageOrNull
 import com.diniy.duit.data.local.entity.toEntity
 import com.diniy.duit.data.local.entity.CommissionSourceEntity
 import com.diniy.duit.data.local.entity.DebtEntity
@@ -153,6 +154,15 @@ interface SavingsRepository {
     fun observeSavingsGoals(): Flow<List<SavingsGoal>>
     fun observeSavingsAllocations(): Flow<List<SavingsAllocation>>
     fun observeSavingsMovements(): Flow<List<SavingsMovement>>
+
+    // Savings challenges (schema v11): plans on goals only. None of these touch wallets, goals or movements.
+    fun observeSavingsChallenges(): Flow<List<com.diniy.duit.domain.challenge.SavingsChallenge>>
+    fun observeChallengeSkippedSlots(): Flow<Map<Long, Set<Int>>>
+    fun observeChallengeStickers(): Flow<List<com.diniy.duit.domain.challenge.EarnedSticker>>
+    suspend fun saveSavingsChallenge(challenge: com.diniy.duit.domain.challenge.SavingsChallenge): Long
+    suspend fun deleteSavingsChallenge(challengeId: Long)
+    suspend fun setChallengeSlotSkipped(challengeId: Long, slotIndex: Int, skipped: Boolean)
+    suspend fun recordEarnedStickers(challengeId: Long, stages: Set<com.diniy.duit.domain.challenge.GardenStage>)
 
     suspend fun upsertSavingsGoal(goal: SavingsGoal): Long
     suspend fun completeSavingsGoal(goalId: Long)
@@ -607,6 +617,50 @@ class OfflineFirstFinanceRepository(
 
     override fun observeCommitments(): Flow<List<Commitment>> =
         commitmentDao.observeAll().map { entities -> entities.map { it.toDomain() } }
+
+    override fun observeSavingsChallenges(): Flow<List<com.diniy.duit.domain.challenge.SavingsChallenge>> =
+        database.savingsChallengeDao().observeChallenges().map { list -> list.map { it.toDomain() } }
+
+    override fun observeChallengeSkippedSlots(): Flow<Map<Long, Set<Int>>> =
+        database.savingsChallengeDao().observeSkippedSlots().map { list ->
+            list.groupBy({ it.challengeId }, { it.slotIndex }).mapValues { it.value.toSet() }
+        }
+
+    override fun observeChallengeStickers(): Flow<List<com.diniy.duit.domain.challenge.EarnedSticker>> =
+        database.savingsChallengeDao().observeStickers().map { list ->
+            list.mapNotNull { e -> e.stageOrNull()?.let { com.diniy.duit.domain.challenge.EarnedSticker(e.challengeId, it, e.earnedAtEpochMs) } }
+        }
+
+    override suspend fun saveSavingsChallenge(challenge: com.diniy.duit.domain.challenge.SavingsChallenge): Long {
+        require(challenge.baseAmountSen > 0L) { "Challenge amount must be more than RM0." }
+        require(challenge.slotCount in 1..com.diniy.duit.domain.challenge.ChallengeCalculator.MAX_SLOTS) { "Invalid number of challenge slots." }
+        require(challenge.intervalDays >= 1) { "Invalid challenge interval." }
+        val dao = database.savingsChallengeDao()
+        val now = System.currentTimeMillis()
+        return if (challenge.id == 0L) {
+            dao.insertChallenge(challenge.toEntity(createdAtEpochMs = now, updatedAtEpochMs = now))
+        } else {
+            val existing = requireNotNull(dao.getChallenge(challenge.id)) { "Challenge not found." }
+            dao.updateChallenge(challenge.toEntity(createdAtEpochMs = existing.createdAtEpochMs, updatedAtEpochMs = now))
+            challenge.id
+        }
+    }
+
+    override suspend fun deleteSavingsChallenge(challengeId: Long) = database.savingsChallengeDao().deleteChallenge(challengeId)
+
+    override suspend fun setChallengeSlotSkipped(challengeId: Long, slotIndex: Int, skipped: Boolean) {
+        val dao = database.savingsChallengeDao()
+        if (skipped) dao.insertSkippedSlot(com.diniy.duit.data.local.entity.ChallengeSkippedSlotEntity(challengeId, slotIndex))
+        else dao.deleteSkippedSlot(challengeId, slotIndex)
+    }
+
+    override suspend fun recordEarnedStickers(challengeId: Long, stages: Set<com.diniy.duit.domain.challenge.GardenStage>) {
+        if (stages.isEmpty()) return
+        val now = System.currentTimeMillis()
+        database.savingsChallengeDao().insertStickers(stages.map {
+            com.diniy.duit.data.local.entity.ChallengeStickerEntity(challengeId = challengeId, stage = it.name, earnedAtEpochMs = now)
+        })
+    }
 
     override fun observeMoneyReminders(): Flow<List<com.diniy.duit.domain.model.MoneyReminder>> =
         database.moneyReminderDao().observeAll().map { entities -> entities.map { it.toDomain() } }

@@ -158,6 +158,7 @@ fun PlanningScreen(
     onDeleteBudget: (Long, () -> Unit, (String) -> Unit) -> Unit,
     onCopyPreviousMonthBudgets: (() -> Unit, (String) -> Unit) -> Unit,
     onSaveCommitmentDetail: (Commitment, () -> Unit, (String) -> Unit) -> Unit,
+    challenges: com.diniy.duit.feature.savings.challenges.SavingsChallengesBinding? = null,
     onSetCommitmentArchived: (Long, Boolean, () -> Unit, (String) -> Unit) -> Unit,
     onDeleteCommitment: (Long, () -> Unit, (String) -> Unit) -> Unit,
     onRecordCommitmentPayment: (Long, Long, Long, String, Long, String, () -> Unit, (String) -> Unit) -> Unit,
@@ -216,6 +217,10 @@ fun PlanningScreen(
     var actionSheetMode by rememberSaveable { mutableStateOf<SavingsActionMode?>(null) }
     var actionGoalId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showInactiveGoals by rememberSaveable { mutableStateOf(false) }
+    var showChallenges by rememberSaveable { mutableStateOf(false) }
+    var openChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // null = closed, 0 = new challenge, otherwise the id being edited.
+    var editingChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showBudgetEditor by rememberSaveable { mutableStateOf(false) }
     var editingBudgetId by rememberSaveable { mutableStateOf<Long?>(null) }
     var inspectedBudgetId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -321,6 +326,24 @@ fun PlanningScreen(
         } else {
             when (selectedSectionTab) {
                 PlanningSectionTab.GOALS -> {
+                    // Public edition: Savings shows Goals or Challenges (plans on goals; progress = real deposits).
+                    if (challenges != null) item(key = "savings_view_toggle", contentType = "toggle") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.diniy.duit.core.ui.components.SpatialGlassPill(label = "Goals", selected = !showChallenges, onClick = { showChallenges = false })
+                            com.diniy.duit.core.ui.components.SpatialGlassPill(label = "Challenges", selected = showChallenges, onClick = { showChallenges = true })
+                        }
+                    }
+                    if (challenges != null && showChallenges) {
+                        item(key = "savings_challenges", contentType = "challenges") {
+                            com.diniy.duit.feature.savings.challenges.SavingsChallengesSection(
+                                state = challenges.state,
+                                isPreview = uiState.isSamplePreview,
+                                onCreate = { editingChallengeId = 0L },
+                                onOpen = { openChallengeId = it },
+                                onRetry = challenges.onRetry
+                            )
+                        }
+                    } else {
                     // 0. Savings Goals & Protected Savings Section
                     item(key = "savings_header", contentType = "section_heading") {
                         Row(
@@ -430,6 +453,7 @@ fun PlanningScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
 
@@ -1160,6 +1184,37 @@ fun PlanningScreen(
                     )
                 },
                 onDismiss = { inspectedGoalId = null }
+            )
+        }
+    }
+
+    if (challenges != null) {
+        openChallengeId?.let { id ->
+            val item = challenges.state.items.firstOrNull { it.challenge.id == id }
+            if (item == null) openChallengeId = null else com.diniy.duit.feature.savings.challenges.ChallengeDetail(
+                item = item,
+                safeToSpendSen = challenges.safeToSpendSen,
+                isPreview = uiState.isSamplePreview,
+                onClose = { openChallengeId = null },
+                onSaveToGoal = { goalId ->
+                    // The existing goal deposit flow records the real movement; the challenge only reads it.
+                    openChallengeId = null
+                    actionGoalId = goalId
+                    actionSheetMode = SavingsActionMode.ALLOCATE
+                },
+                onSkip = { challenges.onSetSkipped(id, it, true) },
+                onUnskip = { challenges.onSetSkipped(id, it, false) },
+                onSetPaused = { challenges.onSetPaused(item.challenge, it) },
+                onEdit = { openChallengeId = null; editingChallengeId = id },
+                onDelete = { challenges.onDelete(id) { openChallengeId = null } }
+            )
+        }
+        editingChallengeId?.let { id ->
+            com.diniy.duit.feature.savings.challenges.ChallengeEditor(
+                existing = challenges.state.items.firstOrNull { it.challenge.id == id }?.challenge,
+                activeGoals = challenges.state.activeGoals,
+                onClose = { editingChallengeId = null },
+                onSave = challenges.onSave
             )
         }
     }

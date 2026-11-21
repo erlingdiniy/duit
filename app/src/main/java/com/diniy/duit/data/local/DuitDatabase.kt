@@ -6,6 +6,10 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import com.diniy.duit.data.local.dao.SavingsChallengeDao
+import com.diniy.duit.data.local.entity.ChallengeSkippedSlotEntity
+import com.diniy.duit.data.local.entity.ChallengeStickerEntity
+import com.diniy.duit.data.local.entity.SavingsChallengeEntity
 import com.diniy.duit.data.local.dao.MoneyReminderDao
 import com.diniy.duit.data.local.entity.MoneyReminderEntity
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -72,9 +76,12 @@ import com.diniy.duit.data.local.entity.WalletEntity
         DebtEntity::class,
         ObligationPaymentEntity::class,
         NotificationHistoryEntity::class,
-        MoneyReminderEntity::class
+        MoneyReminderEntity::class,
+        SavingsChallengeEntity::class,
+        ChallengeSkippedSlotEntity::class,
+        ChallengeStickerEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(DuitTypeConverters::class)
@@ -99,6 +106,7 @@ abstract class DuitDatabase : RoomDatabase() {
     abstract fun obligationPaymentDao(): ObligationPaymentDao
     abstract fun backupDao(): BackupDao
     abstract fun moneyReminderDao(): MoneyReminderDao
+    abstract fun savingsChallengeDao(): SavingsChallengeDao
 
     companion object {
         private const val DATABASE_NAME = "duit_ledger.db"
@@ -512,6 +520,17 @@ abstract class DuitDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive: savings challenge tables only; every existing table and row is untouched. */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `savings_challenges` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `goalId` INTEGER NOT NULL, `type` TEXT NOT NULL, `baseAmountSen` INTEGER NOT NULL, `startEpochDay` INTEGER NOT NULL, `slotCount` INTEGER NOT NULL, `intervalDays` INTEGER NOT NULL, `randomSeed` INTEGER NOT NULL, `isPaused` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, FOREIGN KEY(`goalId`) REFERENCES `savings_goals`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_savings_challenges_goalId` ON `savings_challenges` (`goalId`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `challenge_skipped_slots` (`challengeId` INTEGER NOT NULL, `slotIndex` INTEGER NOT NULL, PRIMARY KEY(`challengeId`, `slotIndex`), FOREIGN KEY(`challengeId`) REFERENCES `savings_challenges`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `challenge_stickers` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `challengeId` INTEGER NOT NULL, `stage` TEXT NOT NULL, `earnedAtEpochMs` INTEGER NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_challenge_stickers_challengeId_stage` ON `challenge_stickers` (`challengeId`, `stage`)")
+            }
+        }
+
         @Volatile
         private var instance: DuitDatabase? = null
 
@@ -531,7 +550,8 @@ abstract class DuitDatabase : RoomDatabase() {
                         MIGRATION_6_7,
                         MIGRATION_7_8,
                         MIGRATION_8_9,
-                        MIGRATION_9_10
+                        MIGRATION_9_10,
+                        MIGRATION_10_11
                     )
                     .build()
                     .also { instance = it }

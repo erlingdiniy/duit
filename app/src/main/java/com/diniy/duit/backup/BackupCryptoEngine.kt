@@ -40,8 +40,9 @@ object BackupCryptoEngine {
 
     const val MAGIC = "DUIT_ENCRYPTED_BACKUP"
     const val CURRENT_FORMAT_VERSION = 1
-    // v10 adds money reminders. Older (v1-9) backups still restore; older apps refuse v10 backups instead of dropping reminders.
-    const val CURRENT_DB_SCHEMA_VERSION = 10
+    // v10 adds money reminders, v11 savings challenges. Older backups still restore; older apps refuse
+    // newer backups instead of silently dropping data they don't know.
+    const val CURRENT_DB_SCHEMA_VERSION = 11
     const val KDF_ALGORITHM = "PBKDF2WithHmacSHA256"
     const val CIPHER_ALGORITHM = "AES/GCM/NoPadding"
     const val DEFAULT_ITERATIONS = 150_000

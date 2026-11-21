@@ -10,7 +10,10 @@ import com.diniy.duit.data.local.entity.CommissionSourceEntity
 import com.diniy.duit.data.local.entity.CommitmentEntity
 import com.diniy.duit.data.local.entity.DailySalesRecordEntity
 import com.diniy.duit.data.local.entity.DebtEntity
+import com.diniy.duit.data.local.entity.ChallengeSkippedSlotEntity
+import com.diniy.duit.data.local.entity.ChallengeStickerEntity
 import com.diniy.duit.data.local.entity.MoneyReminderEntity
+import com.diniy.duit.data.local.entity.SavingsChallengeEntity
 import com.diniy.duit.data.local.entity.NotificationHistoryEntity
 import com.diniy.duit.data.local.entity.ObligationPaymentEntity
 import com.diniy.duit.data.local.entity.PayLaterPlanEntity
@@ -175,6 +178,17 @@ object BackupSerializer {
             }
             if (tx.targetWalletId != null && tx.targetWalletId !in walletIds) {
                 throw BackupFormatException("Backup transaction ${tx.id} references missing target wallet ${tx.targetWalletId}.")
+            }
+        }
+        val challengeIds = ledger.savingsChallenges.map { it.id }.toSet()
+        for (challenge in ledger.savingsChallenges) {
+            if (challenge.goalId !in goalIds) {
+                throw BackupFormatException("Backup savings challenge ${challenge.id} references missing goal ${challenge.goalId}.")
+            }
+        }
+        for (slot in ledger.challengeSkippedSlots) {
+            if (slot.challengeId !in challengeIds) {
+                throw BackupFormatException("Backup skipped slot references missing challenge ${slot.challengeId}.")
             }
         }
         for (alloc in ledger.savingsAllocations) {
@@ -511,6 +525,35 @@ object BackupSerializer {
                 })
             }
         })
+        put("savingsChallenges", JSONArray().apply {
+            s.savingsChallenges.forEach { c ->
+                put(JSONObject().apply {
+                    put("id", c.id)
+                    put("goalId", c.goalId)
+                    put("type", c.type)
+                    put("baseAmountSen", c.baseAmountSen)
+                    put("startEpochDay", c.startEpochDay)
+                    put("slotCount", c.slotCount)
+                    put("intervalDays", c.intervalDays)
+                    put("randomSeed", c.randomSeed)
+                    put("isPaused", c.isPaused)
+                    put("createdAtEpochMs", c.createdAtEpochMs)
+                    put("updatedAtEpochMs", c.updatedAtEpochMs)
+                })
+            }
+        })
+        put("challengeSkippedSlots", JSONArray().apply {
+            s.challengeSkippedSlots.forEach { k ->
+                put(JSONObject().apply { put("challengeId", k.challengeId); put("slotIndex", k.slotIndex) })
+            }
+        })
+        put("challengeStickers", JSONArray().apply {
+            s.challengeStickers.forEach { st ->
+                put(JSONObject().apply {
+                    put("id", st.id); put("challengeId", st.challengeId); put("stage", st.stage); put("earnedAtEpochMs", st.earnedAtEpochMs)
+                })
+            }
+        })
     }
 
     private fun decodeLedger(json: JSONObject): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
@@ -803,6 +846,29 @@ object BackupSerializer {
                 createdAtEpochMs = o.optLong("createdAtEpochMs", 0L),
                 updatedAtEpochMs = o.optLong("updatedAtEpochMs", 0L)
             )
+        },
+        // Absent in backups made before schema v11: restores as no challenges.
+        savingsChallenges = json.optArrayObjects("savingsChallenges").map { o ->
+            SavingsChallengeEntity(
+                id = o.getLong("id"),
+                goalId = o.getLong("goalId"),
+                type = o.getString("type"),
+                baseAmountSen = o.getLong("baseAmountSen"),
+                startEpochDay = o.getLong("startEpochDay"),
+                slotCount = o.getInt("slotCount"),
+                intervalDays = o.getInt("intervalDays"),
+                randomSeed = o.optLong("randomSeed", 0L),
+                isPaused = o.optBoolean("isPaused", false),
+                createdAtEpochMs = o.optLong("createdAtEpochMs", 0L),
+                updatedAtEpochMs = o.optLong("updatedAtEpochMs", 0L)
+            )
+        },
+        challengeSkippedSlots = json.optArrayObjects("challengeSkippedSlots").map { o ->
+            ChallengeSkippedSlotEntity(challengeId = o.getLong("challengeId"), slotIndex = o.getInt("slotIndex"))
+        },
+        challengeStickers = json.optArrayObjects("challengeStickers").map { o ->
+            ChallengeStickerEntity(id = o.getLong("id"), challengeId = o.getLong("challengeId"), stage = o.getString("stage"),
+                earnedAtEpochMs = o.optLong("earnedAtEpochMs", 0L))
         }
     )
 

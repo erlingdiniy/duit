@@ -853,7 +853,24 @@ fun DuitAppShell(
                             
                                                 }
                                                 DuitRoute.PLANNING -> {
+                                // Savings Challenges: public edition only, like the other v1.2 features.
+                                val challengesBinding = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                                    val challengesViewModel: com.diniy.duit.feature.savings.challenges.SavingsChallengesViewModel = viewModel(
+                                        factory = com.diniy.duit.feature.savings.challenges.SavingsChallengesViewModel.factory(container.savingsRepository)
+                                    )
+                                    val challengesState by challengesViewModel.uiState.collectAsStateWithLifecycle()
+                                    com.diniy.duit.feature.savings.challenges.SavingsChallengesBinding(
+                                        state = challengesState,
+                                        safeToSpendSen = homeState.summary.safeToSpendSen,
+                                        onSave = challengesViewModel::save,
+                                        onSetPaused = challengesViewModel::setPaused,
+                                        onSetSkipped = challengesViewModel::setSkipped,
+                                        onDelete = challengesViewModel::delete,
+                                        onRetry = challengesViewModel::retry
+                                    )
+                                } else null
                                 PlanningScreen(
+                                    challenges = challengesBinding,
                                     commissionEnabled = homeState.appSettings.commissionFeatureEnabled,
                                     uiState = planningState,
                                     contentPadding = screenPadding,
@@ -919,7 +936,29 @@ fun DuitAppShell(
                             
                                                 }
                                                 DuitRoute.INSIGHTS -> {
+                                // Money Personality: public edition only, offline and read-only.
+                                val personalityBinding = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                                    val personalityViewModel: com.diniy.duit.feature.personality.MoneyPersonalityViewModel = viewModel(
+                                        factory = com.diniy.duit.feature.personality.MoneyPersonalityViewModel.factory(
+                                            transactionRepository = container.transactionRepository,
+                                            categoryRepository = container.categoryRepository,
+                                            savingsRepository = container.savingsRepository,
+                                            budgetRepository = container.budgetRepository,
+                                            planningRepository = container.planningRepository,
+                                            obligationRepository = container.obligationRepository,
+                                            previewModeController = container.previewModeController
+                                        )
+                                    )
+                                    val personalityState by personalityViewModel.uiState.collectAsStateWithLifecycle()
+                                    com.diniy.duit.feature.personality.MoneyPersonalityBinding(
+                                        state = personalityState,
+                                        onPreviousMonth = personalityViewModel::previousMonth,
+                                        onNextMonth = personalityViewModel::nextMonth,
+                                        onRetry = personalityViewModel::retry
+                                    )
+                                } else null
                                 InsightsScreen(
+                                    personality = personalityBinding,
                                     commissionEnabled = homeState.appSettings.commissionFeatureEnabled,
                                     uiState = insightsState,
                                     contentPadding = screenPadding,

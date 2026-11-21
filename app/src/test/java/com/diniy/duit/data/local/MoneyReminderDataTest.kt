@@ -79,7 +79,7 @@ class MoneyReminderDataTest {
         // Room validates every table against the v10 entities after migrating (fails on any mismatch).
         val db = Room.databaseBuilder(context, DuitDatabase::class.java, dbFile.absolutePath)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-            .addMigrations(DuitDatabase.MIGRATION_9_10)
+            .addMigrations(DuitDatabase.MIGRATION_9_10, DuitDatabase.MIGRATION_10_11)
             .allowMainThreadQueries().build()
         try {
             assertEquals(310_000L, db.walletDao().observeAll().first().single().balanceSen)
@@ -101,7 +101,7 @@ class MoneyReminderDataTest {
             val snapshot = source.backupDao().exportFullSnapshot()
             val bytes = BackupCryptoEngine.encrypt(BackupSerializer.encodePayload(snapshot, prefs, createdAtEpochMs = 1), "Pass1234".toCharArray())
             val bundle = BackupSerializer.decodePayload(BackupCryptoEngine.inspectEnvelope(bytes), BackupCryptoEngine.decrypt(bytes, "Pass1234".toCharArray()))
-            assertEquals(10, bundle.header.dbSchemaVersion)
+            assertEquals(BackupCryptoEngine.CURRENT_DB_SCHEMA_VERSION, bundle.header.dbSchemaVersion)
             assertEquals(snapshot.moneyReminders, bundle.ledger.moneyReminders)
 
             restored.backupDao().replaceAllLedgerDataAtomically(bundle.ledger)

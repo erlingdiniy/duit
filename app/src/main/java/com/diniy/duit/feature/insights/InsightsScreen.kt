@@ -106,6 +106,7 @@ fun InsightsScreen(
     onEnablePreview: () -> Unit,
     onExitPreview: () -> Unit,
     onAddTransaction: () -> Unit = {},
+    personality: com.diniy.duit.feature.personality.MoneyPersonalityBinding? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = SpatialTheme.colors
@@ -113,6 +114,16 @@ fun InsightsScreen(
     val spacing = SpatialTheme.spacing
 
     var selectedTab by rememberSaveable { mutableStateOf(InsightsSectionTab.OVERVIEW) }
+    var showPersonality by rememberSaveable { mutableStateOf(false) }
+    if (showPersonality && personality != null) {
+        com.diniy.duit.feature.personality.MoneyPersonalityScreen(
+            state = personality.state,
+            onClose = { showPersonality = false },
+            onPreviousMonth = personality.onPreviousMonth,
+            onNextMonth = personality.onNextMonth,
+            onRetry = personality.onRetry
+        )
+    }
     var showCustomRangePicker by rememberSaveable { mutableStateOf(false) }
     var showPeriodSheet by rememberSaveable { mutableStateOf(false) }
     var showCommissionHistory by rememberSaveable { mutableStateOf(false) }
@@ -231,6 +242,9 @@ fun InsightsScreen(
 
             when (selectedTab) {
                 InsightsSectionTab.OVERVIEW -> {
+                    if (personality != null) item(key = "money_personality", contentType = "personality") {
+                        com.diniy.duit.feature.personality.MoneyPersonalityTeaserCard(personality.state, onOpen = { showPersonality = true })
+                    }
                     item(key = "financial_overview", contentType = "overview") {
                         FinancialOverviewHeroCard(
                             overview = uiState.overview,
