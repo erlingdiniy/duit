@@ -83,7 +83,7 @@ class SavingsChallengeDataTest {
         // Room validates every table against the v11 entities after migrating.
         val db = Room.databaseBuilder(context, DuitDatabase::class.java, dbFile.absolutePath)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-            .addMigrations(DuitDatabase.MIGRATION_10_11)
+            .addMigrations(DuitDatabase.MIGRATION_10_11, DuitDatabase.MIGRATION_11_12)
             .allowMainThreadQueries().build()
         try {
             val repo = OfflineFirstFinanceRepository(db)

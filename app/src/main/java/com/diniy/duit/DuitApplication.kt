@@ -79,6 +79,12 @@ class DuitContainer(application: Application) {
     val savingsRepository: SavingsRepository get() = financeRepository
     val budgetRepository: BudgetRepository get() = financeRepository
     val obligationRepository: ObligationRepository get() = financeRepository
+    val receiptFileStorage: com.diniy.duit.data.receipt.ReceiptFileStorage by lazy {
+        com.diniy.duit.data.receipt.ReceiptFileStorage(application)
+    }
+    val receiptRepository: com.diniy.duit.data.repository.ReceiptRepository by lazy {
+        com.diniy.duit.data.repository.OfflineFirstReceiptRepository(database.receiptDao(), receiptFileStorage)
+    }
     val userPreferencesRepository: UserPreferencesRepository by lazy {
         OfflineUserPreferencesRepository(preferencesDataStore)
     }
@@ -96,6 +102,7 @@ class DuitContainer(application: Application) {
             onFactoryResetFinancialData = {
                 withContext(Dispatchers.IO) {
                     database.clearAllTables()
+                    receiptFileStorage.clearAllFiles()
                 }
             }
         )
@@ -167,7 +174,8 @@ class DuitContainer(application: Application) {
             notificationHistoryRepository = notificationHistoryRepository,
             securityRepository = securityRepository,
             reminderScheduler = reminderScheduler,
-            widgetUpdateCoordinator = widgetUpdateCoordinator
+            widgetUpdateCoordinator = widgetUpdateCoordinator,
+            receiptFileStorage = receiptFileStorage
         )
     }
 

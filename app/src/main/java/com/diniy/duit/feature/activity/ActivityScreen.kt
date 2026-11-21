@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.HorizontalDivider
@@ -81,6 +82,7 @@ fun ActivityScreen(
     onOpenNewTransaction: (TransactionType) -> Unit,
     onSelectTransaction: (FinanceTransaction) -> Unit,
     onOpenCategories: () -> Unit,
+    onOpenReceiptVault: (() -> Unit)? = null,
     onEnablePreview: () -> Unit,
     onExitPreview: () -> Unit,
     onDismissError: () -> Unit,
@@ -124,13 +126,23 @@ fun ActivityScreen(
                         color = colors.secondaryText
                     )
                 }
-                // Phase 11F: mint bubble button; the duplicate "+" was removed (use the floating +).
-                com.diniy.duit.core.ui.components.CandyMintIconButton(
-                    icon = Icons.Rounded.Tune,
-                    contentDescription = "Manage categories",
-                    onClick = onOpenCategories,
-                    pressedTilt = 0f
-                )
+                // Phase 11F: mint bubble buttons (Receipt Vault in public edition + Categories).
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (onOpenReceiptVault != null) {
+                        com.diniy.duit.core.ui.components.CandyMintIconButton(
+                            icon = Icons.Rounded.ReceiptLong,
+                            contentDescription = "Receipt Vault",
+                            onClick = onOpenReceiptVault,
+                            pressedTilt = 0f
+                        )
+                    }
+                    com.diniy.duit.core.ui.components.CandyMintIconButton(
+                        icon = Icons.Rounded.Tune,
+                        contentDescription = "Manage categories",
+                        onClick = onOpenCategories,
+                        pressedTilt = 0f
+                    )
+                }
             }
         }
 

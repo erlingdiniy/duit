@@ -43,6 +43,8 @@ fun TransactionDetailSheet(
     walletsById: Map<Long, Wallet>,
     isReadOnlyPreview: Boolean = false,
     deleteError: String? = null,
+    linkedReceiptCount: Int = 0,
+    onOpenReceiptsForTransaction: (() -> Unit)? = null,
     onEdit: () -> Unit,
     onConfirmDelete: (Long) -> Unit,
     onDismiss: () -> Unit
@@ -124,6 +126,30 @@ fun TransactionDetailSheet(
                 if (transaction.note.isNotBlank()) {
                     HorizontalDivider(modifier = Modifier.paddingVertical(), color = glass.glassBorderSubtle)
                     DetailLine("Notes", transaction.note)
+                }
+                if (onOpenReceiptsForTransaction != null && !isReadOnlyPreview) {
+                    HorizontalDivider(modifier = Modifier.paddingVertical(), color = glass.glassBorderSubtle)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "Receipts",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (linkedReceiptCount > 0) "$linkedReceiptCount attached" else "None attached",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        TextButton(onClick = onOpenReceiptsForTransaction) {
+                            Text(if (linkedReceiptCount > 0) "Manage" else "Attach")
+                        }
+                    }
                 }
             }
 

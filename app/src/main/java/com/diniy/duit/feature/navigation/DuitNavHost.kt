@@ -155,6 +155,8 @@ fun DuitAppShell(
     var showSecuritySettings by rememberSaveable { mutableStateOf(false) }
     var showNotificationCentre by rememberSaveable { mutableStateOf(false) }
     var showCalendar by rememberSaveable { mutableStateOf(false) }
+    var showReceiptVault by rememberSaveable { mutableStateOf(false) }
+    var receiptDraftTxId by rememberSaveable { mutableStateOf<Long?>(null) }
     var calendarFocusDay by rememberSaveable { mutableStateOf<Long?>(null) }
     var showNotificationSettings by rememberSaveable { mutableStateOf(false) }
     var showReplayTour by rememberSaveable { mutableStateOf(false) }
@@ -447,6 +449,18 @@ fun DuitAppShell(
         )
         return
     }
+
+    val receiptVaultViewModel = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+        viewModel<com.diniy.duit.feature.receipts.ReceiptVaultViewModel>(
+            factory = com.diniy.duit.feature.receipts.ReceiptVaultViewModel.factory(
+                receiptRepository = container.receiptRepository,
+                transactionRepository = container.transactionRepository,
+                categoryRepository = container.categoryRepository,
+                previewModeController = container.previewModeController
+            )
+        )
+    } else null
+    val receiptVaultState = receiptVaultViewModel?.uiState?.collectAsStateWithLifecycle()?.value
 
     if (showCalendar) {
         val calendarViewModel: com.diniy.duit.feature.calendar.CalendarViewModel = viewModel(
@@ -846,6 +860,10 @@ fun DuitAppShell(
                                         categoryInitialType = TransactionType.EXPENSE
                                         showCategorySheet = true
                                     },
+                                    onOpenReceiptVault = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) ({
+                                        receiptDraftTxId = null
+                                        showReceiptVault = true
+                                    }) else null,
                                     onEnablePreview = activityViewModel::enableSamplePreview,
                                     onExitPreview = activityViewModel::exitSamplePreview,
                                     onDismissError = activityViewModel::dismissError
@@ -1043,11 +1061,18 @@ fun DuitAppShell(
     inspectedTransactionId?.let { txId ->
         val tx = homeState.transactions.firstOrNull { it.id == txId }
         if (tx != null) {
+            val linkedReceipts = receiptVaultState?.allReceipts?.count { it.transactionId == tx.id } ?: 0
             TransactionDetailSheet(
                 transaction = tx,
                 walletsById = activityState.walletsById,
                 isReadOnlyPreview = activityState.isSamplePreview,
                 deleteError = detailDeleteError,
+                linkedReceiptCount = linkedReceipts,
+                onOpenReceiptsForTransaction = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION && tx.type != TransactionType.TRANSFER) ({
+                    inspectedTransactionId = null
+                    receiptDraftTxId = if (linkedReceipts == 0) tx.id else null
+                    showReceiptVault = true
+                }) else null,
                 onEdit = {
                     inspectedTransactionId = null
                     editingTransactionId = tx.id
@@ -1070,6 +1095,26 @@ fun DuitAppShell(
                 }
             )
         }
+    }
+
+    if (showReceiptVault && receiptVaultViewModel != null && receiptVaultState != null) {
+        com.diniy.duit.feature.receipts.ReceiptVaultScreen(
+            state = receiptVaultState,
+            fileStorage = container.receiptFileStorage,
+            initialDraftTransaction = receiptDraftTxId?.let { id -> homeState.transactions.firstOrNull { it.id == id } },
+            onSelectTab = receiptVaultViewModel::selectTab,
+            onSearchQueryChange = receiptVaultViewModel::updateSearchQuery,
+            onSaveReceipt = { rec, onSaved, onErr ->
+                receiptVaultViewModel.saveReceipt(rec, onSaved = { onSaved() }, onError = onErr)
+            },
+            onLinkTransaction = receiptVaultViewModel::linkToTransaction,
+            onDeleteReceipt = receiptVaultViewModel::deleteReceipt,
+            onDismissError = receiptVaultViewModel::dismissError,
+            onClose = {
+                showReceiptVault = false
+                receiptDraftTxId = null
+            }
+        )
     }
 
     inspectedWalletId?.let { wId ->

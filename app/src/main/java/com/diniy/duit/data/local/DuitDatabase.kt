@@ -79,9 +79,10 @@ import com.diniy.duit.data.local.entity.WalletEntity
         MoneyReminderEntity::class,
         SavingsChallengeEntity::class,
         ChallengeSkippedSlotEntity::class,
-        ChallengeStickerEntity::class
+        ChallengeStickerEntity::class,
+        com.diniy.duit.data.local.entity.ReceiptEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(DuitTypeConverters::class)
@@ -107,6 +108,7 @@ abstract class DuitDatabase : RoomDatabase() {
     abstract fun backupDao(): BackupDao
     abstract fun moneyReminderDao(): MoneyReminderDao
     abstract fun savingsChallengeDao(): SavingsChallengeDao
+    abstract fun receiptDao(): com.diniy.duit.data.local.dao.ReceiptDao
 
     companion object {
         private const val DATABASE_NAME = "duit_ledger.db"
@@ -531,6 +533,33 @@ abstract class DuitDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive: Receipt Vault table only; every existing table and row is untouched. */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `receipts` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`transactionId` INTEGER, " +
+                        "`merchant` TEXT NOT NULL, " +
+                        "`dateEpochDay` INTEGER NOT NULL, " +
+                        "`amountSen` INTEGER, " +
+                        "`category` TEXT NOT NULL, " +
+                        "`note` TEXT NOT NULL, " +
+                        "`taxTag` TEXT NOT NULL, " +
+                        "`fileRelativePath` TEXT NOT NULL, " +
+                        "`mimeType` TEXT NOT NULL, " +
+                        "`originalFileName` TEXT NOT NULL, " +
+                        "`fileSizeBytes` INTEGER NOT NULL, " +
+                        "`createdAtEpochMs` INTEGER NOT NULL, " +
+                        "`updatedAtEpochMs` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`transactionId`) REFERENCES `transactions`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_receipts_transactionId` ON `receipts` (`transactionId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_receipts_dateEpochDay` ON `receipts` (`dateEpochDay`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_receipts_taxTag` ON `receipts` (`taxTag`)")
+            }
+        }
+
         @Volatile
         private var instance: DuitDatabase? = null
 
@@ -551,7 +580,8 @@ abstract class DuitDatabase : RoomDatabase() {
                         MIGRATION_7_8,
                         MIGRATION_8_9,
                         MIGRATION_9_10,
-                        MIGRATION_10_11
+                        MIGRATION_10_11,
+                        MIGRATION_11_12
                     )
                     .build()
                     .also { instance = it }

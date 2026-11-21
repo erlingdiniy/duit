@@ -1,6 +1,7 @@
 package com.diniy.duit.backup
 
 import com.diniy.duit.data.local.dao.BackupDao
+import com.diniy.duit.data.receipt.ReceiptFileStorage
 import com.diniy.duit.data.repository.UserPreferencesRepository
 import com.diniy.duit.notifications.NotificationHistoryRepository
 import com.diniy.duit.notifications.NotificationPreferencesRepository
@@ -24,7 +25,8 @@ class BackupRestoreCoordinator(
     private val securityRepository: SecurityRepository,
     private val reminderScheduler: ReminderScheduler,
     private val widgetUpdateCoordinator: WidgetUpdateCoordinator,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val receiptFileStorage: ReceiptFileStorage? = null
 ) {
 
     suspend fun loadStorageSummary(): LedgerStorageSummary = withContext(ioDispatcher) {
@@ -39,7 +41,8 @@ class BackupRestoreCoordinator(
             budgetCount = snap.budgets.size,
             commissionCount = snap.commissions.size,
             salaryCycleCount = snap.salaryCycles.size,
-            notificationHistoryCount = snap.notificationHistory.size
+            notificationHistoryCount = snap.notificationHistory.size,
+            receiptCount = snap.receipts.size
         )
     }
 
@@ -47,6 +50,14 @@ class BackupRestoreCoordinator(
         val passwordCopy = password.copyOf()
         try {
             val ledger = backupDao.exportFullSnapshot()
+            val receiptFiles = buildMap<String, ByteArray> {
+                val storage = receiptFileStorage ?: return@buildMap
+                ledger.receipts.forEach { r ->
+                    if (r.fileRelativePath.isNotBlank()) {
+                        storage.readFileBytes(r.fileRelativePath)?.let { put(r.fileRelativePath, it) }
+                    }
+                }
+            }
             val appSettings = userPreferencesRepository.observeAppSettings().first()
             val notifSettings = notificationPreferencesRepository.observeSettings().first()
             val sec = securityRepository.observeSecurityConfig().first()
@@ -64,7 +75,8 @@ class BackupRestoreCoordinator(
             val payloadJson = BackupSerializer.encodePayload(
                 ledger = ledger,
                 preferences = portablePrefs,
-                createdAtEpochMs = nowMs
+                createdAtEpochMs = nowMs,
+                receiptFiles = receiptFiles
             )
             BackupCryptoEngine.encrypt(
                 plaintextJson = payloadJson,
@@ -107,6 +119,7 @@ class BackupRestoreCoordinator(
 
         // Atomic Room replacement: throws & rolls back cleanly on any SQLite/FK failure.
         backupDao.replaceAllLedgerDataAtomically(bundle.ledger)
+        receiptFileStorage?.replaceAllFiles(bundle.receiptFiles)
 
         val validWalletIds = bundle.ledger.wallets.map { it.id }.toSet()
         val sanitizedAppSettings = bundle.preferences.appSettings.let { prefs ->
@@ -154,6 +167,7 @@ class BackupRestoreCoordinator(
      */
     suspend fun deleteAllFinancialData() = withContext(ioDispatcher) {
         backupDao.deleteAllLedgerDataAtomically()
+        receiptFileStorage?.clearAllFiles()
         userPreferencesRepository.setDefaultWalletId(null)
         reminderScheduler.enqueueImmediateSync()
         widgetUpdateCoordinator.refreshAllWidgetsNow()

@@ -17,6 +17,7 @@ import com.diniy.duit.data.local.entity.SavingsChallengeEntity
 import com.diniy.duit.data.local.entity.NotificationHistoryEntity
 import com.diniy.duit.data.local.entity.ObligationPaymentEntity
 import com.diniy.duit.data.local.entity.PayLaterPlanEntity
+import com.diniy.duit.data.local.entity.ReceiptEntity
 import com.diniy.duit.data.local.entity.SalaryCycleEntity
 import com.diniy.duit.data.local.entity.SavingsAllocationEntity
 import com.diniy.duit.data.local.entity.SavingsGoalEntity
@@ -47,6 +48,7 @@ import com.diniy.duit.notifications.NotificationSettingsSnapshot
 import com.diniy.duit.notifications.ReminderOffset
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Base64
 
 data class PortablePrivacyPreferences(
     val hideSensitiveBalances: Boolean = false,
@@ -72,14 +74,17 @@ data class BackupPreviewSummary(
     val savingsGoalCount: Int,
     val budgetCount: Int,
     val commissionCount: Int,
-    val salaryCycleCount: Int
+    val salaryCycleCount: Int,
+    val receiptCount: Int = 0
 )
 
 data class DecryptedBackupBundle(
     val header: BackupEnvelopeHeader,
     val ledger: LedgerDatabaseSnapshot,
     val preferences: PortablePreferencesBackup,
-    val preview: BackupPreviewSummary
+    val preview: BackupPreviewSummary,
+    /** Private receipt attachment bytes keyed by sanitized relative filename (schema v12+). */
+    val receiptFiles: Map<String, ByteArray> = emptyMap()
 )
 
 data class LedgerStorageSummary(
@@ -92,7 +97,8 @@ data class LedgerStorageSummary(
     val budgetCount: Int = 0,
     val commissionCount: Int = 0,
     val salaryCycleCount: Int = 0,
-    val notificationHistoryCount: Int = 0
+    val notificationHistoryCount: Int = 0,
+    val receiptCount: Int = 0
 ) {
     val totalFinancialRecords: Int
         get() = walletCount + transactionCount + commitmentCount + payLaterPlanCount +
@@ -110,13 +116,24 @@ object BackupSerializer {
         ledger: LedgerDatabaseSnapshot,
         preferences: PortablePreferencesBackup,
         createdAtEpochMs: Long = System.currentTimeMillis(),
-        dbSchemaVersion: Int = BackupCryptoEngine.CURRENT_DB_SCHEMA_VERSION
+        dbSchemaVersion: Int = BackupCryptoEngine.CURRENT_DB_SCHEMA_VERSION,
+        receiptFiles: Map<String, ByteArray> = emptyMap()
     ): String {
         return JSONObject().apply {
             put("dbSchemaVersion", dbSchemaVersion)
             put("createdAtEpochMs", createdAtEpochMs)
             put("ledger", encodeLedger(ledger))
             put("preferences", encodePreferences(preferences))
+            if (receiptFiles.isNotEmpty()) {
+                val b64 = Base64.getEncoder()
+                put("receiptFiles", JSONObject().apply {
+                    receiptFiles.forEach { (name, bytes) ->
+                        if (name.isNotBlank() && bytes.isNotEmpty()) {
+                            put(name, b64.encodeToString(bytes))
+                        }
+                    }
+                })
+            }
         }.toString()
     }
 
@@ -157,14 +174,30 @@ object BackupSerializer {
             savingsGoalCount = ledger.savingsGoals.size,
             budgetCount = ledger.budgets.size,
             commissionCount = ledger.commissions.size,
-            salaryCycleCount = ledger.salaryCycles.size
+            salaryCycleCount = ledger.salaryCycles.size,
+            receiptCount = ledger.receipts.size
         )
+
+        val receiptFiles = buildMap<String, ByteArray> {
+            val filesJson = root.optJSONObject("receiptFiles") ?: return@buildMap
+            val decoder = Base64.getDecoder()
+            val keys = filesJson.keys()
+            while (keys.hasNext()) {
+                val name = keys.next()
+                val encoded = filesJson.optString(name, "")
+                if (name.isNotBlank() && encoded.isNotBlank()) {
+                    val decoded = runCatching { decoder.decode(encoded) }.getOrNull()
+                    if (decoded != null && decoded.isNotEmpty()) put(name, decoded)
+                }
+            }
+        }
 
         return DecryptedBackupBundle(
             header = header,
             ledger = ledger,
             preferences = preferences,
-            preview = preview
+            preview = preview,
+            receiptFiles = receiptFiles
         )
     }
 
@@ -194,6 +227,12 @@ object BackupSerializer {
         for (alloc in ledger.savingsAllocations) {
             if (alloc.walletId !in walletIds || alloc.goalId !in goalIds) {
                 throw BackupFormatException("Backup savings allocation ${alloc.id} has invalid references.")
+            }
+        }
+        val txIds = ledger.transactions.map { it.id }.toSet()
+        for (receipt in ledger.receipts) {
+            if (receipt.transactionId != null && receipt.transactionId !in txIds) {
+                throw BackupFormatException("Backup receipt ${receipt.id} references missing transaction ${receipt.transactionId}.")
             }
         }
     }
@@ -554,6 +593,26 @@ object BackupSerializer {
                 })
             }
         })
+        put("receipts", JSONArray().apply {
+            s.receipts.forEach { r ->
+                put(JSONObject().apply {
+                    put("id", r.id)
+                    putNullable("transactionId", r.transactionId)
+                    put("merchant", r.merchant)
+                    put("dateEpochDay", r.dateEpochDay)
+                    putNullable("amountSen", r.amountSen)
+                    put("category", r.category)
+                    put("note", r.note)
+                    put("taxTag", r.taxTag)
+                    put("fileRelativePath", r.fileRelativePath)
+                    put("mimeType", r.mimeType)
+                    put("originalFileName", r.originalFileName)
+                    put("fileSizeBytes", r.fileSizeBytes)
+                    put("createdAtEpochMs", r.createdAtEpochMs)
+                    put("updatedAtEpochMs", r.updatedAtEpochMs)
+                })
+            }
+        })
     }
 
     private fun decodeLedger(json: JSONObject): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
@@ -869,6 +928,25 @@ object BackupSerializer {
         challengeStickers = json.optArrayObjects("challengeStickers").map { o ->
             ChallengeStickerEntity(id = o.getLong("id"), challengeId = o.getLong("challengeId"), stage = o.getString("stage"),
                 earnedAtEpochMs = o.optLong("earnedAtEpochMs", 0L))
+        },
+        // Absent in backups made before schema v12: restores as no receipts.
+        receipts = json.optArrayObjects("receipts").map { o ->
+            ReceiptEntity(
+                id = o.getLong("id"),
+                transactionId = o.optNullableLong("transactionId"),
+                merchant = o.optString("merchant", ""),
+                dateEpochDay = o.getLong("dateEpochDay"),
+                amountSen = o.optNullableLong("amountSen"),
+                category = o.optString("category", ""),
+                note = o.optString("note", ""),
+                taxTag = o.optString("taxTag", "NONE"),
+                fileRelativePath = o.optString("fileRelativePath", ""),
+                mimeType = o.optString("mimeType", ""),
+                originalFileName = o.optString("originalFileName", ""),
+                fileSizeBytes = o.optLong("fileSizeBytes", 0L),
+                createdAtEpochMs = o.optLong("createdAtEpochMs", 0L),
+                updatedAtEpochMs = o.optLong("updatedAtEpochMs", 0L)
+            )
         }
     )
 

@@ -350,7 +350,8 @@ class Phase3SalaryAndCommissionRepositoryTest {
                 DuitDatabase.MIGRATION_7_8,
                 DuitDatabase.MIGRATION_8_9,
                 DuitDatabase.MIGRATION_9_10,
-                DuitDatabase.MIGRATION_10_11
+                DuitDatabase.MIGRATION_10_11,
+                DuitDatabase.MIGRATION_11_12
             )
             .allowMainThreadQueries()
             .build()
