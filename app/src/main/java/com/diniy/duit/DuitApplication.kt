@@ -85,6 +85,9 @@ class DuitContainer(application: Application) {
     val receiptRepository: com.diniy.duit.data.repository.ReceiptRepository by lazy {
         com.diniy.duit.data.repository.OfflineFirstReceiptRepository(database.receiptDao(), receiptFileStorage)
     }
+    val milestoneRepository: com.diniy.duit.data.repository.MilestoneRepository by lazy {
+        com.diniy.duit.data.repository.OfflineFirstMilestoneRepository(database.milestoneDao())
+    }
     val userPreferencesRepository: UserPreferencesRepository by lazy {
         OfflineUserPreferencesRepository(preferencesDataStore)
     }

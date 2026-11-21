@@ -89,7 +89,7 @@ class ReceiptVaultDataTest {
         val (dir, storage) = tempStorage()
         val db = Room.databaseBuilder(context, DuitDatabase::class.java, dbFile.absolutePath)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-            .addMigrations(DuitDatabase.MIGRATION_11_12)
+            .addMigrations(DuitDatabase.MIGRATION_11_12, DuitDatabase.MIGRATION_12_13)
             .allowMainThreadQueries()
             .build()
         try {
@@ -268,7 +268,7 @@ class ReceiptVaultDataTest {
             val plain = BackupCryptoEngine.decrypt(encrypted, "Secret123!".toCharArray())
             val bundle = BackupSerializer.decodePayload(header, plain)
 
-            assertEquals(12, bundle.preview.dbSchemaVersion)
+            assertEquals(BackupCryptoEngine.CURRENT_DB_SCHEMA_VERSION, bundle.preview.dbSchemaVersion)
             assertEquals(2, bundle.preview.receiptCount)
             assertArrayEquals(pdfBytes, bundle.receiptFiles["receipt_books.pdf"])
 

@@ -80,9 +80,10 @@ import com.diniy.duit.data.local.entity.WalletEntity
         SavingsChallengeEntity::class,
         ChallengeSkippedSlotEntity::class,
         ChallengeStickerEntity::class,
-        com.diniy.duit.data.local.entity.ReceiptEntity::class
+        com.diniy.duit.data.local.entity.ReceiptEntity::class,
+        com.diniy.duit.data.local.entity.EarnedMilestoneEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(DuitTypeConverters::class)
@@ -109,6 +110,7 @@ abstract class DuitDatabase : RoomDatabase() {
     abstract fun moneyReminderDao(): MoneyReminderDao
     abstract fun savingsChallengeDao(): SavingsChallengeDao
     abstract fun receiptDao(): com.diniy.duit.data.local.dao.ReceiptDao
+    abstract fun milestoneDao(): com.diniy.duit.data.local.dao.MilestoneDao
 
     companion object {
         private const val DATABASE_NAME = "duit_ledger.db"
@@ -560,6 +562,20 @@ abstract class DuitDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive: Little Wins Club milestone stickers only; all existing tables and rows stay untouched. */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `earned_milestones` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`milestoneKey` TEXT NOT NULL, " +
+                        "`earnedAtEpochMs` INTEGER NOT NULL, " +
+                        "`celebratedAtEpochMs` INTEGER)"
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_earned_milestones_milestoneKey` ON `earned_milestones` (`milestoneKey`)")
+            }
+        }
+
         @Volatile
         private var instance: DuitDatabase? = null
 
@@ -581,7 +597,8 @@ abstract class DuitDatabase : RoomDatabase() {
                         MIGRATION_8_9,
                         MIGRATION_9_10,
                         MIGRATION_10_11,
-                        MIGRATION_11_12
+                        MIGRATION_11_12,
+                        MIGRATION_12_13
                     )
                     .build()
                     .also { instance = it }

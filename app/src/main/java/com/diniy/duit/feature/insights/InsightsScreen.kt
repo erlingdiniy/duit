@@ -107,6 +107,7 @@ fun InsightsScreen(
     onExitPreview: () -> Unit,
     onAddTransaction: () -> Unit = {},
     personality: com.diniy.duit.feature.personality.MoneyPersonalityBinding? = null,
+    littleWins: com.diniy.duit.feature.wins.LittleWinsBinding? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = SpatialTheme.colors
@@ -115,6 +116,7 @@ fun InsightsScreen(
 
     var selectedTab by rememberSaveable { mutableStateOf(InsightsSectionTab.OVERVIEW) }
     var showPersonality by rememberSaveable { mutableStateOf(false) }
+    var showLittleWins by rememberSaveable { mutableStateOf(false) }
     if (showPersonality && personality != null) {
         com.diniy.duit.feature.personality.MoneyPersonalityScreen(
             state = personality.state,
@@ -122,6 +124,14 @@ fun InsightsScreen(
             onPreviousMonth = personality.onPreviousMonth,
             onNextMonth = personality.onNextMonth,
             onRetry = personality.onRetry
+        )
+    }
+    if (showLittleWins && littleWins != null) {
+        com.diniy.duit.feature.wins.LittleWinsClubScreen(
+            state = littleWins.state,
+            onSelectCategory = littleWins.onSelectCategory,
+            onMarkCelebrated = littleWins.onMarkCelebrated,
+            onClose = { showLittleWins = false }
         )
     }
     var showCustomRangePicker by rememberSaveable { mutableStateOf(false) }
@@ -244,6 +254,9 @@ fun InsightsScreen(
                 InsightsSectionTab.OVERVIEW -> {
                     if (personality != null) item(key = "money_personality", contentType = "personality") {
                         com.diniy.duit.feature.personality.MoneyPersonalityTeaserCard(personality.state, onOpen = { showPersonality = true })
+                    }
+                    if (littleWins != null) item(key = "little_wins_club", contentType = "little_wins") {
+                        com.diniy.duit.feature.wins.LittleWinsTeaserCard(littleWins.state, onOpen = { showLittleWins = true })
                     }
                     item(key = "financial_overview", contentType = "overview") {
                         FinancialOverviewHeroCard(

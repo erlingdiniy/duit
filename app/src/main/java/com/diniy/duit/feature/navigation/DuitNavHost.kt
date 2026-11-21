@@ -975,8 +975,29 @@ fun DuitAppShell(
                                         onRetry = personalityViewModel::retry
                                     )
                                 } else null
+                                val littleWinsBinding = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                                    val littleWinsViewModel: com.diniy.duit.feature.wins.LittleWinsViewModel = viewModel(
+                                        factory = com.diniy.duit.feature.wins.LittleWinsViewModel.factory(
+                                            savingsRepository = container.savingsRepository,
+                                            budgetRepository = container.budgetRepository,
+                                            transactionRepository = container.transactionRepository,
+                                            categoryRepository = container.categoryRepository,
+                                            planningRepository = container.planningRepository,
+                                            obligationRepository = container.obligationRepository,
+                                            milestoneRepository = container.milestoneRepository,
+                                            previewModeController = container.previewModeController
+                                        )
+                                    )
+                                    val littleWinsState by littleWinsViewModel.uiState.collectAsStateWithLifecycle()
+                                    com.diniy.duit.feature.wins.LittleWinsBinding(
+                                        state = littleWinsState,
+                                        onSelectCategory = littleWinsViewModel::selectCategory,
+                                        onMarkCelebrated = littleWinsViewModel::markCelebrated
+                                    )
+                                } else null
                                 InsightsScreen(
                                     personality = personalityBinding,
+                                    littleWins = littleWinsBinding,
                                     commissionEnabled = homeState.appSettings.commissionFeatureEnabled,
                                     uiState = insightsState,
                                     contentPadding = screenPadding,

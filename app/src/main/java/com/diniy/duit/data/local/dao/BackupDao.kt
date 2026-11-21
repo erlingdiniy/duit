@@ -14,6 +14,7 @@ import com.diniy.duit.data.local.entity.CommissionSourceEntity
 import com.diniy.duit.data.local.entity.CommitmentEntity
 import com.diniy.duit.data.local.entity.DailySalesRecordEntity
 import com.diniy.duit.data.local.entity.DebtEntity
+import com.diniy.duit.data.local.entity.EarnedMilestoneEntity
 import com.diniy.duit.data.local.entity.ChallengeSkippedSlotEntity
 import com.diniy.duit.data.local.entity.ChallengeStickerEntity
 import com.diniy.duit.data.local.entity.MoneyReminderEntity
@@ -55,7 +56,9 @@ data class LedgerDatabaseSnapshot(
     val challengeSkippedSlots: List<ChallengeSkippedSlotEntity> = emptyList(),
     val challengeStickers: List<ChallengeStickerEntity> = emptyList(),
     /** Schema v12+. Older backups have none, so it defaults to empty on restore. */
-    val receipts: List<ReceiptEntity> = emptyList()
+    val receipts: List<ReceiptEntity> = emptyList(),
+    /** Schema v13+. Older backups have none, so it defaults to empty on restore. */
+    val earnedMilestones: List<EarnedMilestoneEntity> = emptyList()
 )
 
 @Dao
@@ -130,6 +133,9 @@ interface BackupDao {
     @Query("SELECT * FROM receipts ORDER BY id ASC")
     suspend fun getAllReceipts(): List<ReceiptEntity>
 
+    @Query("SELECT * FROM earned_milestones ORDER BY id ASC")
+    suspend fun getAllEarnedMilestones(): List<EarnedMilestoneEntity>
+
     @Transaction
     suspend fun exportFullSnapshot(): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
         wallets = getAllWallets(),
@@ -154,7 +160,8 @@ interface BackupDao {
         savingsChallenges = getAllSavingsChallenges(),
         challengeSkippedSlots = getAllChallengeSkippedSlots(),
         challengeStickers = getAllChallengeStickers(),
-        receipts = getAllReceipts()
+        receipts = getAllReceipts(),
+        earnedMilestones = getAllEarnedMilestones()
     )
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -241,6 +248,12 @@ interface BackupDao {
     @Query("DELETE FROM receipts")
     suspend fun deleteAllReceipts()
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertEarnedMilestones(items: List<EarnedMilestoneEntity>)
+
+    @Query("DELETE FROM earned_milestones")
+    suspend fun deleteAllEarnedMilestones()
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAllTransactions()
 
@@ -321,6 +334,7 @@ interface BackupDao {
         deleteAllCategories()
         deleteAllNotificationHistory()
         deleteAllMoneyReminders()
+        deleteAllEarnedMilestones()
         deleteAllWallets()
     }
 
@@ -351,5 +365,6 @@ interface BackupDao {
         insertChallengeSkippedSlots(snapshot.challengeSkippedSlots)
         insertChallengeStickers(snapshot.challengeStickers)
         insertReceipts(snapshot.receipts)
+        insertEarnedMilestones(snapshot.earnedMilestones)
     }
 }

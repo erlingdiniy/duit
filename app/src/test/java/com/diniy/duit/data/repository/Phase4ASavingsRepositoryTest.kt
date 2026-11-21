@@ -431,7 +431,8 @@ class Phase4ASavingsRepositoryTest {
                 DuitDatabase.MIGRATION_8_9,
                 DuitDatabase.MIGRATION_9_10,
                 DuitDatabase.MIGRATION_10_11,
-                DuitDatabase.MIGRATION_11_12
+                DuitDatabase.MIGRATION_11_12,
+                DuitDatabase.MIGRATION_12_13
             )
             .allowMainThreadQueries()
             .build()
@@ -463,7 +464,8 @@ class Phase4ASavingsRepositoryTest {
                 DuitDatabase.MIGRATION_8_9,
                 DuitDatabase.MIGRATION_9_10,
                 DuitDatabase.MIGRATION_10_11,
-                DuitDatabase.MIGRATION_11_12
+                DuitDatabase.MIGRATION_11_12,
+                DuitDatabase.MIGRATION_12_13
             )
             .allowMainThreadQueries()
             .build()

@@ -10,6 +10,7 @@ import com.diniy.duit.data.local.entity.CommissionSourceEntity
 import com.diniy.duit.data.local.entity.CommitmentEntity
 import com.diniy.duit.data.local.entity.DailySalesRecordEntity
 import com.diniy.duit.data.local.entity.DebtEntity
+import com.diniy.duit.data.local.entity.EarnedMilestoneEntity
 import com.diniy.duit.data.local.entity.ChallengeSkippedSlotEntity
 import com.diniy.duit.data.local.entity.ChallengeStickerEntity
 import com.diniy.duit.data.local.entity.MoneyReminderEntity
@@ -613,6 +614,16 @@ object BackupSerializer {
                 })
             }
         })
+        put("earnedMilestones", JSONArray().apply {
+            s.earnedMilestones.forEach { m ->
+                put(JSONObject().apply {
+                    put("id", m.id)
+                    put("milestoneKey", m.milestoneKey)
+                    put("earnedAtEpochMs", m.earnedAtEpochMs)
+                    putNullable("celebratedAtEpochMs", m.celebratedAtEpochMs)
+                })
+            }
+        })
     }
 
     private fun decodeLedger(json: JSONObject): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
@@ -946,6 +957,15 @@ object BackupSerializer {
                 fileSizeBytes = o.optLong("fileSizeBytes", 0L),
                 createdAtEpochMs = o.optLong("createdAtEpochMs", 0L),
                 updatedAtEpochMs = o.optLong("updatedAtEpochMs", 0L)
+            )
+        },
+        // Absent in backups made before schema v13: restores as no milestone stickers.
+        earnedMilestones = json.optArrayObjects("earnedMilestones").map { o ->
+            EarnedMilestoneEntity(
+                id = o.getLong("id"),
+                milestoneKey = o.getString("milestoneKey"),
+                earnedAtEpochMs = o.optLong("earnedAtEpochMs", 0L),
+                celebratedAtEpochMs = o.optNullableLong("celebratedAtEpochMs")
             )
         }
     )
