@@ -81,9 +81,10 @@ import com.diniy.duit.data.local.entity.WalletEntity
         ChallengeSkippedSlotEntity::class,
         ChallengeStickerEntity::class,
         com.diniy.duit.data.local.entity.ReceiptEntity::class,
-        com.diniy.duit.data.local.entity.EarnedMilestoneEntity::class
+        com.diniy.duit.data.local.entity.EarnedMilestoneEntity::class,
+        com.diniy.duit.data.local.entity.TaxReliefEntryEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 @TypeConverters(DuitTypeConverters::class)
@@ -111,6 +112,7 @@ abstract class DuitDatabase : RoomDatabase() {
     abstract fun savingsChallengeDao(): SavingsChallengeDao
     abstract fun receiptDao(): com.diniy.duit.data.local.dao.ReceiptDao
     abstract fun milestoneDao(): com.diniy.duit.data.local.dao.MilestoneDao
+    abstract fun taxReliefDao(): com.diniy.duit.data.local.dao.TaxReliefDao
 
     companion object {
         private const val DATABASE_NAME = "duit_ledger.db"
@@ -576,6 +578,31 @@ abstract class DuitDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive: My Tax Pocket relief entries only; all existing tables and rows stay untouched. */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `tax_relief_entries` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`assessmentYear` INTEGER NOT NULL, " +
+                        "`categoryKey` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`dateEpochDay` INTEGER NOT NULL, " +
+                        "`totalSpentSen` INTEGER, " +
+                        "`eligibleAmountSen` INTEGER NOT NULL, " +
+                        "`receiptId` INTEGER, " +
+                        "`reviewStatus` TEXT NOT NULL, " +
+                        "`note` TEXT NOT NULL, " +
+                        "`createdAtEpochMs` INTEGER NOT NULL, " +
+                        "`updatedAtEpochMs` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tax_relief_entries_assessmentYear` ON `tax_relief_entries` (`assessmentYear`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tax_relief_entries_assessmentYear_categoryKey` ON `tax_relief_entries` (`assessmentYear`, `categoryKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tax_relief_entries_receiptId` ON `tax_relief_entries` (`receiptId`)")
+            }
+        }
+
         @Volatile
         private var instance: DuitDatabase? = null
 
@@ -598,7 +625,8 @@ abstract class DuitDatabase : RoomDatabase() {
                         MIGRATION_9_10,
                         MIGRATION_10_11,
                         MIGRATION_11_12,
-                        MIGRATION_12_13
+                        MIGRATION_12_13,
+                        MIGRATION_13_14
                     )
                     .build()
                     .also { instance = it }

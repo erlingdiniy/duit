@@ -168,7 +168,7 @@ class LittleWinsClubTest {
 
         val db = Room.databaseBuilder(context, DuitDatabase::class.java, dbFile.absolutePath)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-            .addMigrations(DuitDatabase.MIGRATION_12_13)
+            .addMigrations(DuitDatabase.MIGRATION_12_13, DuitDatabase.MIGRATION_13_14)
             .allowMainThreadQueries()
             .build()
         try {
@@ -196,7 +196,7 @@ class LittleWinsClubTest {
                 BackupCryptoEngine.inspectEnvelope(enc),
                 BackupCryptoEngine.decrypt(enc, "Secret123!".toCharArray())
             )
-            assertEquals(13, bundle.preview.dbSchemaVersion)
+            assertEquals(BackupCryptoEngine.CURRENT_DB_SCHEMA_VERSION, bundle.preview.dbSchemaVersion)
             assertEquals(1, bundle.ledger.earnedMilestones.size)
             assertEquals(LittleWinType.SAVINGS_FIRST_DEPOSIT.key, bundle.ledger.earnedMilestones.single().milestoneKey)
 

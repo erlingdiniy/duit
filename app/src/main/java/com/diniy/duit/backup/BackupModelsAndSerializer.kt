@@ -23,6 +23,7 @@ import com.diniy.duit.data.local.entity.SalaryCycleEntity
 import com.diniy.duit.data.local.entity.SavingsAllocationEntity
 import com.diniy.duit.data.local.entity.SavingsGoalEntity
 import com.diniy.duit.data.local.entity.SavingsMovementEntity
+import com.diniy.duit.data.local.entity.TaxReliefEntryEntity
 import com.diniy.duit.data.local.entity.TransactionEntity
 import com.diniy.duit.data.local.entity.WalletEntity
 import com.diniy.duit.domain.model.AnimationIntensity
@@ -234,6 +235,12 @@ object BackupSerializer {
         for (receipt in ledger.receipts) {
             if (receipt.transactionId != null && receipt.transactionId !in txIds) {
                 throw BackupFormatException("Backup receipt ${receipt.id} references missing transaction ${receipt.transactionId}.")
+            }
+        }
+        val receiptIds = ledger.receipts.map { it.id }.toSet()
+        for (taxEntry in ledger.taxReliefEntries) {
+            if (taxEntry.receiptId != null && taxEntry.receiptId !in receiptIds) {
+                throw BackupFormatException("Backup tax entry ${taxEntry.id} references missing receipt ${taxEntry.receiptId}.")
             }
         }
     }
@@ -624,6 +631,24 @@ object BackupSerializer {
                 })
             }
         })
+        put("taxReliefEntries", JSONArray().apply {
+            s.taxReliefEntries.forEach { t ->
+                put(JSONObject().apply {
+                    put("id", t.id)
+                    put("assessmentYear", t.assessmentYear)
+                    put("categoryKey", t.categoryKey)
+                    put("title", t.title)
+                    put("dateEpochDay", t.dateEpochDay)
+                    putNullable("totalSpentSen", t.totalSpentSen)
+                    put("eligibleAmountSen", t.eligibleAmountSen)
+                    putNullable("receiptId", t.receiptId)
+                    put("reviewStatus", t.reviewStatus)
+                    put("note", t.note)
+                    put("createdAtEpochMs", t.createdAtEpochMs)
+                    put("updatedAtEpochMs", t.updatedAtEpochMs)
+                })
+            }
+        })
     }
 
     private fun decodeLedger(json: JSONObject): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
@@ -966,6 +991,23 @@ object BackupSerializer {
                 milestoneKey = o.getString("milestoneKey"),
                 earnedAtEpochMs = o.optLong("earnedAtEpochMs", 0L),
                 celebratedAtEpochMs = o.optNullableLong("celebratedAtEpochMs")
+            )
+        },
+        // Absent in backups made before schema v14: restores as no tax relief entries.
+        taxReliefEntries = json.optArrayObjects("taxReliefEntries").map { o ->
+            TaxReliefEntryEntity(
+                id = o.getLong("id"),
+                assessmentYear = o.getInt("assessmentYear"),
+                categoryKey = o.getString("categoryKey"),
+                title = o.optString("title", ""),
+                dateEpochDay = o.getLong("dateEpochDay"),
+                totalSpentSen = o.optNullableLong("totalSpentSen"),
+                eligibleAmountSen = o.getLong("eligibleAmountSen"),
+                receiptId = o.optNullableLong("receiptId"),
+                reviewStatus = o.optString("reviewStatus", "NEEDS_REVIEW"),
+                note = o.optString("note", ""),
+                createdAtEpochMs = o.optLong("createdAtEpochMs", 0L),
+                updatedAtEpochMs = o.optLong("updatedAtEpochMs", 0L)
             )
         }
     )

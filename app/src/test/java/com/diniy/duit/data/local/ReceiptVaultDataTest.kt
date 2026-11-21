@@ -89,7 +89,7 @@ class ReceiptVaultDataTest {
         val (dir, storage) = tempStorage()
         val db = Room.databaseBuilder(context, DuitDatabase::class.java, dbFile.absolutePath)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-            .addMigrations(DuitDatabase.MIGRATION_11_12, DuitDatabase.MIGRATION_12_13)
+            .addMigrations(DuitDatabase.MIGRATION_11_12, DuitDatabase.MIGRATION_12_13, DuitDatabase.MIGRATION_13_14)
             .allowMainThreadQueries()
             .build()
         try {

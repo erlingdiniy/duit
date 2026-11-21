@@ -27,6 +27,7 @@ import com.diniy.duit.data.local.entity.SalaryCycleEntity
 import com.diniy.duit.data.local.entity.SavingsAllocationEntity
 import com.diniy.duit.data.local.entity.SavingsGoalEntity
 import com.diniy.duit.data.local.entity.SavingsMovementEntity
+import com.diniy.duit.data.local.entity.TaxReliefEntryEntity
 import com.diniy.duit.data.local.entity.TransactionEntity
 import com.diniy.duit.data.local.entity.WalletEntity
 
@@ -58,7 +59,9 @@ data class LedgerDatabaseSnapshot(
     /** Schema v12+. Older backups have none, so it defaults to empty on restore. */
     val receipts: List<ReceiptEntity> = emptyList(),
     /** Schema v13+. Older backups have none, so it defaults to empty on restore. */
-    val earnedMilestones: List<EarnedMilestoneEntity> = emptyList()
+    val earnedMilestones: List<EarnedMilestoneEntity> = emptyList(),
+    /** Schema v14+. Older backups have none, so it defaults to empty on restore. */
+    val taxReliefEntries: List<TaxReliefEntryEntity> = emptyList()
 )
 
 @Dao
@@ -136,6 +139,9 @@ interface BackupDao {
     @Query("SELECT * FROM earned_milestones ORDER BY id ASC")
     suspend fun getAllEarnedMilestones(): List<EarnedMilestoneEntity>
 
+    @Query("SELECT * FROM tax_relief_entries ORDER BY id ASC")
+    suspend fun getAllTaxReliefEntries(): List<TaxReliefEntryEntity>
+
     @Transaction
     suspend fun exportFullSnapshot(): LedgerDatabaseSnapshot = LedgerDatabaseSnapshot(
         wallets = getAllWallets(),
@@ -161,7 +167,8 @@ interface BackupDao {
         challengeSkippedSlots = getAllChallengeSkippedSlots(),
         challengeStickers = getAllChallengeStickers(),
         receipts = getAllReceipts(),
-        earnedMilestones = getAllEarnedMilestones()
+        earnedMilestones = getAllEarnedMilestones(),
+        taxReliefEntries = getAllTaxReliefEntries()
     )
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -254,6 +261,12 @@ interface BackupDao {
     @Query("DELETE FROM earned_milestones")
     suspend fun deleteAllEarnedMilestones()
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertTaxReliefEntries(items: List<TaxReliefEntryEntity>)
+
+    @Query("DELETE FROM tax_relief_entries")
+    suspend fun deleteAllTaxReliefEntries()
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAllTransactions()
 
@@ -311,6 +324,7 @@ interface BackupDao {
     @Transaction
     suspend fun deleteAllLedgerDataAtomically() {
         // Delete child/FK-referencing tables first to honor ForeignKey constraints.
+        deleteAllTaxReliefEntries()
         deleteAllReceipts()
         deleteAllTransactions()
         deleteAllSavingsAllocations()
@@ -366,5 +380,6 @@ interface BackupDao {
         insertChallengeStickers(snapshot.challengeStickers)
         insertReceipts(snapshot.receipts)
         insertEarnedMilestones(snapshot.earnedMilestones)
+        insertTaxReliefEntries(snapshot.taxReliefEntries)
     }
 }

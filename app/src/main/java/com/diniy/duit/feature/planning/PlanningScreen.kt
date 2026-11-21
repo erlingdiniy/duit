@@ -159,6 +159,7 @@ fun PlanningScreen(
     onCopyPreviousMonthBudgets: (() -> Unit, (String) -> Unit) -> Unit,
     onSaveCommitmentDetail: (Commitment, () -> Unit, (String) -> Unit) -> Unit,
     challenges: com.diniy.duit.feature.savings.challenges.SavingsChallengesBinding? = null,
+    taxPocket: com.diniy.duit.feature.tax.TaxPocketBinding? = null,
     onSetCommitmentArchived: (Long, Boolean, () -> Unit, (String) -> Unit) -> Unit,
     onDeleteCommitment: (Long, () -> Unit, (String) -> Unit) -> Unit,
     onRecordCommitmentPayment: (Long, Long, Long, String, Long, String, () -> Unit, (String) -> Unit) -> Unit,
@@ -218,6 +219,7 @@ fun PlanningScreen(
     var actionGoalId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showInactiveGoals by rememberSaveable { mutableStateOf(false) }
     var showChallenges by rememberSaveable { mutableStateOf(false) }
+    var showTaxPocket by rememberSaveable { mutableStateOf(false) }
     var openChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
     // null = closed, 0 = new challenge, otherwise the id being edited.
     var editingChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -238,6 +240,13 @@ fun PlanningScreen(
     var inspectedDebtId by rememberSaveable { mutableStateOf<Long?>(null) }
     var debtFilterDirection by rememberSaveable { mutableStateOf<DebtDirection?>(null) }
     var showArchivedDebts by rememberSaveable { mutableStateOf(false) }
+
+    if (showTaxPocket && taxPocket != null) {
+        com.diniy.duit.feature.tax.MyTaxPocketScreen(
+            binding = taxPocket,
+            onClose = { showTaxPocket = false }
+        )
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -296,6 +305,13 @@ fun PlanningScreen(
                     accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.lavender,
                     onClick = onOpenCategories
                 )
+                if (taxPocket != null) {
+                    com.diniy.duit.core.ui.components.SpatialGlassPill(
+                        label = "Tax Relief",
+                        accentColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.aqua,
+                        onClick = { showTaxPocket = true }
+                    )
+                }
             }
         }
 

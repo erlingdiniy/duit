@@ -79,7 +79,7 @@ class MoneyReminderDataTest {
         // Room validates every table against the v10 entities after migrating (fails on any mismatch).
         val db = Room.databaseBuilder(context, DuitDatabase::class.java, dbFile.absolutePath)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-            .addMigrations(DuitDatabase.MIGRATION_9_10, DuitDatabase.MIGRATION_10_11, DuitDatabase.MIGRATION_11_12, DuitDatabase.MIGRATION_12_13)
+            .addMigrations(DuitDatabase.MIGRATION_9_10, DuitDatabase.MIGRATION_10_11, DuitDatabase.MIGRATION_11_12, DuitDatabase.MIGRATION_12_13, DuitDatabase.MIGRATION_13_14)
             .allowMainThreadQueries().build()
         try {
             assertEquals(310_000L, db.walletDao().observeAll().first().single().balanceSen)

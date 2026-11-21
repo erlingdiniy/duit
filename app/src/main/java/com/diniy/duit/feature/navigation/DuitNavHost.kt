@@ -887,8 +887,26 @@ fun DuitAppShell(
                                         onRetry = challengesViewModel::retry
                                     )
                                 } else null
+                                val taxPocketBinding = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                                    val taxViewModel: com.diniy.duit.feature.tax.TaxReliefViewModel = viewModel(
+                                        factory = com.diniy.duit.feature.tax.TaxReliefViewModel.factory(
+                                            taxReliefRepository = container.taxReliefRepository,
+                                            receiptRepository = container.receiptRepository,
+                                            previewModeController = container.previewModeController
+                                        )
+                                    )
+                                    val taxState by taxViewModel.uiState.collectAsStateWithLifecycle()
+                                    com.diniy.duit.feature.tax.TaxPocketBinding(
+                                        state = taxState,
+                                        onSelectYear = taxViewModel::selectYear,
+                                        onSaveEntry = taxViewModel::saveEntry,
+                                        onUpdateStatus = taxViewModel::updateStatus,
+                                        onDeleteEntry = taxViewModel::deleteEntry
+                                    )
+                                } else null
                                 PlanningScreen(
                                     challenges = challengesBinding,
+                                    taxPocket = taxPocketBinding,
                                     commissionEnabled = homeState.appSettings.commissionFeatureEnabled,
                                     uiState = planningState,
                                     contentPadding = screenPadding,

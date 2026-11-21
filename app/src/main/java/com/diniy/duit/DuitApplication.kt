@@ -88,6 +88,9 @@ class DuitContainer(application: Application) {
     val milestoneRepository: com.diniy.duit.data.repository.MilestoneRepository by lazy {
         com.diniy.duit.data.repository.OfflineFirstMilestoneRepository(database.milestoneDao())
     }
+    val taxReliefRepository: com.diniy.duit.data.repository.TaxReliefRepository by lazy {
+        com.diniy.duit.data.repository.OfflineFirstTaxReliefRepository(database.taxReliefDao())
+    }
     val userPreferencesRepository: UserPreferencesRepository by lazy {
         OfflineUserPreferencesRepository(preferencesDataStore)
     }
