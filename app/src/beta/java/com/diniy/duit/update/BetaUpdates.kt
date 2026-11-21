@@ -197,13 +197,17 @@ internal fun findReleaseNotes(releases: JSONArray, installedCode: Long): String?
 
 /**
  * Stable releases are tagged vX.Y.Z (not prerelease) with asset duit-X.Y.Z.apk, and their
- * versionCode is X*1_000_000 + Y*1_000 + Z, so 1.0.0 is above every beta-N. Betas stay beta-N
- * prereleases with asset duit-beta-N.apk. Returns (versionCode, asset name) or null.
+ * versionCode is X*1_000_000 + Y*1_000 + Z, so 1.0.0 is above every beta-N. Closed betas are
+ * vX.Y.0-beta.N prereleases with asset duit-X.Y.0-beta.N.apk, coded just below stable X.Y.0
+ * ([closedBetaVersionCode]). Legacy beta-N prereleases keep code N. Returns (versionCode, asset name) or null.
  */
 internal fun releaseIdentity(release: org.json.JSONObject): Pair<Long, String>? {
     val tag = release.optString("tag_name")
     return if (release.optBoolean("prerelease")) {
-        TAG.matchEntire(tag)?.groupValues?.get(1)?.toLongOrNull()?.let { it to "duit-beta-$it.apk" }
+        CLOSED_BETA_TAG.matchEntire(tag)?.destructured?.let { (major, minor, patch, n) ->
+            closedBetaVersionCode(major.toInt(), minor.toInt(), patch.toInt(), n.toInt())
+                ?.let { it to "duit-$major.$minor.$patch-beta.$n.apk" }
+        } ?: TAG.matchEntire(tag)?.groupValues?.get(1)?.toLongOrNull()?.let { it to "duit-beta-$it.apk" }
     } else {
         STABLE_TAG.matchEntire(tag)?.destructured?.let { (major, minor, patch) ->
             stableVersionCode(major.toInt(), minor.toInt(), patch.toInt()) to "duit-$major.$minor.$patch.apk"
@@ -213,6 +217,11 @@ internal fun releaseIdentity(release: org.json.JSONObject): Pair<Long, String>? 
 
 internal fun stableVersionCode(major: Int, minor: Int, patch: Int): Long =
     major * 1_000_000L + minor * 1_000L + patch
+
+/** X.Y.0-beta.N (N 1..99) = stable X.Y.0 - 100 + N, so 1.2.0-beta.1 = 1001901. Same rule as app/build.gradle.kts. */
+internal fun closedBetaVersionCode(major: Int, minor: Int, patch: Int, n: Int): Long? =
+    if (patch != 0 || n !in 1..99 || major * 1_000 + minor == 0) null
+    else stableVersionCode(major, minor, 0) - 100 + n
 
 internal fun selectBetaRelease(
     releases: JSONArray,
@@ -279,6 +288,7 @@ private inline fun <T> request(start: URI, hosts: Set<String>, read: (HttpsURLCo
 
 private val DOWNLOAD_HOSTS = setOf("github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com")
 private val TAG = Regex("beta-([1-9][0-9]{0,9})")
+private val CLOSED_BETA_TAG = Regex("""v([0-9]{1,3})[.]([0-9]{1,3})[.]([0-9]{1,3})-beta[.]([1-9][0-9]?)""")
 private val STABLE_TAG = Regex("""v([0-9]{1,3})[.]([0-9]{1,3})[.]([0-9]{1,3})""")
 private val DIGEST = Regex("sha256:([0-9a-fA-F]{64})")
 private const val MAX_METADATA_BYTES = 2 * 1024 * 1024

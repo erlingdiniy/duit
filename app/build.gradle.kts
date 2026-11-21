@@ -24,6 +24,16 @@ Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(betaVersionName)?.destructured?.let
         "Stable $betaVersionName needs duitBetaVersionCode=${major.toInt() * 1_000_000 + minor.toInt() * 1_000 + patch.toInt()}"
     }
 }
+// Beta X.Y.0-beta.N (N 1..99) sits just below stable X.Y.0: versionCode X*1_000_000 + Y*1_000 - 100 + N,
+// e.g. 1.2.0-beta.1 = 1001901. Only .0 releases get betas, so beta codes never collide with each other.
+if (betaVersionName.contains("-beta.")) {
+    val (major, minor, patch, n) = requireNotNull(Regex("""(\d+)\.(\d+)\.(\d+)-beta\.([1-9]\d?)""").matchEntire(betaVersionName)) {
+        "Beta versionName must look like X.Y.0-beta.N (N 1..99), got $betaVersionName"
+    }.destructured
+    require(patch == "0" && major.toInt() * 1_000 + minor.toInt() > 0) { "Betas only precede X.Y.0 releases, got $betaVersionName" }
+    val expected = major.toInt() * 1_000_000 + minor.toInt() * 1_000 - 100 + n.toInt()
+    require(betaVersionCode == expected) { "Beta $betaVersionName needs duitBetaVersionCode=$expected" }
+}
 val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
 
 android {
