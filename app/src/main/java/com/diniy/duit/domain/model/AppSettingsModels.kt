@@ -5,7 +5,7 @@ enum class VisualTheme(
     val summary: String
 ) {
     CANDY_BUBBLE("Candy Bubble", "Playful pastel cards, sticker outlines & soft shadows"),
-    LIQUID_GLASS("Liquid Glass", "Translucent optical glass, bevel refraction & specular rims")
+    LIQUID_GLASS("Pure", "Translucent optical glass, bevel refraction & specular rims")
 }
 
 enum class GlassIntensity(
@@ -15,7 +15,7 @@ enum class GlassIntensity(
 ) {
     SUBTLE("Low", 0.5f, "Solid surfaces, no blur or refraction"),
     BALANCED("Mid", 1.0f, "Soft frosted glass with subtle refraction"),
-    RICH("High", 1.6f, "Full Liquid Glass with chromatic lens")
+    RICH("High", 1.6f, "Full Pure glass with chromatic lens")
 }
 
 enum class AnimationIntensity(

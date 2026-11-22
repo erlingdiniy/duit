@@ -91,21 +91,32 @@ fun PlanningSectionPillBar(
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val geometry = com.diniy.duit.core.ui.theme.SpatialTheme.geometry
     val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val isLiquidLow = com.diniy.duit.core.ui.theme.LocalGlassIntensity.current ==
+        com.diniy.duit.domain.model.GlassIntensity.SUBTLE
     val scrollable = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.35f
+    val trackShape = RoundedCornerShape(if (isLiquidGlass) 16.dp else geometry.radiusPill)
+    val itemShape = RoundedCornerShape(if (isLiquidGlass) 12.dp else geometry.radiusPill)
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(geometry.radiusPill))
-            .background(if (colors.isDark) colors.glassSurfaceSubtle else colors.baseSurface)
+            .clip(trackShape)
+            .background(if (isLiquidGlass) colors.baseSurface else if (colors.isDark) colors.glassSurfaceSubtle else colors.baseSurface)
+            .then(if (isLiquidGlass) Modifier.border(0.75.dp, colors.divider, trackShape) else Modifier)
             .then(if (scrollable) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
-            .padding(5.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         PlanningSectionTab.entries.forEach { tab ->
             val selected = tab == selectedTab
             val bgColor by animateColorAsState(
-                targetValue = if (selected) (if (colors.isDark) colors.floatingNavActivePill else colors.glassSurfaceElevated) else Color.Transparent,
+                targetValue = when {
+                    selected && isLiquidGlass -> colors.elevatedSurface
+                    selected -> if (colors.isDark) colors.floatingNavActivePill else colors.glassSurfaceElevated
+                    else -> Color.Transparent
+                },
                 label = "planning_pill_bg"
             )
             val textColor by animateColorAsState(
@@ -115,12 +126,12 @@ fun PlanningSectionPillBar(
             Box(
                 modifier = Modifier
                     .then(if (scrollable) Modifier else Modifier.weight(1f))
-                    .heightIn(min = 44.dp)
+                    .heightIn(min = if (isLiquidGlass) 44.dp else 44.dp)
                     .then(
-                        if (selected) {
+                        if (selected && (!isLiquidGlass || !isLiquidLow)) {
                             Modifier.shadow(
-                                elevation = 3.dp,
-                                shape = RoundedCornerShape(geometry.radiusPill),
+                                elevation = if (isLiquidGlass) 2.dp else 3.dp,
+                                shape = itemShape,
                                 ambientColor = colors.glassShadowAmbient,
                                 spotColor = colors.glassShadowSpot
                             )
@@ -128,8 +139,15 @@ fun PlanningSectionPillBar(
                             Modifier
                         }
                     )
-                    .clip(RoundedCornerShape(geometry.radiusPill))
+                    .clip(itemShape)
                     .background(bgColor)
+                    .then(
+                        if (selected && isLiquidGlass) {
+                            Modifier.border(0.75.dp, colors.divider, itemShape)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .clickable(role = Role.Tab) {
                         if (!selected) haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                         onSelectTab(tab)

@@ -276,14 +276,16 @@ fun CandyBubbleCard(
     val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
         com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val t = candyTone(tone)
-    val effectiveFill = if (isLiquidGlass && containerColor == null && tone != CandyTone.Neutral) {
-        lerp(SpatialTheme.colors.glassSurface, t.fill, if (SpatialTheme.colors.isDark) 0.14f else 0.10f)
+    val effectiveFill = if (isLiquidGlass && containerColor == null) {
+        SpatialTheme.colors.elevatedSurface
     } else {
         containerColor ?: t.container
     }
+    val effectiveShape = if (isLiquidGlass) RoundedCornerShape(20.dp) else shape
     SpatialGlassSurface(
         modifier = modifier,
-        shape = shape,
+        tier = SpatialGlassTier.Standard,
+        shape = effectiveShape,
         containerColor = effectiveFill,
         sticker = sticker && !isLiquidGlass,
         onClick = onClick,
@@ -312,20 +314,34 @@ fun CandyIconBlob(
 ) {
     val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
         com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val colors = SpatialTheme.colors
     val t = candyTone(tone)
     val effectiveTilt = if (isLiquidGlass) 0f else tilt
+    val containerBg = when {
+        isLiquidGlass && tone == CandyTone.Neutral -> colors.baseSurface
+        isLiquidGlass -> t.fill.copy(alpha = if (colors.isDark) 0.16f else 0.11f)
+        solid -> t.fill
+        else -> t.container
+    }
+    val iconColor = when {
+        isLiquidGlass && tone == CandyTone.Neutral -> colors.secondaryText
+        isLiquidGlass -> t.ink
+        solid -> t.onFill
+        else -> t.ink
+    }
+    val cornerShape = if (isLiquidGlass) RoundedCornerShape(12.dp) else RoundedCornerShape(size * 0.36f)
     Box(
         modifier = modifier
             .size(size)
             .rotate(effectiveTilt)
-            .clip(RoundedCornerShape(size * 0.36f))
-            .background(if (solid) t.fill else t.container),
+            .clip(cornerShape)
+            .background(containerBg),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (solid) t.onFill else t.ink,
+            tint = iconColor,
             modifier = Modifier
                 .size(size * 0.5f)
                 .rotate(-effectiveTilt)
@@ -333,7 +349,7 @@ fun CandyIconBlob(
     }
 }
 
-/** Sticker label: bold outline + small hard offset shadow in Candy Bubble; crisp frosted pill in Liquid Glass. */
+/** Sticker label: bold outline + small hard offset shadow in Candy Bubble; crisp tonal tag in Liquid Glass. */
 @Composable
 fun CandySticker(
     text: String,
@@ -347,15 +363,15 @@ fun CandySticker(
     val t = candyTone(tone)
     val colors = SpatialTheme.colors
     val ink = colors.sticker
-    val shape = RoundedCornerShape(50)
+    val shape = if (isLiquidGlass) RoundedCornerShape(10.dp) else RoundedCornerShape(50)
     Row(
         modifier = modifier
             .then(
                 if (isLiquidGlass) {
                     Modifier
                         .clip(shape)
-                        .background(colors.glassSurfaceElevated.copy(alpha = if (colors.isDark) 0.72f else 0.85f))
-                        .border(BorderStroke(1.dp, colors.glassBorder), shape)
+                        .background(colors.baseSurface)
+                        .border(BorderStroke(0.75.dp, colors.divider), shape)
                 } else {
                     Modifier
                         .rotate(tilt)
@@ -373,7 +389,7 @@ fun CandySticker(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        val labelColor = if (isLiquidGlass) colors.primaryText else t.onFill
+        val labelColor = if (isLiquidGlass) colors.secondaryText else t.onFill
         if (leadingIcon != null) {
             Icon(leadingIcon, contentDescription = null, tint = labelColor, modifier = Modifier.size(14.dp))
         }
@@ -381,24 +397,37 @@ fun CandySticker(
     }
 }
 
-/** Calm status badge: soft container + dot. For states that should not shout. */
+/** Calm status badge: soft container + dot in Candy Bubble; minimal dot + label in Liquid Glass. */
 @Composable
 fun CandyStatusBadge(text: String, tone: CandyTone, modifier: Modifier = Modifier) {
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val t = candyTone(tone)
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(t.container)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(t.fill))
-        Text(text = text, style = SpatialTheme.typography.caption, color = t.ink, maxLines = 1)
+    if (isLiquidGlass) {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Box(Modifier.size(6.dp).clip(CircleShape).background(t.fill))
+            Text(text = text, style = SpatialTheme.typography.caption, color = t.ink, maxLines = 1)
+        }
+    } else {
+        Row(
+            modifier = modifier
+                .clip(RoundedCornerShape(50))
+                .background(t.container)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(t.fill))
+            Text(text = text, style = SpatialTheme.typography.caption, color = t.ink, maxLines = 1)
+        }
     }
 }
 
-/** Section header: display title, optional count bubble and a pill action with arrow. */
+/** Section header: display title, optional count and action. */
 @Composable
 fun CandySectionHeader(
     title: String,
@@ -408,6 +437,8 @@ fun CandySectionHeader(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null
 ) {
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val c = SpatialTheme.colors
     val type = SpatialTheme.typography
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -415,12 +446,20 @@ fun CandySectionHeader(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, style = type.sectionHeading, color = c.primaryText, modifier = Modifier.semantics { heading() })
                 if (count != null && count > 0) {
-                    Box(
-                        Modifier
-                            .clip(CircleShape)
-                            .background(c.coral)
-                            .padding(horizontal = 8.dp, vertical = 1.dp)
-                    ) { Text("$count", style = type.caption, color = c.onCoral) }
+                    if (isLiquidGlass) {
+                        Text(
+                            text = "$count",
+                            style = type.supportingInfo,
+                            color = c.secondaryText
+                        )
+                    } else {
+                        Box(
+                            Modifier
+                                .clip(CircleShape)
+                                .background(c.coral)
+                                .padding(horizontal = 8.dp, vertical = 1.dp)
+                        ) { Text("$count", style = type.caption, color = c.onCoral) }
+                    }
                 }
             }
             if (subtitle != null) {
@@ -428,47 +467,90 @@ fun CandySectionHeader(
             }
         }
         if (actionLabel != null && onAction != null) {
-            Row(
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(c.glassSurfaceElevated)
-                    .candyPressable(onClick = onAction, onClickLabel = actionLabel)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(actionLabel, style = type.caption, color = c.primaryAction)
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, tint = c.primaryAction, modifier = Modifier.size(14.dp))
+            if (isLiquidGlass) {
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .candyPressable(onClick = onAction, onClickLabel = actionLabel)
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = actionLabel,
+                        style = type.caption.copy(fontFamily = type.cardTitle.fontFamily),
+                        color = c.primaryAction
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(c.glassSurfaceElevated)
+                        .candyPressable(onClick = onAction, onClickLabel = actionLabel)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(actionLabel, style = type.caption, color = c.primaryAction)
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, tint = c.primaryAction, modifier = Modifier.size(14.dp))
+                }
             }
         }
     }
 }
 
-/** Mini calendar tile: coloured month band on top, big day number below. */
+/** Mini calendar tile: coloured month band on top, big day number below (quiet tonal tile in Liquid Glass). */
 @Composable
 fun CandyDateTile(epochDay: Long, tone: CandyTone, modifier: Modifier = Modifier) {
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val t = candyTone(tone)
     val c = SpatialTheme.colors
     val date = remember(epochDay) { LocalDate.ofEpochDay(epochDay) }
     val month = remember(date) { date.month.getDisplayName(JavaTextStyle.SHORT, Locale.ENGLISH).uppercase(Locale.ENGLISH) }
-    Column(
-        modifier = modifier
-            .width(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(c.glassSurfaceElevated)
-            .border(BorderStroke(1.5.dp, t.fill), RoundedCornerShape(14.dp)),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(Modifier.fillMaxWidth().background(t.fill).padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
-            Text(month, style = SpatialTheme.typography.caption, color = t.onFill, maxLines = 1)
+    if (isLiquidGlass) {
+        Column(
+            modifier = modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(c.primaryAction.copy(alpha = if (c.isDark) 0.16f else 0.10f)),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = month,
+                style = SpatialTheme.typography.caption.copy(fontSize = 10.sp),
+                color = c.primaryAction,
+                maxLines = 1
+            )
+            Text(
+                text = "${date.dayOfMonth}",
+                style = SpatialTheme.typography.cardTitle.copy(fontSize = 16.sp),
+                color = c.primaryText,
+                maxLines = 1
+            )
         }
-        Text(
-            "${date.dayOfMonth}",
-            style = SpatialTheme.typography.cardBalance,
-            color = c.primaryText,
-            modifier = Modifier.padding(vertical = 2.dp)
-        )
+    } else {
+        Column(
+            modifier = modifier
+                .width(48.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(c.glassSurfaceElevated)
+                .border(BorderStroke(1.5.dp, t.fill), RoundedCornerShape(14.dp)),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(Modifier.fillMaxWidth().background(t.fill).padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
+                Text(month, style = SpatialTheme.typography.caption, color = t.onFill, maxLines = 1)
+            }
+            Text(
+                "${date.dayOfMonth}",
+                style = SpatialTheme.typography.cardBalance,
+                color = c.primaryText,
+                modifier = Modifier.padding(vertical = 2.dp)
+            )
+        }
     }
 }
 
@@ -619,6 +701,16 @@ fun CandyMintIconButton(
     val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
         com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val colors = SpatialTheme.colors
+    if (isLiquidGlass) {
+        com.diniy.duit.core.ui.glass.LiquidGlassOrbButton(
+            icon = icon,
+            contentDescription = contentDescription,
+            onClick = onClick,
+            modifier = modifier,
+            size = 48.dp
+        )
+        return
+    }
     val motion = SpatialTheme.motion
     val reduced = rememberReducedMotionEnabled()
     val haptic = rememberDuitHaptic()

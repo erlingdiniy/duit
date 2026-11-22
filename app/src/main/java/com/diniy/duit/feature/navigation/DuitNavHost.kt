@@ -742,8 +742,8 @@ fun DuitAppShell(
             ) { innerPadding ->
                 val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
                 // Generous bottom clearance so the last scrollable card & CTA scroll completely
-                // above the floating bottom dock without ever being obscured.
-                val extraDockBreathing = if (useNavigationRail) 20.dp else 32.dp
+                // above the floating bottom dock & FAB without ever being obscured.
+                val extraDockBreathing = if (useNavigationRail) 20.dp else 44.dp
                 val baseBottom = innerPadding.calculateBottomPadding() + extraDockBreathing
                 val screenPadding = PaddingValues(
                     start = if (useNavigationRail) 12.dp else innerPadding.calculateStartPadding(layoutDirection) + 16.dp,

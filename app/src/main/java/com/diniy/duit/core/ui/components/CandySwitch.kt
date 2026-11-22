@@ -14,8 +14,22 @@ import com.diniy.duit.core.ui.theme.SpatialTheme
  */
 @Composable
 fun candySwitchColors(personal: SwitchColors = SwitchDefaults.colors()): SwitchColors {
-    if (!BuildConfig.PUBLIC_EDITION) return personal
     val colors = SpatialTheme.colors
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    if (isLiquidGlass) {
+        return SwitchDefaults.colors(
+            checkedThumbColor = Color.White,
+            checkedTrackColor = colors.primaryAction,
+            checkedBorderColor = Color.Transparent,
+            checkedIconColor = colors.primaryAction,
+            uncheckedThumbColor = Color.White,
+            uncheckedTrackColor = if (colors.isDark) Color(0xFF2C3140) else Color(0xFFD0D5DD),
+            uncheckedBorderColor = Color.Transparent,
+            uncheckedIconColor = colors.secondaryText
+        )
+    }
+    if (!BuildConfig.PUBLIC_EDITION) return personal
     return SwitchDefaults.colors(
         checkedThumbColor = Color.White,
         checkedTrackColor = colors.coral,

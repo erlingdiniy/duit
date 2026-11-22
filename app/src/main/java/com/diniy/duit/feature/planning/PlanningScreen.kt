@@ -15,6 +15,7 @@ import com.diniy.duit.core.ui.components.CandySticker
 import com.diniy.duit.core.ui.components.CandyProgressRing
 import com.diniy.duit.core.ui.components.CandyDecor
 import com.diniy.duit.core.ui.components.CandyBubbleCard
+import com.diniy.duit.core.ui.components.candyPressable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -331,22 +332,35 @@ fun PlanningScreen(
             item(key = "my_tax_pocket_shortcut", contentType = "shortcut_card") {
                 val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
                 val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
-                CandyBubbleCard(
-                    tone = CandyTone.Mint,
-                    decor = CandyDecor.Corner,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-                    onClick = { showTaxPocket = true },
-                    onClickLabel = "Open My Tax Pocket"
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CandyIconBlob(
-                            icon = androidx.compose.material.icons.Icons.Rounded.ReceiptLong,
-                            tone = CandyTone.Mint,
-                            size = 38.dp,
-                            tilt = -4f,
-                            solid = true
-                        )
+                val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                    com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+                if (isLiquidGlass) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .candyPressable(
+                                onClick = { showTaxPocket = true },
+                                onClickLabel = "Open My Tax Pocket"
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.income.copy(alpha = if (colors.isDark) 0.16f else 0.11f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Rounded.ReceiptLong,
+                                contentDescription = null,
+                                tint = colors.income,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -354,30 +368,73 @@ fun PlanningScreen(
                                 style = typography.transactionDescription,
                                 color = colors.primaryText,
                                 maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "Tax relief & receipts",
                                 style = typography.caption,
                                 color = colors.secondaryText,
                                 maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(colors.baseSurface),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.ChevronRight,
-                                contentDescription = null,
-                                tint = colors.primaryText,
-                                modifier = Modifier.size(18.dp)
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = colors.secondaryText.copy(alpha = 0.55f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    HorizontalDivider(color = colors.divider)
+                } else {
+                    CandyBubbleCard(
+                        tone = CandyTone.Mint,
+                        decor = CandyDecor.Corner,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                        onClick = { showTaxPocket = true },
+                        onClickLabel = "Open My Tax Pocket"
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CandyIconBlob(
+                                icon = androidx.compose.material.icons.Icons.Rounded.ReceiptLong,
+                                tone = CandyTone.Mint,
+                                size = 38.dp,
+                                tilt = -4f,
+                                solid = true
                             )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = "My Tax Pocket",
+                                    style = typography.transactionDescription,
+                                    color = colors.primaryText,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Tax relief & receipts",
+                                    style = typography.caption,
+                                    color = colors.secondaryText,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.baseSurface),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ChevronRight,
+                                    contentDescription = null,
+                                    tint = colors.primaryText,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }

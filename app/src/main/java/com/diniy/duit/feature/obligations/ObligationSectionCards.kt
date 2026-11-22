@@ -249,12 +249,19 @@ fun CommitmentObligationCard(
     }
     val t = candyTone(tone)
     val urgent = summary.displayState == CommitmentDisplayState.OVERDUE || summary.displayState == CommitmentDisplayState.DUE_TODAY
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
 
-    // Bill ticket: date + details on the left, perforated amount stub on the right.
+    // Bill ticket in Candy Bubble; clean architectural card with hairline divider in Pure.
     SpatialGlassSurface(
         modifier = Modifier.fillMaxWidth(),
-        shape = CandyTicketShape(cornerRadius = 24.dp, notchRadius = 10.dp, notchFraction = 0.70f),
-        containerColor = if (c.isArchived) colors.glassSurfaceSubtle else t.container,
+        shape = if (isLiquidGlass) RoundedCornerShape(20.dp) else CandyTicketShape(cornerRadius = 24.dp, notchRadius = 10.dp, notchFraction = 0.70f),
+        containerColor = when {
+            isLiquidGlass && c.isArchived -> colors.baseSurface
+            isLiquidGlass -> colors.elevatedSurface
+            c.isArchived -> colors.glassSurfaceSubtle
+            else -> t.container
+        },
         onClick = onClick,
         onClickLabel = "Inspect ${c.title}"
     ) {
@@ -275,12 +282,22 @@ fun CommitmentObligationCard(
                         Text(
                             note,
                             style = type.caption,
-                            color = if (summary.displayState == CommitmentDisplayState.OVERDUE) colors.error else t.ink,
+                            color = if (summary.displayState == CommitmentDisplayState.OVERDUE) colors.error else if (isLiquidGlass) colors.secondaryText else t.ink,
                             maxLines = 2
                         )
                     }
                 }
-                CandyPerforation(t.fill, Modifier.fillMaxHeight().padding(horizontal = 8.dp))
+                if (isLiquidGlass) {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 10.dp)
+                            .width(1.dp)
+                            .fillMaxHeight()
+                            .background(colors.divider)
+                    )
+                } else {
+                    CandyPerforation(t.fill, Modifier.fillMaxHeight().padding(horizontal = 8.dp))
+                }
                 Column(Modifier.weight(0.30f), horizontalAlignment = Alignment.CenterHorizontally) {
                     CandyMoneyText(maskedBalance(c.amountSen), type.transactionAmount, colors.primaryText, minorScale = 0.7f)
                     Spacer(Modifier.height(6.dp))

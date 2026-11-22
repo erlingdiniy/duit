@@ -343,6 +343,8 @@ private fun NotifSectionHeader(
     trailing: @Composable () -> Unit = {}
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -352,12 +354,17 @@ private fun NotifSectionHeader(
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .rotate(-6f)
-                .clip(RoundedCornerShape(13.dp))
-                .background(accent),
+                .rotate(if (isLiquidGlass) 0f else -6f)
+                .clip(RoundedCornerShape(if (isLiquidGlass) 11.dp else 13.dp))
+                .background(if (isLiquidGlass) accent.copy(alpha = if (colors.isDark) 0.16f else 0.11f) else accent),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = colors.onCoral, modifier = Modifier.size(18.dp).rotate(6f))
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (isLiquidGlass) colors.readableOn(accent) else colors.onCoral,
+                modifier = Modifier.size(18.dp).rotate(if (isLiquidGlass) 0f else 6f)
+            )
         }
         Spacer(Modifier.width(10.dp))
         Text(

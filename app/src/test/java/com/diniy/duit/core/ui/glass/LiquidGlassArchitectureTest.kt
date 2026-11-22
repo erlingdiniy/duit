@@ -125,6 +125,9 @@ class LiquidGlassArchitectureTest {
     @Test
     fun visualTheme_defaultsToCandyBubbleAndHasDistinctLiquidGlassPalette() {
         assertEquals(VisualTheme.CANDY_BUBBLE, AppSettingsSnapshot().visualTheme)
+        assertEquals("LIQUID_GLASS", VisualTheme.LIQUID_GLASS.name)
+        assertEquals("Pure", VisualTheme.LIQUID_GLASS.label)
+        assertEquals("Candy Bubble", VisualTheme.CANDY_BUBBLE.label)
         assertNotEquals(LightSpatialColors.appBackground, LiquidGlassLightSpatialColors.appBackground)
         assertNotEquals(LightSpatialColors.primaryAction, LiquidGlassLightSpatialColors.primaryAction)
         assertNotEquals(DarkSpatialColors.appBackground, LiquidGlassDarkSpatialColors.appBackground)
@@ -287,6 +290,66 @@ class LiquidGlassArchitectureTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun safeAllocationBreakdown_isMathematicallyExactAcrossAllEdgeCases() {
+        // Real beta scenario: RM 1,538 Safe + RM 200 Bills + RM 900 Savings = RM 2,638
+        val beta = com.diniy.duit.feature.home.computeSafeAllocationBreakdown(
+            safeToSpendSen = 153_800L,
+            reservedBillsSen = 20_000L,
+            savingsBalanceSen = 90_000L
+        )
+        assertTrue(beta.isVisible)
+        assertEquals(3, beta.activeCount)
+        assertEquals(1.0f, beta.safeFraction + beta.billsFraction + beta.savingsFraction, 0.0001f)
+        assertEquals(100, beta.safePercent + beta.billsPercent + beta.savingsPercent)
+        assertEquals(58, beta.safePercent)
+        assertEquals(8, beta.billsPercent)
+        assertEquals(34, beta.savingsPercent)
+
+        // Equal 3-way split (33.33% each -> largest-remainder sums to exactly 100)
+        val equal = com.diniy.duit.feature.home.computeSafeAllocationBreakdown(
+            safeToSpendSen = 10_000L,
+            reservedBillsSen = 10_000L,
+            savingsBalanceSen = 10_000L
+        )
+        assertEquals(1.0f, equal.safeFraction + equal.billsFraction + equal.savingsFraction, 0.0001f)
+        assertEquals(100, equal.safePercent + equal.billsPercent + equal.savingsPercent)
+
+        // Very small non-zero bills bucket (<1%) is preserved in bar fraction and sum remains 1.0
+        val tinyBills = com.diniy.duit.feature.home.computeSafeAllocationBreakdown(
+            safeToSpendSen = 990_000L,
+            reservedBillsSen = 5_000L,
+            savingsBalanceSen = 5_000L
+        )
+        assertTrue(tinyBills.billsFraction > 0f)
+        assertEquals(3, tinyBills.activeCount)
+        assertEquals(1.0f, tinyBills.safeFraction + tinyBills.billsFraction + tinyBills.savingsFraction, 0.0001f)
+        assertEquals(100, tinyBills.safePercent + tinyBills.billsPercent + tinyBills.savingsPercent)
+
+        // Zero bills: only Safe & Savings
+        val noBills = com.diniy.duit.feature.home.computeSafeAllocationBreakdown(
+            safeToSpendSen = 75_000L,
+            reservedBillsSen = 0L,
+            savingsBalanceSen = 25_000L
+        )
+        assertEquals(2, noBills.activeCount)
+        assertEquals(0f, noBills.billsFraction, 0.0001f)
+        assertEquals(75, noBills.safePercent)
+        assertEquals(25, noBills.savingsPercent)
+
+        // Negative / overcommitted Safe to Spend hides bar cleanly
+        val tight = com.diniy.duit.feature.home.computeSafeAllocationBreakdown(
+            safeToSpendSen = -5_000L,
+            reservedBillsSen = 20_000L,
+            savingsBalanceSen = 50_000L
+        )
+        assertEquals(false, tight.isVisible)
+
+        // All zero hides bar cleanly
+        val empty = com.diniy.duit.feature.home.computeSafeAllocationBreakdown(0L, 0L, 0L)
+        assertEquals(false, empty.isVisible)
     }
 
     private fun contrastRatio(fg: Color, bg: Color): Double {

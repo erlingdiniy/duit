@@ -269,8 +269,12 @@ private fun MonthGrid(uiState: CalendarUiState, visibleTypes: Set<CalendarEventT
 @Composable
 private fun DayCell(date: LocalDate, types: List<CalendarEventType>, isSelected: Boolean, isToday: Boolean, onClick: () -> Unit) {
     val colors = SpatialTheme.colors
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val selectedFill = if (isLiquidGlass) colors.primaryAction else colors.coral
+    val selectedInk = if (isLiquidGlass) colors.onPrimaryAction else colors.onCoral
     val fill by animateColorAsState(
-        if (isSelected) colors.coral else Color.Transparent,
+        if (isSelected) selectedFill else Color.Transparent,
         prismaticTween(rememberReducedMotionEnabled(), 160),
         label = "day_fill"
     )
@@ -286,7 +290,7 @@ private fun DayCell(date: LocalDate, types: List<CalendarEventType>, isSelected:
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(fill)
-            .then(if (isToday && !isSelected) Modifier.border(1.5.dp, colors.coral, RoundedCornerShape(14.dp)) else Modifier)
+            .then(if (isToday && !isSelected) Modifier.border(1.5.dp, selectedFill, RoundedCornerShape(14.dp)) else Modifier)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label; selected = isSelected }
             .padding(vertical = 6.dp)
@@ -294,12 +298,12 @@ private fun DayCell(date: LocalDate, types: List<CalendarEventType>, isSelected:
         Text(
             date.dayOfMonth.toString(),
             style = SpatialTheme.typography.supportingInfo.copy(fontWeight = if (isSelected || isToday) FontWeight.ExtraBold else FontWeight.SemiBold),
-            color = if (isSelected) colors.onCoral else colors.primaryText
+            color = if (isSelected) selectedInk else colors.primaryText
         )
         Spacer(Modifier.height(3.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.height(6.dp)) {
             types.forEach { t ->
-                Box(Modifier.size(6.dp).clip(CircleShape).background(if (isSelected) colors.onCoral else t.dotColor()))
+                Box(Modifier.size(6.dp).clip(CircleShape).background(if (isSelected) selectedInk else t.dotColor()))
             }
         }
     }

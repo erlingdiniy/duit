@@ -126,6 +126,9 @@ fun FinancialOverviewHeroCard(
 ) {
     val colors = SpatialTheme.colors
     val type = SpatialTheme.typography
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val intensity = com.diniy.duit.core.ui.theme.LocalGlassIntensity.current
     val masked = LocalPrivacySettings.current.isAnyMaskActive
     val resolved = overview.resolvedPeriod
     val net = overview.netCashFlowSen
@@ -136,6 +139,215 @@ fun FinancialOverviewHeroCard(
     val flowTotal = income + expense
     val inShare = if (flowTotal > 0L) income.toFloat() / flowTotal.toFloat() else 0f
     val savingsFraction = if (income > 0L) ((income - expense).toFloat() / income.toFloat()).coerceIn(0f, 1f) else 0f
+
+    if (isLiquidGlass) {
+        val heroSpec = remember(colors, intensity) {
+            com.diniy.duit.core.ui.glass.LiquidGlassPanelPresets.card(
+                colors = colors,
+                intensity = intensity,
+                elevated = true
+            ).copy(
+                fillColor = when (intensity) {
+                    com.diniy.duit.domain.model.GlassIntensity.SUBTLE -> colors.elevatedSurface
+                    com.diniy.duit.domain.model.GlassIntensity.BALANCED ->
+                        if (colors.isDark) Color(0xFF171A23).copy(alpha = 0.90f) else Color.White.copy(alpha = 0.88f)
+                    com.diniy.duit.domain.model.GlassIntensity.RICH ->
+                        if (colors.isDark) Color(0xFF161A25).copy(alpha = 0.80f) else Color.White.copy(alpha = 0.78f)
+                },
+                topSheenAlpha = when (intensity) {
+                    com.diniy.duit.domain.model.GlassIntensity.SUBTLE -> 0f
+                    com.diniy.duit.domain.model.GlassIntensity.BALANCED -> if (colors.isDark) 0.10f else 0.55f
+                    com.diniy.duit.domain.model.GlassIntensity.RICH -> if (colors.isDark) 0.18f else 0.82f
+                },
+                rimHighlightAlpha = when (intensity) {
+                    com.diniy.duit.domain.model.GlassIntensity.SUBTLE -> 0f
+                    com.diniy.duit.domain.model.GlassIntensity.BALANCED -> if (colors.isDark) 0.28f else 0.85f
+                    com.diniy.duit.domain.model.GlassIntensity.RICH -> if (colors.isDark) 0.46f else 0.96f
+                },
+                chromaticGlintAlpha = 0f,
+                borderColor = if (colors.isDark) Color(0x22FFFFFF) else Color(0x160F172A),
+                shadowElevation = when (intensity) {
+                    com.diniy.duit.domain.model.GlassIntensity.SUBTLE -> if (colors.isDark) 0.dp else 2.dp
+                    com.diniy.duit.domain.model.GlassIntensity.BALANCED -> 6.dp
+                    com.diniy.duit.domain.model.GlassIntensity.RICH -> if (colors.isDark) 10.dp else 9.dp
+                }
+            )
+        }
+        val netColor = when {
+            net > 0L -> colors.income
+            net < 0L -> colors.expense
+            else -> colors.primaryText
+        }
+        val inPct = (inShare * 100.0).roundToInt().coerceIn(0, 100)
+        val outPct = (100 - inPct).coerceIn(0, 100)
+
+        Column(
+            modifier = Modifier.candyEntrance("insights_overview_${resolved.startEpochDay}_${resolved.endEpochDayInclusive}"),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Single prominent optical Liquid Glass hero matching Home's Safe to Spend surface
+            com.diniy.duit.core.ui.glass.LiquidGlassPanelBox(
+                spec = heroSpec,
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Net cash flow", style = type.cardTitle.copy(fontSize = 15.sp), color = colors.secondaryText)
+                            Text(
+                                text = "${DateTimeFormatters.formatEpochDay(resolved.startEpochDay)} – ${DateTimeFormatters.formatEpochDay(resolved.endEpochDayInclusive)}",
+                                style = type.caption,
+                                color = colors.secondaryText.copy(alpha = 0.80f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (isSamplePreview) "Sample" else resolved.preset.label,
+                            style = type.caption,
+                            color = colors.primaryAction
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    CandyMoneyText(
+                        maskedBalance(net, includePlusSign = true),
+                        type.heroBalance.copy(fontSize = 40.sp, lineHeight = 46.sp),
+                        netColor,
+                        minorScale = 0.5f
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(colors.baseSurface),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        if (income > 0L) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(income.toFloat() / flowTotal.toFloat())
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(colors.income)
+                            )
+                        }
+                        if (expense > 0L) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(expense.toFloat() / flowTotal.toFloat())
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(colors.expense)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            text = if (flowTotal == 0L) "No income or spending yet" else if (masked) "In ••%" else "In $inPct%",
+                            style = type.caption,
+                            color = colors.secondaryText
+                        )
+                        if (flowTotal > 0L) {
+                            Text(
+                                text = if (masked) "Out ••%" else "Out $outPct%",
+                                style = type.caption,
+                                color = colors.secondaryText
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Open 2-column Income & Expenses metrics with vertical hairline divider (Home rhythm)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Income", style = type.caption, color = colors.secondaryText)
+                    Spacer(Modifier.height(4.dp))
+                    CandyMoneyText(maskedBalance(overview.totalIncomeSen), type.cardBalance.copy(fontSize = 22.sp), colors.income)
+                }
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp)
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(colors.divider)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Expenses", style = type.caption, color = colors.secondaryText)
+                    Spacer(Modifier.height(4.dp))
+                    CandyMoneyText(maskedBalance(overview.totalExpenseSen), type.cardBalance.copy(fontSize = 22.sp), colors.primaryText)
+                }
+            }
+
+            // Quiet grouped 3-metric strip (Savings rate · Avg / day · Safe to spend)
+            SpatialGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                tier = com.diniy.duit.core.ui.components.SpatialGlassTier.Standard,
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(vertical = 14.dp, horizontal = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        CandyProgressRing(fraction = savingsFraction, tone = CandyTone.Sunny, size = 44.dp, stroke = 5.dp) {
+                            Text(if (masked) "••" else overview.savingsRateDisplay, style = type.caption.copy(fontSize = 11.sp), color = colors.primaryText, maxLines = 1)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text("Savings rate", style = type.caption, color = colors.secondaryText, maxLines = 1)
+                    }
+                    InsightMiniStat(
+                        label = "Avg / day",
+                        value = if (resolved.elapsedDays > 0L) maskedBalance(overview.avgDailySpendingSen) else "—",
+                        color = colors.primaryText,
+                        modifier = Modifier.weight(1f)
+                    )
+                    InsightMiniStat(
+                        label = "Safe to spend",
+                        value = maskedBalance(overview.safeToSpendSen),
+                        color = if (overview.safeToSpendSen < 0L) colors.warning else colors.income,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            if (overview.transferCountExcluded > 0) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.baseSurface)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.SwapHoriz, contentDescription = null, tint = colors.secondaryText, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "${overview.transferCountExcluded} internal transfer(s) (${maskedBalance(overview.transferTotalExcludedSen)}) excluded from cashflow.",
+                        style = type.caption,
+                        color = colors.secondaryText
+                    )
+                }
+            }
+        }
+        return
+    }
 
     Column(
         modifier = Modifier.candyEntrance("insights_overview_${resolved.startEpochDay}_${resolved.endEpochDayInclusive}"),

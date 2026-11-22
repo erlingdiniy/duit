@@ -795,13 +795,14 @@ private fun LiquidGlassSafeToSpendHeroCard(
         )
     }
 
-    val safePart = safeToSpendSen.coerceAtLeast(0L).toFloat()
-    val reservedPart = upcomingUnreservedSen.coerceAtLeast(0L).toFloat()
-    val savingsPart = savingsBalanceSen.coerceAtLeast(0L).toFloat()
-    val allocationTotal = (safePart + reservedPart + savingsPart).coerceAtLeast(
-        totalBalanceSen.coerceAtLeast(0L).toFloat()
-    )
-    val showAllocationBar = !isMasked && allocationTotal > 0f && !isTight
+    val allocation = remember(safeToSpendSen, upcomingUnreservedSen, savingsBalanceSen) {
+        computeSafeAllocationBreakdown(
+            safeToSpendSen = safeToSpendSen,
+            reservedBillsSen = upcomingUnreservedSen,
+            savingsBalanceSen = savingsBalanceSen
+        )
+    }
+    val showAllocationBar = !isMasked && allocation.isVisible
 
     LiquidGlassPanelBox(
         spec = heroSpec,
@@ -928,11 +929,6 @@ private fun LiquidGlassSafeToSpendHeroCard(
             }
 
             if (showAllocationBar) {
-                val safeW = (safePart / allocationTotal).coerceIn(0f, 1f)
-                val reservedW = (reservedPart / allocationTotal).coerceIn(0f, 1f)
-                val savingsW = (savingsPart / allocationTotal).coerceIn(0f, 1f)
-                val activeSegments = listOf(safeW, reservedW, savingsW).count { it > 0.01f }
-
                 Spacer(Modifier.height(16.dp))
                 Row(
                     modifier = Modifier
@@ -942,28 +938,28 @@ private fun LiquidGlassSafeToSpendHeroCard(
                         .background(colors.baseSurface),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    if (safeW > 0.01f) {
+                    if (allocation.safeFraction > 0f) {
                         Box(
                             modifier = Modifier
-                                .weight(safeW)
+                                .weight(allocation.safeFraction)
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(3.dp))
                                 .background(colors.primaryAction)
                         )
                     }
-                    if (reservedW > 0.01f) {
+                    if (allocation.billsFraction > 0f) {
                         Box(
                             modifier = Modifier
-                                .weight(reservedW)
+                                .weight(allocation.billsFraction)
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(3.dp))
                                 .background(colors.warning)
                         )
                     }
-                    if (savingsW > 0.01f) {
+                    if (allocation.savingsFraction > 0f) {
                         Box(
                             modifier = Modifier
-                                .weight(savingsW)
+                                .weight(allocation.savingsFraction)
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(3.dp))
                                 .background(colors.income)
@@ -971,27 +967,92 @@ private fun LiquidGlassSafeToSpendHeroCard(
                     }
                 }
 
-                if (activeSegments > 1) {
+                if (allocation.activeCount > 1) {
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (safeW > 0.01f) {
-                            AllocationLegendDot(label = "Safe", dotColor = colors.primaryAction)
+                        if (allocation.safeFraction > 0f) {
+                            AllocationLegendDot(
+                                label = "Safe ${allocation.safePercent}%",
+                                dotColor = colors.primaryAction
+                            )
                         }
-                        if (reservedW > 0.01f) {
-                            AllocationLegendDot(label = "Bills", dotColor = colors.warning)
+                        if (allocation.billsFraction > 0f) {
+                            AllocationLegendDot(
+                                label = "Bills ${allocation.billsPercent}%",
+                                dotColor = colors.warning
+                            )
                         }
-                        if (savingsW > 0.01f) {
-                            AllocationLegendDot(label = "Savings", dotColor = colors.income)
+                        if (allocation.savingsFraction > 0f) {
+                            AllocationLegendDot(
+                                label = "Savings ${allocation.savingsPercent}%",
+                                dotColor = colors.income
+                            )
                         }
                     }
                 }
             }
         }
     }
+}
+
+internal data class SafeAllocationBreakdown(
+    val safeFraction: Float,
+    val billsFraction: Float,
+    val savingsFraction: Float,
+    val safePercent: Int,
+    val billsPercent: Int,
+    val savingsPercent: Int,
+    val activeCount: Int
+) {
+    val isVisible: Boolean get() = activeCount > 0
+}
+
+/**
+ * Pure, deterministic breakdown of Safe to Spend vs Current-Cycle Bills vs Protected Savings.
+ * Fractions sum to 1.0f and integer percentages sum to 100 via largest-remainder rounding.
+ */
+internal fun computeSafeAllocationBreakdown(
+    safeToSpendSen: Long,
+    reservedBillsSen: Long,
+    savingsBalanceSen: Long
+): SafeAllocationBreakdown {
+    if (safeToSpendSen < 0L) {
+        return SafeAllocationBreakdown(0f, 0f, 0f, 0, 0, 0, 0)
+    }
+    val safeSen = safeToSpendSen.coerceAtLeast(0L)
+    val billsSen = reservedBillsSen.coerceAtLeast(0L)
+    val savingsSen = savingsBalanceSen.coerceAtLeast(0L)
+    val totalSen = safeSen + billsSen + savingsSen
+    if (totalSen <= 0L) {
+        return SafeAllocationBreakdown(0f, 0f, 0f, 0, 0, 0, 0)
+    }
+    val totalD = totalSen.toDouble()
+    val exactF = doubleArrayOf(safeSen / totalD, billsSen / totalD, savingsSen / totalD)
+    val rawPct = DoubleArray(3) { exactF[it] * 100.0 }
+    val floors = IntArray(3) { kotlin.math.floor(rawPct[it]).toInt() }
+    val remainders = (0..2).sortedByDescending { rawPct[it] - floors[it] }
+    var rem = 100 - floors.sum()
+    for (idx in remainders) {
+        if (rem <= 0) break
+        if (exactF[idx] > 0.0) {
+            floors[idx] += 1
+            rem -= 1
+        }
+    }
+    val activeCount = listOf(safeSen, billsSen, savingsSen).count { it > 0L }
+    return SafeAllocationBreakdown(
+        safeFraction = exactF[0].toFloat(),
+        billsFraction = exactF[1].toFloat(),
+        savingsFraction = exactF[2].toFloat(),
+        safePercent = floors[0],
+        billsPercent = floors[1],
+        savingsPercent = floors[2],
+        activeCount = activeCount
+    )
 }
 
 @Composable

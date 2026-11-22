@@ -222,6 +222,8 @@ fun InsightsScreen(
                                     style = typography.cardTitle,
                                     color = colors.primaryText
                                 )
+                                val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                                    com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                                 // Active period type stays visible (plus dates for a custom range)
                                 Text(
                                     text = if (uiState.periodPreset == InsightsPeriodPreset.CUSTOM_RANGE &&
@@ -233,7 +235,7 @@ fun InsightsScreen(
                                         uiState.periodPreset.label
                                     },
                                     style = typography.caption,
-                                    color = colors.coral
+                                    color = if (isLiquidGlass) colors.primaryAction else colors.coral
                                 )
                             }
                             IconButton(onClick = { onShiftMonth(1) }) {
@@ -558,19 +560,30 @@ private fun InsightsSectionPillBar(
     val typography = SpatialTheme.typography
     val geometry = SpatialTheme.geometry
     val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val isLiquidLow = com.diniy.duit.core.ui.theme.LocalGlassIntensity.current ==
+        com.diniy.duit.domain.model.GlassIntensity.SUBTLE
+    val trackShape = RoundedCornerShape(if (isLiquidGlass) 16.dp else geometry.radiusPill)
+    val itemShape = RoundedCornerShape(if (isLiquidGlass) 12.dp else geometry.radiusPill)
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(geometry.radiusPill))
-            .background(if (colors.isDark) colors.glassSurfaceSubtle else colors.baseSurface)
-            .padding(5.dp),
+            .clip(trackShape)
+            .background(if (isLiquidGlass) colors.baseSurface else if (colors.isDark) colors.glassSurfaceSubtle else colors.baseSurface)
+            .then(if (isLiquidGlass) Modifier.border(0.75.dp, colors.divider, trackShape) else Modifier)
+            .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         InsightsSectionTab.entries.forEach { tab ->
             val selected = tab == selectedTab
             val bgColor by animateColorAsState(
-                targetValue = if (selected) (if (colors.isDark) colors.floatingNavActivePill else colors.glassSurfaceElevated) else Color.Transparent,
+                targetValue = when {
+                    selected && isLiquidGlass -> colors.elevatedSurface
+                    selected -> if (colors.isDark) colors.floatingNavActivePill else colors.glassSurfaceElevated
+                    else -> Color.Transparent
+                },
                 label = "insights_tab_bg"
             )
             val textColor by animateColorAsState(
@@ -580,12 +593,12 @@ private fun InsightsSectionPillBar(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 42.dp)
+                    .heightIn(min = if (isLiquidGlass) 44.dp else 42.dp)
                     .then(
-                        if (selected) {
+                        if (selected && (!isLiquidGlass || !isLiquidLow)) {
                             Modifier.shadow(
-                                elevation = 3.dp,
-                                shape = RoundedCornerShape(geometry.radiusPill),
+                                elevation = if (isLiquidGlass) 2.dp else 3.dp,
+                                shape = itemShape,
                                 ambientColor = colors.glassShadowAmbient,
                                 spotColor = colors.glassShadowSpot
                             )
@@ -593,8 +606,15 @@ private fun InsightsSectionPillBar(
                             Modifier
                         }
                     )
-                    .clip(RoundedCornerShape(geometry.radiusPill))
+                    .clip(itemShape)
                     .background(bgColor)
+                    .then(
+                        if (selected && isLiquidGlass) {
+                            Modifier.border(0.75.dp, colors.divider, itemShape)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .clickable(role = Role.Tab) {
                         if (!selected) haptic(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                         onSelectTab(tab)

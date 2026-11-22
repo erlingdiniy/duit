@@ -584,18 +584,18 @@ private fun AppearanceSettingsScreen(
                     val isLiquid = settings.visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(if (isLiquid) 38.dp else 40.dp)
                             .rotate(if (isLiquid) 0f else -6f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(colors.coral),
+                            .clip(RoundedCornerShape(if (isLiquid) 12.dp else 14.dp))
+                            .background(if (isLiquid) colors.primaryAction.copy(alpha = if (colors.isDark) 0.16f else 0.10f) else colors.coral),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Palette,
                             contentDescription = null,
-                            tint = colors.onCoral,
+                            tint = if (isLiquid) colors.primaryAction else colors.onCoral,
                             modifier = Modifier
-                                .size(20.dp)
+                                .size(if (isLiquid) 19.dp else 20.dp)
                                 .rotate(if (isLiquid) 0f else 6f)
                         )
                     }
@@ -1024,10 +1024,12 @@ private fun AboutMainPage(onBack: () -> Unit, onOpenPrivacy: () -> Unit, onOpenL
                         .clip(RoundedCornerShape(30.dp))
                 )
                 Spacer(Modifier.height(14.dp))
+                val isLiquidAbout = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                    com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                 Text(
                     text = androidx.compose.ui.text.buildAnnotatedString {
                         append("duit")
-                        withStyle(androidx.compose.ui.text.SpanStyle(color = colors.coral)) { append(".") }
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = if (isLiquidAbout) colors.primaryAction else colors.coral)) { append(".") }
                     },
                     style = typography.screenHeading,
                     color = colors.primaryText
@@ -1095,21 +1097,28 @@ private fun AboutMainPage(onBack: () -> Unit, onOpenPrivacy: () -> Unit, onOpenL
 private fun AboutInfoCard(icon: ImageVector, accent: Color, title: String, body: String) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     com.diniy.duit.core.ui.components.SpatialGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(if (isLiquidGlass) 20.dp else 26.dp),
         contentPadding = PaddingValues(16.dp)
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Box(
                 modifier = Modifier
                     .size(38.dp)
-                    .rotate(-6f)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(accent),
+                    .rotate(if (isLiquidGlass) 0f else -6f)
+                    .clip(RoundedCornerShape(if (isLiquidGlass) 12.dp else 13.dp))
+                    .background(if (isLiquidGlass) accent.copy(alpha = if (colors.isDark) 0.16f else 0.11f) else accent),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = colors.onCoral, modifier = Modifier.size(19.dp).rotate(6f))
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = if (isLiquidGlass) colors.readableOn(accent) else colors.onCoral,
+                    modifier = Modifier.size(19.dp).rotate(if (isLiquidGlass) 0f else 6f)
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -1294,35 +1303,53 @@ private fun SettingsGroupedRowItem(
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
-    val geometry = com.diniy.duit.core.ui.theme.SpatialTheme.geometry
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(if (isLiquidGlass) 14.dp else 20.dp))
             .candyPressable(onClick = onClick, onClickLabel = "Open $title")
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Candy icon blob: solid accent squircle, slightly tilted, dark ink icon (readable in both modes)
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .rotate(-6f)
-                .clip(RoundedCornerShape(14.dp))
-                .background(accent),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = colors.onCoral,
+        if (isLiquidGlass) {
+            Box(
                 modifier = Modifier
-                    .size(20.dp)
-                    .rotate(6f)
-            )
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accent.copy(alpha = if (colors.isDark) 0.16f else 0.11f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = colors.readableOn(accent),
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+        } else {
+            // Candy icon blob: solid accent squircle, slightly tilted, dark ink icon (readable in both modes)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .rotate(-6f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(accent),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = colors.onCoral,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(6f)
+                )
+            }
         }
         Column(modifier = Modifier.weight(1f).padding(end = if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) 8.dp else 0.dp)) {
             Text(
@@ -1338,19 +1365,28 @@ private fun SettingsGroupedRowItem(
                 color = colors.secondaryText
             )
         }
-        Box(
-            Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(colors.baseSurface),
-            contentAlignment = Alignment.Center
-        ) {
+        if (isLiquidGlass) {
             Icon(
                 imageVector = Icons.Rounded.ChevronRight,
                 contentDescription = null,
-                tint = colors.primaryText,
+                tint = colors.secondaryText.copy(alpha = 0.55f),
                 modifier = Modifier.size(18.dp)
             )
+        } else {
+            Box(
+                Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(colors.baseSurface),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = colors.primaryText,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
@@ -1367,6 +1403,8 @@ private fun SettingsGroupedSwitchItem(
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val haptic = com.diniy.duit.core.ui.components.rememberDuitHaptic()
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1380,15 +1418,27 @@ private fun SettingsGroupedSwitchItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .rotate(-6f)
-                .clip(RoundedCornerShape(14.dp))
-                .background(accent),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = null, tint = colors.onCoral, modifier = Modifier.size(20.dp).rotate(6f))
+        if (isLiquidGlass) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accent.copy(alpha = if (colors.isDark) 0.16f else 0.11f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = colors.readableOn(accent), modifier = Modifier.size(19.dp))
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .rotate(-6f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(accent),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = colors.onCoral, modifier = Modifier.size(20.dp).rotate(6f))
+            }
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = typography.transactionDescription, color = colors.primaryText)

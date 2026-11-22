@@ -143,6 +143,7 @@ fun SpatialGlassSurface(
     val motion = SpatialTheme.motion
     val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
         com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val glassIntensity = com.diniy.duit.core.ui.theme.LocalGlassIntensity.current
     val effectiveSticker = sticker && !isLiquidGlass
     val reducedMotion = rememberReducedMotionEnabled()
     val performHaptic = rememberDuitHaptic()
@@ -177,13 +178,28 @@ fun SpatialGlassSurface(
         label = "spatial_surface_sticker_shift"
     )
 
-    val baseFill = containerColor ?: when (tier) {
-        SpatialGlassTier.Subtle -> colors.glassSurfaceSubtle
-        SpatialGlassTier.Standard -> colors.glassSurface
-        SpatialGlassTier.Elevated -> colors.glassSurfaceElevated
-        SpatialGlassTier.Floating -> colors.floatingNavSurface
+    val isLiquidElevated = isLiquidGlass && (tier == SpatialGlassTier.Elevated || tier == SpatialGlassTier.Floating)
+    val isLiquidLow = glassIntensity == com.diniy.duit.domain.model.GlassIntensity.SUBTLE
+    val isLiquidHigh = glassIntensity == com.diniy.duit.domain.model.GlassIntensity.RICH
+
+    val baseFill = containerColor ?: when {
+        isLiquidGlass && tier == SpatialGlassTier.Subtle -> colors.baseSurface
+        isLiquidGlass && tier == SpatialGlassTier.Standard -> colors.elevatedSurface
+        isLiquidGlass && isLiquidElevated -> when (glassIntensity) {
+            com.diniy.duit.domain.model.GlassIntensity.SUBTLE -> colors.elevatedSurface
+            com.diniy.duit.domain.model.GlassIntensity.BALANCED ->
+                if (colors.isDark) Color(0xFF171A23).copy(alpha = 0.90f) else Color.White.copy(alpha = 0.88f)
+            com.diniy.duit.domain.model.GlassIntensity.RICH ->
+                if (colors.isDark) Color(0xFF161A25).copy(alpha = 0.80f) else Color.White.copy(alpha = 0.80f)
+        }
+        tier == SpatialGlassTier.Subtle -> colors.glassSurfaceSubtle
+        tier == SpatialGlassTier.Standard -> colors.glassSurface
+        tier == SpatialGlassTier.Elevated -> colors.glassSurfaceElevated
+        else -> colors.floatingNavSurface
     }
     val tintAlpha = when {
+        isLiquidGlass && selected -> if (colors.isDark) 0.16f else 0.10f
+        isLiquidGlass -> if (colors.isDark) 0.06f else 0.04f
         selected -> if (colors.isDark) 0.30f else 0.22f
         else -> if (colors.isDark) 0.11f else 0.14f
     }
@@ -192,7 +208,6 @@ fun SpatialGlassSurface(
     val targetFill = when {
         !enabled -> tinted.copy(alpha = 0.6f)
         pressedActive -> colors.pressedStateOverlay.compositeOverSolid(tinted)
-        isLiquidGlass -> tinted.copy(alpha = if (colors.isDark) 0.78f else 0.82f)
         else -> tinted
     }
 
@@ -204,7 +219,12 @@ fun SpatialGlassSurface(
 
     val baseElevation: Dp = when {
         effectiveSticker -> 0.dp // the hard offset shadow replaces soft elevation
-        isLiquidGlass -> if (colors.isDark) 8.dp else 6.dp
+        isLiquidGlass && !isLiquidElevated -> 0.dp
+        isLiquidElevated -> when (glassIntensity) {
+            com.diniy.duit.domain.model.GlassIntensity.SUBTLE -> if (colors.isDark) 0.dp else 1.dp
+            com.diniy.duit.domain.model.GlassIntensity.BALANCED -> 5.dp
+            com.diniy.duit.domain.model.GlassIntensity.RICH -> if (colors.isDark) 9.dp else 8.dp
+        }
         tier == SpatialGlassTier.Subtle -> geometry.elevationNone
         tier == SpatialGlassTier.Standard -> if (colors.isDark) geometry.elevationCardDark else geometry.elevationCardLight
         tier == SpatialGlassTier.Elevated -> if (colors.isDark) geometry.elevationElevatedDark else geometry.elevationElevatedLight
@@ -219,19 +239,21 @@ fun SpatialGlassSurface(
 
     val stickerInk = colors.sticker
     val stickerOffset = geometry.stickerOffset
-    val liquidRimBrush = if (isLiquidGlass) {
+    val liquidRimBrush = if (isLiquidElevated && !isLiquidLow) {
+        val rimPeak = if (isLiquidHigh) (if (colors.isDark) 0.38f else 0.92f) else (if (colors.isDark) 0.22f else 0.72f)
         Brush.linearGradient(
             colors = listOf(
-                colors.glassHighlight,
-                colors.glassBorder,
-                colors.glassHighlight.copy(alpha = if (colors.isDark) 0.22f else 0.45f)
+                Color.White.copy(alpha = rimPeak),
+                if (colors.isDark) Color(0x22FFFFFF) else Color(0x160F172A),
+                Color.White.copy(alpha = rimPeak * 0.28f)
             )
         )
     } else null
     val outline: BorderStroke? = when {
         effectiveSticker -> BorderStroke(geometry.stickerBorder, stickerInk)
-        selected -> BorderStroke(geometry.borderFocused, accentTint ?: colors.primaryAction)
-        isLiquidGlass && liquidRimBrush != null -> BorderStroke(1.dp, liquidRimBrush)
+        selected -> BorderStroke(if (isLiquidGlass) 1.5.dp else geometry.borderFocused, accentTint ?: colors.primaryAction)
+        isLiquidElevated && liquidRimBrush != null -> BorderStroke(0.75.dp, liquidRimBrush)
+        isLiquidGlass -> BorderStroke(0.75.dp, colors.divider)
         colors.isDark -> BorderStroke(geometry.borderHairline, colors.glassBorder)
         else -> null
     }
@@ -378,8 +400,10 @@ fun SpatialGlassButton(
         label = "spatial_button_scale"
     )
 
-    val shape = RoundedCornerShape(geometry.radiusMd)
-    val isSticker = variant == SpatialButtonVariant.Primary && isInteractive
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val shape = RoundedCornerShape(if (isLiquidGlass) 14.dp else geometry.radiusMd)
+    val isSticker = !isLiquidGlass && variant == SpatialButtonVariant.Primary && isInteractive
     val lastClickAt = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     // Public edition: soft Candy shadow (translucent ink, smaller lift, thinner tinted outline).
     val softSticker = com.diniy.duit.BuildConfig.PUBLIC_EDITION
@@ -397,33 +421,63 @@ fun SpatialGlassButton(
         label = "spatial_button_sticker_shift"
     )
 
-    val (bgColor, fgColor, borderStroke) = when (variant) {
-        // Candy Pop: Primary is the Sticker Pop action (outline + hard offset shadow).
-        SpatialButtonVariant.Primary -> Triple(
-            if (isInteractive) colors.primaryAction else colors.baseSurface,
-            if (isInteractive) colors.onPrimaryAction else colors.disabledText,
-            if (isInteractive) stickerBorder else null
-        )
-        SpatialButtonVariant.SecondaryGlass -> Triple(
-            if (isInteractive) colors.glassSurfaceElevated else colors.glassSurfaceSubtle,
-            if (isInteractive) colors.primaryAction else colors.disabledText,
-            BorderStroke(geometry.borderFocused, colors.primaryAction.copy(alpha = if (isInteractive) 0.35f else 0.12f))
-        )
-        SpatialButtonVariant.TonalAccent -> Triple(
-            if (isInteractive) colors.selectedStateOverlay.compositeOverSolid(colors.glassSurfaceElevated) else colors.glassSurfaceSubtle,
-            if (isInteractive) colors.primaryAction else colors.disabledText,
-            null
-        )
-        SpatialButtonVariant.Destructive -> Triple(
-            if (isInteractive) colors.errorContainer else colors.glassSurfaceSubtle,
-            if (isInteractive) colors.onErrorContainer else colors.disabledText,
-            null
-        )
-        SpatialButtonVariant.Ghost -> Triple(
-            if (isPressed && isInteractive) colors.pressedStateOverlay else Color.Transparent,
-            if (isInteractive) colors.primaryAction else colors.disabledText,
-            null
-        )
+    val (bgColor, fgColor, borderStroke) = if (isLiquidGlass) {
+        when (variant) {
+            SpatialButtonVariant.Primary -> Triple(
+                if (isInteractive) colors.primaryAction else colors.baseSurface,
+                if (isInteractive) colors.onPrimaryAction else colors.disabledText,
+                null
+            )
+            SpatialButtonVariant.SecondaryGlass -> Triple(
+                if (isInteractive) colors.elevatedSurface else colors.baseSurface,
+                if (isInteractive) colors.primaryAction else colors.disabledText,
+                BorderStroke(0.75.dp, if (isInteractive) colors.divider else colors.divider.copy(alpha = 0.5f))
+            )
+            SpatialButtonVariant.TonalAccent -> Triple(
+                if (isInteractive) colors.primaryAction.copy(alpha = if (colors.isDark) 0.18f else 0.10f) else colors.baseSurface,
+                if (isInteractive) colors.primaryAction else colors.disabledText,
+                null
+            )
+            SpatialButtonVariant.Destructive -> Triple(
+                if (isInteractive) colors.errorContainer else colors.baseSurface,
+                if (isInteractive) colors.onErrorContainer else colors.disabledText,
+                null
+            )
+            SpatialButtonVariant.Ghost -> Triple(
+                if (isPressed && isInteractive) colors.pressedStateOverlay else Color.Transparent,
+                if (isInteractive) colors.primaryAction else colors.disabledText,
+                null
+            )
+        }
+    } else {
+        when (variant) {
+            // Candy Pop: Primary is the Sticker Pop action (outline + hard offset shadow).
+            SpatialButtonVariant.Primary -> Triple(
+                if (isInteractive) colors.primaryAction else colors.baseSurface,
+                if (isInteractive) colors.onPrimaryAction else colors.disabledText,
+                if (isInteractive) stickerBorder else null
+            )
+            SpatialButtonVariant.SecondaryGlass -> Triple(
+                if (isInteractive) colors.glassSurfaceElevated else colors.glassSurfaceSubtle,
+                if (isInteractive) colors.primaryAction else colors.disabledText,
+                BorderStroke(geometry.borderFocused, colors.primaryAction.copy(alpha = if (isInteractive) 0.35f else 0.12f))
+            )
+            SpatialButtonVariant.TonalAccent -> Triple(
+                if (isInteractive) colors.selectedStateOverlay.compositeOverSolid(colors.glassSurfaceElevated) else colors.glassSurfaceSubtle,
+                if (isInteractive) colors.primaryAction else colors.disabledText,
+                null
+            )
+            SpatialButtonVariant.Destructive -> Triple(
+                if (isInteractive) colors.errorContainer else colors.glassSurfaceSubtle,
+                if (isInteractive) colors.onErrorContainer else colors.disabledText,
+                null
+            )
+            SpatialButtonVariant.Ghost -> Triple(
+                if (isPressed && isInteractive) colors.pressedStateOverlay else Color.Transparent,
+                if (isInteractive) colors.primaryAction else colors.disabledText,
+                null
+            )
+        }
     }
 
     Box(
@@ -521,10 +575,23 @@ fun SpatialGlassIconButton(
 ) {
     val colors = SpatialTheme.colors
     val geometry = SpatialTheme.geometry
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val iconTint = when {
         !enabled -> colors.disabledText
         selected -> accentTint ?: colors.primaryAction
         else -> colors.primaryText
+    }
+
+    if (isLiquidGlass && enabled) {
+        com.diniy.duit.core.ui.glass.LiquidGlassOrbButton(
+            icon = icon,
+            contentDescription = contentDescription,
+            onClick = onClick,
+            modifier = modifier,
+            size = geometry.iconButtonSize
+        )
+        return
     }
 
     SpatialGlassSurface(
@@ -571,22 +638,29 @@ fun SpatialGlassPill(
     val colors = SpatialTheme.colors
     val geometry = SpatialTheme.geometry
     val typography = SpatialTheme.typography
-    val shape = RoundedCornerShape(geometry.radiusPill)
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val shape = RoundedCornerShape(if (isLiquidGlass) 14.dp else geometry.radiusPill)
 
-    // Candy Pop: selected pills become grape "stickers"; idle pills are plain candy.
+    // Candy Pop: selected pills become grape "stickers"; Liquid Glass: crisp solid active pill / quiet hairline idle pill.
     val resolvedContainer = containerColor ?: when {
+        isLiquidGlass && selected -> colors.primaryAction
+        isLiquidGlass -> colors.elevatedSurface
         selected -> accentColor ?: colors.primaryAction
         else -> colors.glassSurfaceElevated
     }
     val resolvedContent = contentColor ?: when {
+        isLiquidGlass && selected -> colors.onPrimaryAction
+        isLiquidGlass -> colors.secondaryText
         selected && accentColor == null -> colors.onPrimaryAction
         selected -> com.diniy.duit.core.ui.theme.PrismaticPalette.DeepTeal // accents are bright candy in both modes
         else -> colors.secondaryText
     }
-    val pillBorder = if (selected) {
-        BorderStroke(2.dp, colors.sticker)
-    } else {
-        BorderStroke(geometry.borderHairline, colors.glassBorder)
+    val pillBorder = when {
+        isLiquidGlass && selected -> null
+        isLiquidGlass -> BorderStroke(0.75.dp, colors.divider)
+        selected -> BorderStroke(2.dp, colors.sticker)
+        else -> BorderStroke(geometry.borderHairline, colors.glassBorder)
     }
 
     val pillModifier = modifier
@@ -595,7 +669,7 @@ fun SpatialGlassPill(
         .then(if (onClick != null) Modifier.minimumInteractiveComponentSize() else Modifier)
         .clip(shape)
         .background(resolvedContainer)
-        .border(pillBorder, shape)
+        .then(if (pillBorder != null) Modifier.border(pillBorder, shape) else Modifier)
         .then(
             if (onClick != null) {
                 Modifier
@@ -715,11 +789,13 @@ fun SpatialGlassBottomSheetSurface(
     val geometry = SpatialTheme.geometry
     val typography = SpatialTheme.typography
     val publicSpacing = com.diniy.duit.BuildConfig.PUBLIC_EDITION
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
+        shape = RoundedCornerShape(topStart = if (isLiquidGlass) 28.dp else 36.dp, topEnd = if (isLiquidGlass) 28.dp else 36.dp),
         containerColor = colors.bottomSheetSurface,
         contentColor = colors.primaryText,
         scrimColor = colors.scrim,
@@ -727,9 +803,9 @@ fun SpatialGlassBottomSheetSurface(
             Box(
                 modifier = Modifier
                     .padding(top = if (publicSpacing) 10.dp else 12.dp, bottom = if (publicSpacing) 14.dp else 10.dp)
-                    .size(width = 48.dp, height = 6.dp)
+                    .size(width = if (isLiquidGlass) 38.dp else 48.dp, height = if (isLiquidGlass) 4.dp else 6.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(colors.coral.copy(alpha = 0.7f))
+                    .background(if (isLiquidGlass) colors.secondaryText.copy(alpha = 0.28f) else colors.coral.copy(alpha = 0.7f))
             )
         },
         modifier = modifier.semantics { paneTitle = title }

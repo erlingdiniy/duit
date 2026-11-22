@@ -163,8 +163,10 @@ fun ActivityScreen(
             }
         }
 
-        // 2. Frosted Spatial Search Bar
+        // 2. Search Bar (clean architectural pill in Liquid Glass; candy bubble in Candy Bubble)
         item(key = "search_bar", contentType = "search") {
+            val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = onSearchQueryChange,
@@ -178,7 +180,16 @@ fun ActivityScreen(
                     )
                 },
                 leadingIcon = {
-                    CandyIconBlob(Icons.Rounded.Search, CandyTone.Coral, size = 34.dp, tilt = -6f, solid = true)
+                    if (isLiquidGlass) {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = null,
+                            tint = colors.secondaryText,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        CandyIconBlob(Icons.Rounded.Search, CandyTone.Coral, size = 34.dp, tilt = -6f, solid = true)
+                    }
                 },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
@@ -191,12 +202,12 @@ fun ActivityScreen(
                         }
                     }
                 },
-                shape = RoundedCornerShape(50),
+                shape = if (isLiquidGlass) RoundedCornerShape(16.dp) else RoundedCornerShape(50),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = colors.glassSurfaceElevated,
-                    unfocusedContainerColor = colors.glassSurface,
-                    focusedBorderColor = colors.coral,
-                    unfocusedBorderColor = Color.Transparent
+                    focusedContainerColor = if (isLiquidGlass) colors.elevatedSurface else colors.glassSurfaceElevated,
+                    unfocusedContainerColor = if (isLiquidGlass) colors.elevatedSurface else colors.glassSurface,
+                    focusedBorderColor = if (isLiquidGlass) colors.primaryAction else colors.coral,
+                    unfocusedBorderColor = if (isLiquidGlass) colors.divider else Color.Transparent
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -350,6 +361,46 @@ private fun SpatialDateTransactionGroup(
 ) {
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+
+    if (isLiquidGlass) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = section.headerLabel,
+                    style = typography.cardTitle.copy(fontSize = 16.sp),
+                    color = colors.primaryText,
+                    modifier = Modifier.semantics { heading() }
+                )
+                Text(
+                    text = "${section.transactions.size}",
+                    style = typography.caption,
+                    color = colors.secondaryText
+                )
+            }
+
+            section.transactions.forEachIndexed { idx, transaction ->
+                if (idx > 0) {
+                    HorizontalDivider(color = colors.divider)
+                }
+                SpatialCompactTransactionRow(
+                    transaction = transaction,
+                    index = idx,
+                    walletsById = walletsById,
+                    categoriesById = categoriesById,
+                    onClick = { onSelectTransaction(transaction) }
+                )
+            }
+        }
+        return
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -406,6 +457,8 @@ private fun SpatialCompactTransactionRow(
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
     val privacy = LocalPrivacySettings.current
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
 
     val sourceWalletName = walletsById[transaction.walletId]?.name ?: "Wallet"
     val targetWalletName = transaction.targetWalletId?.let { walletsById[it]?.name }
@@ -442,6 +495,81 @@ private fun SpatialCompactTransactionRow(
         "${transaction.category} · $sourceWalletName"
     }
     val timeLabel = DateTimeFormatters.formatTimeOnly(transaction.occurredAtEpochMs)
+
+    if (isLiquidGlass) {
+        val iconTint = when (transaction.type) {
+            TransactionType.INCOME -> colors.income
+            TransactionType.TRANSFER -> colors.savings
+            TransactionType.EXPENSE -> colors.primaryText
+        }
+        val iconBg = when (transaction.type) {
+            TransactionType.INCOME -> colors.income.copy(alpha = if (colors.isDark) 0.16f else 0.10f)
+            TransactionType.TRANSFER -> colors.savings.copy(alpha = if (colors.isDark) 0.16f else 0.10f)
+            TransactionType.EXPENSE -> colors.baseSurface
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 58.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .candyPressable(onClick = onClick, onClickLabel = "Inspect ${transaction.title}")
+                .padding(vertical = 10.dp)
+                .privacySafeAmountSemantics(
+                    label = "${transaction.title}, $subtitle, $timeLabel",
+                    isMasked = privacy.isAnyMaskActive,
+                    visibleFormattedAmount = amountText
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = CategoryIconMapper.iconFor(iconKey, transaction.type),
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = transaction.title,
+                    style = typography.transactionDescription,
+                    color = colors.primaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = typography.caption,
+                    color = colors.secondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                CandyMoneyText(
+                    amountText,
+                    typography.transactionAmount.copy(fontSize = 15.sp),
+                    amountColor,
+                    minorScale = 0.72f
+                )
+                Text(
+                    text = if (transaction.type == TransactionType.TRANSFER) "Transfer · $timeLabel" else timeLabel,
+                    style = typography.caption,
+                    color = colors.secondaryText,
+                    maxLines = 1
+                )
+            }
+        }
+        return
+    }
 
     Row(
         modifier = Modifier
