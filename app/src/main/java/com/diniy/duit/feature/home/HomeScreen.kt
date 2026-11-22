@@ -129,8 +129,21 @@ import com.diniy.duit.core.ui.state.PrivacyMask
 import com.diniy.duit.core.ui.state.maskedAmount
 import com.diniy.duit.core.ui.state.maskedBalance
 import com.diniy.duit.core.ui.state.privacySafeAmountSemantics
+import com.diniy.duit.core.ui.glass.LiquidGlassActionPill
+import com.diniy.duit.core.ui.glass.LiquidGlassCapabilities
+import com.diniy.duit.core.ui.glass.LiquidGlassOrbButton
+import com.diniy.duit.core.ui.glass.LiquidGlassPanel
+import com.diniy.duit.core.ui.glass.LiquidGlassPanelBox
+import com.diniy.duit.core.ui.glass.LiquidGlassPanelPresets
+import com.diniy.duit.core.ui.glass.LiquidGlassSurface
+import com.diniy.duit.core.ui.glass.liquidGlassBackdropSource
+import com.diniy.duit.core.ui.glass.rememberLiquidGlassBackdropState
 import com.diniy.duit.core.ui.theme.DuitTheme
+import com.diniy.duit.core.ui.theme.LocalGlassIntensity
+import com.diniy.duit.core.ui.theme.LocalVisualTheme
 import com.diniy.duit.core.ui.theme.SpatialTheme
+import com.diniy.duit.domain.model.GlassIntensity
+import com.diniy.duit.domain.model.VisualTheme
 import com.diniy.duit.core.util.DateTimeFormatters
 import com.diniy.duit.domain.calculator.ObligationCalculator
 import com.diniy.duit.domain.model.Commitment
@@ -448,26 +461,118 @@ private fun SpatialHomeHeader(
             // Phase 11I: cycle subtitle removed; the cycle is shown inside the Safe to Spend card.
         }
 
+        val isLiquidGlass = LocalVisualTheme.current == VisualTheme.LIQUID_GLASS
         if (onOpenCalendar != null) {
-            com.diniy.duit.core.ui.components.CandyMintIconButton(
-                icon = androidx.compose.material.icons.Icons.Rounded.CalendarMonth,
-                contentDescription = "Money Calendar",
-                onClick = onOpenCalendar
-            )
+            if (isLiquidGlass) {
+                LiquidGlassOrbButton(
+                    icon = androidx.compose.material.icons.Icons.Rounded.CalendarMonth,
+                    contentDescription = "Money Calendar",
+                    onClick = onOpenCalendar
+                )
+            } else {
+                com.diniy.duit.core.ui.components.CandyMintIconButton(
+                    icon = androidx.compose.material.icons.Icons.Rounded.CalendarMonth,
+                    contentDescription = "Money Calendar",
+                    onClick = onOpenCalendar
+                )
+            }
             Spacer(Modifier.width(8.dp))
         }
         HomeSettingsButton(onClick = onOpenSettingsHub)
     }
 }
 
-/** Phase 11E: mint Candy Bubble settings button (shared with Activity header). */
+/** Phase 11E: mint Candy Bubble settings button; Phase 10E: optical Liquid Glass orb in Liquid Glass theme. */
 @Composable
 private fun HomeSettingsButton(onClick: () -> Unit) {
-    com.diniy.duit.core.ui.components.CandyMintIconButton(
-        icon = Icons.Rounded.Settings,
-        contentDescription = "Settings hub",
-        onClick = onClick
-    )
+    if (LocalVisualTheme.current == VisualTheme.LIQUID_GLASS) {
+        LiquidGlassOrbButton(
+            icon = Icons.Rounded.Settings,
+            contentDescription = "Settings hub",
+            onClick = onClick
+        )
+    } else {
+        com.diniy.duit.core.ui.components.CandyMintIconButton(
+            icon = Icons.Rounded.Settings,
+            contentDescription = "Settings hub",
+            onClick = onClick
+        )
+    }
+}
+
+@Composable
+private fun HomeSectionHeader(
+    title: String,
+    count: Int? = null,
+    subtitle: String? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    if (LocalVisualTheme.current != VisualTheme.LIQUID_GLASS) {
+        CandySectionHeader(
+            title = title,
+            count = count,
+            subtitle = subtitle,
+            actionLabel = actionLabel,
+            onAction = onAction
+        )
+        return
+    }
+    val colors = SpatialTheme.colors
+    val typography = SpatialTheme.typography
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = typography.sectionHeading,
+                    color = colors.primaryText,
+                    modifier = Modifier.semantics { heading() }
+                )
+                if (count != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(colors.primaryAction.copy(alpha = if (colors.isDark) 0.22f else 0.14f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = count.toString(),
+                            style = typography.caption,
+                            color = colors.primaryAction
+                        )
+                    }
+                }
+            }
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = typography.caption,
+                    color = colors.secondaryText
+                )
+            }
+        }
+        if (actionLabel != null && onAction != null) {
+            LiquidGlassActionPill(
+                onClick = onAction,
+                onClickLabel = actionLabel
+            ) {
+                Text(
+                    text = actionLabel,
+                    style = typography.caption,
+                    color = colors.primaryAction
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -477,6 +582,15 @@ private fun SpatialSafeToSpendHeroCard(
     activeReservePeriodLabel: String,
     onToggleBalanceVisibility: () -> Unit
 ) {
+    if (LocalVisualTheme.current == VisualTheme.LIQUID_GLASS) {
+        LiquidGlassSafeToSpendHeroCard(
+            safeToSpendSen = safeToSpendSen,
+            upcomingUnreservedSen = upcomingUnreservedSen,
+            activeReservePeriodLabel = activeReservePeriodLabel,
+            onToggleBalanceVisibility = onToggleBalanceVisibility
+        )
+        return
+    }
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
     val privacySettings = LocalPrivacySettings.current
@@ -622,6 +736,375 @@ private fun SpatialSafeToSpendHeroCard(
     }
 }
 
+/**
+ * Phase 10E Liquid Glass Safe-to-Spend Hero Card (Home only):
+ * - LOW: crisp solid optical blue card, flat border, solid inner tray, flat RM badge.
+ * - MID: soft frosted optical blue glass, delicate top catch-light sheen, frosted RM medallion.
+ * - HIGH: full Liquid Glass with specular bevel, subtle chromatic corner glint, and a genuine
+ *   AGSL convex chromatic glass `RM` lens medallion refracting the hero optical highlight.
+ */
+@Composable
+private fun LiquidGlassSafeToSpendHeroCard(
+    safeToSpendSen: Long,
+    upcomingUnreservedSen: Long,
+    activeReservePeriodLabel: String,
+    onToggleBalanceVisibility: () -> Unit
+) {
+    val colors = SpatialTheme.colors
+    val typography = SpatialTheme.typography
+    val intensity = LocalGlassIntensity.current
+    val privacySettings = LocalPrivacySettings.current
+    val isMasked = privacySettings.isAnyMaskActive
+    val isTight = safeToSpendSen < 0L
+    val isLow = intensity == GlassIntensity.SUBTLE
+    val isHigh = intensity == GlassIntensity.RICH
+
+    val heroBase = when {
+        isTight -> colors.expenseContainer
+        colors.isDark -> Color(0xFF0A54BD)
+        else -> Color(0xFF0062CC)
+    }
+    val heroInk = if (isTight) colors.onExpenseContainer else Color.White
+    val trayFill = when {
+        isTight -> heroInk.copy(alpha = if (isLow) 0.14f else 0.10f)
+        isLow -> if (colors.isDark) Color(0xFF063B8A) else Color(0xFF004B9E)
+        isHigh -> Color(0xFF002D66).copy(alpha = if (colors.isDark) 0.44f else 0.32f)
+        else -> Color(0xFF00387A).copy(alpha = if (colors.isDark) 0.36f else 0.26f)
+    }
+    val hidePillBg = when {
+        isTight -> heroInk
+        colors.isDark -> Color(0xFF0B2545).copy(alpha = if (isLow) 1f else 0.86f)
+        else -> Color(0xFFF2F7FF).copy(alpha = if (isLow) 1f else 0.92f)
+    }
+    val hidePillInk = when {
+        isTight -> heroBase
+        colors.isDark -> Color(0xFFD6EAFF)
+        else -> Color(0xFF0055B8)
+    }
+
+    val heroSpec = remember(colors, intensity, heroBase) {
+        LiquidGlassPanelPresets.card(
+            colors = colors,
+            intensity = intensity,
+            elevated = true
+        ).copy(
+            fillColor = heroBase,
+            topSheenAlpha = when (intensity) {
+                GlassIntensity.SUBTLE -> 0f
+                GlassIntensity.BALANCED -> 0.26f
+                GlassIntensity.RICH -> 0.44f
+            },
+            bottomReflectionAlpha = when (intensity) {
+                GlassIntensity.SUBTLE -> 0f
+                GlassIntensity.BALANCED -> 0.10f
+                GlassIntensity.RICH -> 0.24f
+            },
+            rimHighlightAlpha = when (intensity) {
+                GlassIntensity.SUBTLE -> 0f
+                GlassIntensity.BALANCED -> 0.46f
+                GlassIntensity.RICH -> 0.72f
+            },
+            chromaticGlintAlpha = if (isHigh) 0.42f else 0f,
+            borderColor = if (isLow) {
+                if (colors.isDark) Color(0x2EFFFFFF) else Color(0x24002B5C)
+            } else {
+                Color(0x38FFFFFF)
+            }
+        )
+    }
+    val desiredQuality = remember(intensity) { LiquidGlassCapabilities.qualityModeFor(intensity) }
+    val heroBackdrop = rememberLiquidGlassBackdropState(initialQualityMode = desiredQuality)
+    androidx.compose.runtime.SideEffect {
+        if (heroBackdrop.qualityMode != desiredQuality) {
+            heroBackdrop.qualityMode = desiredQuality
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxWidth().candyEntrance("home_hero")) {
+        LiquidGlassPanelBox(
+            spec = heroSpec,
+            shape = RoundedCornerShape(32.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (isHigh) Modifier.liquidGlassBackdropSource(heroBackdrop) else Modifier)
+        ) {
+            // Subtle calibrated optical depth highlight inside hero (HIGH/MID only; zero bubbles in LOW)
+            if (!isLow) {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .drawBehind {
+                            val topGlowAlpha = if (isHigh) 0.22f else 0.12f
+                            drawCircle(
+                                brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = topGlowAlpha),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 0.88f, size.height * 0.14f),
+                                    radius = size.width * 0.52f
+                                ),
+                                center = Offset(size.width * 0.88f, size.height * 0.14f),
+                                radius = size.width * 0.52f
+                            )
+                        }
+                )
+            }
+
+            Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp)) {
+                Text(text = "Safe to spend", style = typography.cardTitle.copy(fontSize = 18.sp), color = heroInk)
+                Text(
+                    text = activeReservePeriodLabel,
+                    style = typography.caption,
+                    color = heroInk.copy(alpha = 0.86f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(end = 68.dp)
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                SpatialAnimatedCounterText(
+                    amountSen = safeToSpendSen,
+                    accessibilityLabel = "Safe to Spend",
+                    style = typography.heroBalance.copy(fontSize = 50.sp, lineHeight = 56.sp, letterSpacing = (-1.5).sp),
+                    color = heroInk,
+                    splitMinorScale = 0.46f
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // Optical status chip (upright, clean contrast across all intensities)
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            if (isLow) {
+                                if (colors.isDark) Color(0xFF0B2545) else Color(0xFFF2F7FF)
+                            } else {
+                                Color.White.copy(alpha = if (colors.isDark) 0.18f else 0.90f)
+                            }
+                        )
+                        .border(
+                            BorderStroke(
+                                width = if (isLow) 1.dp else 0.75.dp,
+                                color = if (isLow) Color(0x24FFFFFF) else Color.White.copy(alpha = 0.55f)
+                            ),
+                            RoundedCornerShape(50)
+                        )
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    val statusTint = if (colors.isDark && !isLow) Color.White else hidePillInk
+                    Icon(
+                        imageVector = if (isTight) Icons.Rounded.Warning else Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = statusTint,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = if (isTight) "Overcommitted" else "Good to go",
+                        style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
+                        color = statusTint,
+                        maxLines = 1
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(trayFill)
+                        .then(
+                            if (!isLow) {
+                                Modifier.border(
+                                    BorderStroke(0.75.dp, Color.White.copy(alpha = if (isHigh) 0.28f else 0.18f)),
+                                    RoundedCornerShape(18.dp)
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .padding(start = 12.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Lock,
+                        contentDescription = null,
+                        tint = heroInk,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (upcomingUnreservedSen > 0L) {
+                            "${maskedBalance(upcomingUnreservedSen)} set aside for this cycle's bills. Savings protected."
+                        } else {
+                            "This cycle's bills are settled. Savings protected."
+                        },
+                        style = typography.caption,
+                        color = heroInk,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Row(
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(hidePillBg)
+                            .then(
+                                if (!isLow) {
+                                    Modifier.border(
+                                        BorderStroke(0.75.dp, Color.White.copy(alpha = if (isHigh) 0.55f else 0.32f)),
+                                        RoundedCornerShape(50)
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .candyPressable(
+                                onClick = onToggleBalanceVisibility,
+                                onClickLabel = if (isMasked) "Show sensitive amounts" else "Hide sensitive amounts"
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isMasked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            contentDescription = null,
+                            tint = hidePillInk,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (isMasked) "Show" else "Hide",
+                            style = typography.caption,
+                            color = hidePillInk
+                        )
+                    }
+                }
+            }
+        }
+
+        // Upright optical RM medallion (decorative, hidden from TalkBack):
+        // HIGH = genuine AGSL convex chromatic glass lens; MID = soft frosted disc; LOW = flat solid disc.
+        val medallionMod = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 16.dp, end = 16.dp)
+            .size(54.dp)
+            .clearAndSetSemantics { }
+
+        if (isHigh) {
+            val lensSpec = remember(colors) { LiquidGlassPanelPresets.heroMedallionLens(colors) }
+            LiquidGlassSurface(
+                backdropState = heroBackdrop,
+                spec = lensSpec,
+                qualityModeOverride = desiredQuality,
+                modifier = medallionMod
+            ) {
+                Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "RM",
+                        style = typography.cardTitle.copy(fontSize = 15.sp),
+                        color = Color.White
+                    )
+                }
+            }
+        } else {
+            Box(
+                modifier = medallionMod
+                    .clip(CircleShape)
+                    .background(
+                        if (isLow) {
+                            if (colors.isDark) Color(0xFF063B8A) else Color(0xFF004B9E)
+                        } else {
+                            Color.White.copy(alpha = 0.22f)
+                        }
+                    )
+                    .border(
+                        BorderStroke(
+                            width = if (isLow) 1.dp else 0.85.dp,
+                            color = Color.White.copy(alpha = if (isLow) 0.26f else 0.50f)
+                        ),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "RM",
+                    style = typography.cardTitle.copy(fontSize = 15.sp),
+                    color = heroInk
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeGlassOrBubbleCard(
+    tone: CandyTone,
+    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(SpatialTheme.geometry.radiusLg),
+    decor: CandyDecor = CandyDecor.Bubbles,
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
+) {
+    if (LocalVisualTheme.current == VisualTheme.LIQUID_GLASS) {
+        val accent = if (tone == CandyTone.Neutral) null else candyTone(tone).fill
+        LiquidGlassPanel(
+            modifier = modifier,
+            shape = shape,
+            accentTint = accent,
+            contentPadding = contentPadding,
+            onClick = onClick,
+            onClickLabel = onClickLabel,
+            content = content
+        )
+    } else {
+        CandyBubbleCard(
+            tone = tone,
+            modifier = modifier,
+            shape = shape,
+            decor = decor,
+            contentPadding = contentPadding,
+            onClick = onClick,
+            onClickLabel = onClickLabel,
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun HomeGlassOrSpatialCard(
+    modifier: Modifier = Modifier,
+    tier: SpatialGlassTier = SpatialGlassTier.Standard,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(28.dp),
+    contentPadding: PaddingValues = PaddingValues(vertical = 6.dp, horizontal = 4.dp),
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
+) {
+    if (LocalVisualTheme.current == VisualTheme.LIQUID_GLASS) {
+        LiquidGlassPanel(
+            modifier = modifier,
+            shape = shape,
+            elevated = tier == SpatialGlassTier.Elevated,
+            contentPadding = contentPadding,
+            content = content
+        )
+    } else {
+        SpatialGlassCard(
+            modifier = modifier,
+            tier = tier,
+            shape = shape,
+            contentPadding = contentPadding,
+            content = content
+        )
+    }
+}
+
 @Composable
 private fun SpatialSecondaryFinancialBento(
     totalBalanceSen: Long,
@@ -639,6 +1122,8 @@ private fun SpatialSecondaryFinancialBento(
 ) {
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
+    val isLiquidGlass = LocalVisualTheme.current == VisualTheme.LIQUID_GLASS
+    val glassIntensity = LocalGlassIntensity.current
     val privacy = LocalPrivacySettings.current
     val walletCaption = if (walletCount == 1) "1 wallet" else "$walletCount wallets"
     val goalFraction = if (savingsBalanceSen > 0L) {
@@ -658,13 +1143,13 @@ private fun SpatialSecondaryFinancialBento(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Wallet pocket: total balance across included wallets
-            CandyBubbleCard(
+            HomeGlassOrBubbleCard(
                 tone = CandyTone.Sky,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
                     .privacySafeAmountSemantics("Total balance, $walletCaption", privacy.isAnyMaskActive, totalText),
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 12.dp),
+                shape = if (isLiquidGlass) RoundedCornerShape(26.dp) else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 12.dp),
                 onClick = onOpenAllWallets,
                 onClickLabel = "View all wallets"
             ) {
@@ -677,13 +1162,13 @@ private fun SpatialSecondaryFinancialBento(
             }
 
             // Savings jar: protected balance with goal-allocation ring
-            CandyBubbleCard(
+            HomeGlassOrBubbleCard(
                 tone = CandyTone.Sunny,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
                     .privacySafeAmountSemantics("Protected savings", privacy.isAnyMaskActive, savingsText),
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 12.dp, bottomEnd = 28.dp),
+                shape = if (isLiquidGlass) RoundedCornerShape(26.dp) else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 12.dp, bottomEnd = 28.dp),
                 onClick = onOpenSavingsGoals,
                 onClickLabel = "Open savings goals"
             ) {
@@ -705,15 +1190,7 @@ private fun SpatialSecondaryFinancialBento(
         val peach = candyTone(CandyTone.Peach)
         val reservedText = maskedBalance(currentCycleReservedSen)
         val futureText = maskedBalance(upcomingFutureBillsSen)
-        SpatialGlassSurface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .privacySafeAmountSemantics("Current cycle reserved", privacy.isAnyMaskActive, reservedText),
-            shape = CandyTicketShape(notchFraction = 0.66f),
-            containerColor = peach.container,
-            onClick = onOpenCommitments,
-            onClickLabel = "Open commitments"
-        ) {
+        val ticketContent: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -759,6 +1236,36 @@ private fun SpatialSecondaryFinancialBento(
                 }
             }
         }
+        if (isLiquidGlass) {
+            val ticketSpec = remember(colors, glassIntensity, peach.fill) {
+                LiquidGlassPanelPresets.card(
+                    colors = colors,
+                    intensity = glassIntensity,
+                    accentTint = peach.fill
+                )
+            }
+            LiquidGlassPanelBox(
+                spec = ticketSpec,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .privacySafeAmountSemantics("Current cycle reserved", privacy.isAnyMaskActive, reservedText),
+                shape = CandyTicketShape(notchFraction = 0.66f),
+                onClick = onOpenCommitments,
+                onClickLabel = "Open commitments",
+                content = ticketContent
+            )
+        } else {
+            SpatialGlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .privacySafeAmountSemantics("Current cycle reserved", privacy.isAnyMaskActive, reservedText),
+                shape = CandyTicketShape(notchFraction = 0.66f),
+                containerColor = peach.container,
+                onClick = onOpenCommitments,
+                onClickLabel = "Open commitments",
+                content = ticketContent
+            )
+        }
     }
 }
 
@@ -772,7 +1279,7 @@ private fun SpatialPendingCommissionsCard(
     val privacy = LocalPrivacySettings.current
     val amount = maskedBalance(pendingCommissionsSen)
 
-    CandyBubbleCard(
+    HomeGlassOrBubbleCard(
         tone = CandyTone.Sunny,
         decor = CandyDecor.Corner,
         modifier = Modifier
@@ -808,13 +1315,13 @@ private fun SpatialUpcomingPaymentsPreviewSection(
     val previewItems = commitments.take(3)
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        CandySectionHeader(
+        HomeSectionHeader(
             title = if (isSamplePreview) "Coming up · Sample" else "Coming up",
             count = commitments.size,
             actionLabel = "All bills",
             onAction = onViewAllCommitments
         )
-        SpatialGlassCard(
+        HomeGlassOrSpatialCard(
             modifier = Modifier.fillMaxWidth(),
             tier = SpatialGlassTier.Standard,
             shape = RoundedCornerShape(28.dp),
@@ -918,7 +1425,7 @@ private fun SpatialWalletsPreviewSection(
     val totalWalletsCount = activeWallets.size + archivedCount
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        CandySectionHeader(
+        HomeSectionHeader(
             title = if (isSamplePreview) "Wallets · Sample" else "Wallets",
             count = activeWallets.size,
             subtitle = if (archivedCount > 0) "$archivedCount archived" else null,
@@ -946,7 +1453,7 @@ private fun SpatialWalletsPreviewSection(
                     val tone = walletTone(wallet.accentToken)
                     val tags = walletTags(wallet)
                     val balance = maskedBalance(wallet.balanceSen)
-                    CandyBubbleCard(
+                    HomeGlassOrBubbleCard(
                         tone = tone,
                         decor = CandyDecor.Corner,
                         modifier = Modifier
@@ -1045,12 +1552,12 @@ private fun SpatialRecentTransactionsPreviewSection(
     val privacy = LocalPrivacySettings.current
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        CandySectionHeader(
+        HomeSectionHeader(
             title = if (isSamplePreview) "Recent activity · Sample" else "Recent activity",
             actionLabel = "View all",
             onAction = onViewAllActivity
         )
-        SpatialGlassCard(
+        HomeGlassOrSpatialCard(
             modifier = Modifier.fillMaxWidth(),
             tier = SpatialGlassTier.Standard,
             shape = RoundedCornerShape(28.dp),
@@ -1158,9 +1665,10 @@ private fun AllWalletsBottomSheet(
                 color = colors.primaryText,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            SpatialGlassCard(
+            HomeGlassOrSpatialCard(
                 modifier = Modifier.fillMaxWidth(),
                 tier = SpatialGlassTier.Standard,
+                shape = RoundedCornerShape(24.dp),
                 contentPadding = PaddingValues(vertical = 6.dp)
             ) {
                 activeWallets.forEachIndexed { idx, wallet ->
@@ -1186,9 +1694,10 @@ private fun AllWalletsBottomSheet(
                 color = colors.secondaryText,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            SpatialGlassCard(
+            HomeGlassOrSpatialCard(
                 modifier = Modifier.fillMaxWidth(),
                 tier = SpatialGlassTier.Subtle,
+                shape = RoundedCornerShape(24.dp),
                 contentPadding = PaddingValues(vertical = 6.dp)
             ) {
                 archivedWallets.forEachIndexed { idx, wallet ->

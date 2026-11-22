@@ -69,26 +69,36 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.diniy.duit.core.ui.glass.LiquidGlassCapabilities
 import com.diniy.duit.core.ui.glass.LiquidGlassPresets
 import com.diniy.duit.core.ui.glass.LiquidGlassSprings
 import com.diniy.duit.core.ui.glass.LiquidGlassSurface
+import com.diniy.duit.core.ui.glass.LiquidGlassTier
 import com.diniy.duit.core.ui.glass.LocalLiquidGlassBackdrop
+import com.diniy.duit.core.ui.glass.liquidGlassHiddenBackdropSource
+import com.diniy.duit.core.ui.glass.rememberLiquidGlassBackdropState
 import com.diniy.duit.core.ui.theme.LocalGlassIntensity
 import com.diniy.duit.core.ui.theme.SpatialTheme
 import com.diniy.duit.domain.model.GlassIntensity
@@ -132,6 +142,30 @@ fun PrismaticFloatingBottomBar(
     val totalSlots = if (hasCenterAction) items.size + 1 else items.size
     val backdropState = LocalLiquidGlassBackdrop.current
     val useLiquidGlass = visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS && backdropState != null
+    val isLiquidLow = useLiquidGlass && glassIntensity == GlassIntensity.SUBTLE
+    val isLiquidHigh = useLiquidGlass && glassIntensity == GlassIntensity.RICH
+    val hasGlassEffects = useLiquidGlass && !isLiquidLow
+    val desiredQualityMode = remember(glassIntensity) {
+        LiquidGlassCapabilities.qualityModeFor(glassIntensity)
+    }
+    val context = LocalContext.current
+    val isLowRam = remember(context) { LiquidGlassCapabilities.isLowRam(context) }
+    val resolvedTier = remember(desiredQualityMode, isLowRam) {
+        LiquidGlassCapabilities.resolveTier(
+            isLowRamDevice = isLowRam,
+            qualityMode = desiredQualityMode
+        )
+    }
+    val useRaisedChromaticLens = isLiquidHigh && resolvedTier == LiquidGlassTier.FullAgsl && !hasCenterAction
+    val lensTrackBackdrop = rememberLiquidGlassBackdropState(
+        initialQualityMode = desiredQualityMode
+    )
+    androidx.compose.runtime.SideEffect {
+        if (lensTrackBackdrop.qualityMode != desiredQualityMode) {
+            lensTrackBackdrop.qualityMode = desiredQualityMode
+        }
+    }
+    val frostedBarLayer = rememberGraphicsLayer()
     val reducedMotion = rememberReducedMotionEnabled()
     val performHaptic = rememberDuitHaptic()
     val density = LocalDensity.current
@@ -161,20 +195,20 @@ fun PrismaticFloatingBottomBar(
     var jellyTarget by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var rowHeightPx by remember { mutableIntStateOf(with(density) { 56.dp.roundToPx() }) }
 
-    LaunchedEffect(targetVisualSlot, isDragging, reducedMotion, useLiquidGlass) {
+    LaunchedEffect(targetVisualSlot, isDragging, reducedMotion, hasGlassEffects, isLiquidHigh) {
         if (!isDragging) {
             jellyTarget = 0f
             if (reducedMotion) {
                 animatedSlot.snapTo(targetVisualSlot)
             } else {
                 val moved = abs(animatedSlot.value - targetVisualSlot) > 0.05f
-                if (useLiquidGlass && moved) {
+                if (hasGlassEffects && moved) {
                     tapLiftPulse = true
-                    jellyTarget = 0.09f
+                    jellyTarget = if (isLiquidHigh) 0.09f else 0f
                 }
                 animatedSlot.animateTo(
                     targetValue = targetVisualSlot,
-                    animationSpec = if (useLiquidGlass) {
+                    animationSpec = if (hasGlassEffects) {
                         LiquidGlassSprings.Snap
                     } else {
                         spring(
@@ -190,26 +224,26 @@ fun PrismaticFloatingBottomBar(
         }
     }
 
-    val isLensLifted = useLiquidGlass && (isDragging || tapLiftPulse) && !reducedMotion
+    val isLensLifted = hasGlassEffects && (isDragging || tapLiftPulse) && !reducedMotion
     val lensLift by animateFloatAsState(
-        targetValue = if (isLensLifted) 1f else 0f,
+        targetValue = if (isLensLifted) (if (isLiquidHigh) 1f else 0.35f) else 0f,
         animationSpec = if (isLensLifted) LiquidGlassSprings.Lift else LiquidGlassSprings.Settle,
         label = "nav_lens_lift"
     )
     val lensJelly by animateFloatAsState(
-        targetValue = if (useLiquidGlass && !reducedMotion) jellyTarget else 0f,
+        targetValue = if (isLiquidHigh && !reducedMotion) jellyTarget else 0f,
         animationSpec = LiquidGlassSprings.Jelly,
         label = "nav_lens_jelly"
     )
     val barSwell by animateFloatAsState(
-        targetValue = if (useLiquidGlass && isDragging && !reducedMotion) 1.018f else 1f,
+        targetValue = if (isLiquidHigh && isDragging && !reducedMotion) 1.018f else 1f,
         animationSpec = if (isDragging) LiquidGlassSprings.Press else LiquidGlassSprings.Release,
         label = "nav_bar_swell"
     )
 
     // Subtle gesture-bar-only bottom edge fade keeps clipped text out of the system inset strip
     // while leaving the floating glass dock itself crystal-clear over live refracted content.
-    val containerScrim = if (useLiquidGlass) {
+    val containerScrim = if (hasGlassEffects) {
         Modifier.background(
             Brush.verticalGradient(
                 colorStops = arrayOf(
@@ -255,7 +289,7 @@ fun PrismaticFloatingBottomBar(
                 val slotWidthPx = (totalWidthPx / totalSlots).coerceAtLeast(1f)
                 val slotWidthDp = maxWidth / totalSlots
 
-                val dragModifier = Modifier.pointerInput(totalSlots, slotWidthPx, selectedIndex, useLiquidGlass) {
+                val dragModifier = Modifier.pointerInput(totalSlots, slotWidthPx, selectedIndex, hasGlassEffects, isLiquidHigh) {
                     detectHorizontalDragGestures(
                         onDragStart = { startOffset ->
                             val slot = (startOffset.x / slotWidthPx).toInt().coerceIn(0, totalSlots - 1)
@@ -272,7 +306,7 @@ fun PrismaticFloatingBottomBar(
                             val nextSlot = (animatedSlot.value + deltaFraction)
                                 .coerceIn(0f, (totalSlots - 1).toFloat())
                             scope.launch { animatedSlot.snapTo(nextSlot) }
-                            if (useLiquidGlass) {
+                            if (isLiquidHigh) {
                                 jellyTarget = (0.14f * tanh(abs(dragAmount) / 28.0)).toFloat()
                             }
                             val nearestSlot = nextSlot.roundToInt().coerceIn(0, totalSlots - 1)
@@ -297,7 +331,7 @@ fun PrismaticFloatingBottomBar(
                                     } else {
                                         animatedSlot.animateTo(
                                             targetValue = targetVisualSlot,
-                                            animationSpec = if (useLiquidGlass) {
+                                            animationSpec = if (hasGlassEffects) {
                                                 LiquidGlassSprings.Snap
                                             } else {
                                                 spring(
@@ -320,7 +354,7 @@ fun PrismaticFloatingBottomBar(
 
                 Box(modifier = Modifier.fillMaxWidth().then(dragModifier)) {
                     val indicatorHeightDp = with(density) { rowHeightPx.toDp() }
-                    if (useLiquidGlass) {
+                    if (useLiquidGlass && !useRaisedChromaticLens) {
                         val lensSpec = remember(colors, glassIntensity) {
                             LiquidGlassPresets.floatingNavLens(colors, glassIntensity)
                         }
@@ -329,6 +363,7 @@ fun PrismaticFloatingBottomBar(
                         LiquidGlassSurface(
                             backdropState = backdropState,
                             spec = lensSpec,
+                            qualityModeOverride = desiredQualityMode,
                             modifier = Modifier
                                 .offset {
                                     IntOffset(
@@ -343,7 +378,7 @@ fun PrismaticFloatingBottomBar(
                                     scaleY = lensScaleY
                                 }
                         ) {}
-                    } else {
+                    } else if (!useLiquidGlass) {
                         Box(
                             modifier = Modifier
                                 .offset {
@@ -421,6 +456,8 @@ fun PrismaticFloatingBottomBar(
                                 FloatingNavTabItem(
                                     item = item,
                                     isSelected = index == activeHighlightIndex,
+                                    forceIdleInk = useRaisedChromaticLens,
+                                    solidLiquidMode = isLiquidLow,
                                     reducedMotion = reducedMotion,
                                     useLiquidGlass = useLiquidGlass,
                                     lensLift = lensLift,
@@ -440,13 +477,125 @@ fun PrismaticFloatingBottomBar(
         }
 
         val capsuleSurface: @Composable (Modifier) -> Unit = { capsuleMod ->
-            if (useLiquidGlass) {
+            if (useRaisedChromaticLens) {
+                val barSpec = remember(colors, glassIntensity) {
+                    LiquidGlassPresets.floatingNavBar(colors, glassIntensity)
+                }
+                val innerPadH = if (hasTrailingQuickAdd) 6.dp else 8.dp
+                val innerPadV = 6.dp
+                val barHeightDp = with(density) { rowHeightPx.toDp() } + innerPadV * 2
+                val motionBoost = (lensLift + abs(lensJelly) * 4f).coerceIn(0f, 1f)
+                val lensSpec = remember(colors, glassIntensity, motionBoost) {
+                    LiquidGlassPresets.floatingNavLens(
+                        colors = colors,
+                        intensity = glassIntensity,
+                        motionBoost = motionBoost
+                    )
+                }
+
+                Box(modifier = capsuleMod) {
+                    // Layer 1 (outer nav bar untouched): baseline frosted Liquid Glass capsule.
+                    LiquidGlassSurface(
+                        backdropState = backdropState,
+                        spec = barSpec,
+                        qualityModeOverride = desiredQualityMode,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .drawWithContent {
+                                if (size.width >= 1f && size.height >= 1f) {
+                                    frostedBarLayer.record(
+                                        size = IntSize(size.width.roundToInt(), size.height.roundToInt())
+                                    ) {
+                                        this@drawWithContent.drawContent()
+                                    }
+                                    drawLayer(frostedBarLayer)
+                                } else {
+                                    drawContent()
+                                }
+                            }
+                    ) {}
+
+                    // Layer 1B: Visible idle tabs + full tap/drag/TalkBack interactivity.
+                    barContent()
+
+                    // Layer 2 (hidden optical source): frosted bar + active-blue tab glyphs,
+                    // sampled solely by the raised convex lens so center glyphs magnify cleanly
+                    // and edges refract/disperse chromatically with zero double-text ghosting.
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clearAndSetSemantics {}
+                            .liquidGlassHiddenBackdropSource(lensTrackBackdrop)
+                            .drawBehind {
+                                drawLayer(frostedBarLayer)
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = innerPadH, vertical = innerPadV),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            items.forEach { item ->
+                                FloatingNavTabItem(
+                                    item = item,
+                                    isSelected = true,
+                                    forceActiveBlueInk = true,
+                                    interactive = false,
+                                    reducedMotion = true,
+                                    useLiquidGlass = true,
+                                    lensLift = 0f,
+                                    onClick = {},
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+
+                    // Layer 3: Raised convex chromatic glass lens riding cleanly over the bar.
+                    // Uses real animated bounds (no graphicsLayer scale drift) and overhangs the
+                    // bar slightly (+2dp rest, +7dp moving) so icons/labels sit inside the flat
+                    // clear core while curved top/bottom/side walls show TIR depth & RGB dispersion.
+                    BoxWithConstraints(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(barHeightDp)
+                    ) {
+                        val innerPadHPx = with(density) { innerPadH.toPx() }
+                        val trackWidthDp = (maxWidth - innerPadH * 2).coerceAtLeast(1.dp)
+                        val slotWidthDp = trackWidthDp / totalSlots
+                        val slotWidthPx = with(density) { slotWidthDp.toPx() }
+                        val extraW = 8.dp * (lensLift + abs(lensJelly) * 2.5f).coerceIn(0f, 1.4f)
+                        val extraH = 2.dp + 5.dp * lensLift
+                        val lensW = slotWidthDp + extraW
+                        val lensH = (barHeightDp + extraH).coerceAtLeast(56.dp)
+                        val extraWPx = with(density) { extraW.toPx() }
+                        val baseY = with(density) { (-extraH / 2f).toPx() }
+
+                        LiquidGlassSurface(
+                            backdropState = lensTrackBackdrop,
+                            spec = lensSpec,
+                            qualityModeOverride = desiredQualityMode,
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        x = (innerPadHPx + animatedSlot.value * slotWidthPx - extraWPx * 0.5f).roundToInt(),
+                                        y = baseY.roundToInt()
+                                    )
+                                }
+                                .width(lensW)
+                                .height(lensH)
+                        ) {}
+                    }
+                }
+            } else if (useLiquidGlass) {
                 val barSpec = remember(colors, glassIntensity) {
                     LiquidGlassPresets.floatingNavBar(colors, glassIntensity)
                 }
                 LiquidGlassSurface(
                     backdropState = backdropState,
                     spec = barSpec,
+                    qualityModeOverride = desiredQualityMode,
                     modifier = capsuleMod.graphicsLayer {
                         scaleX = barSwell
                         scaleY = 1f
@@ -544,6 +693,11 @@ private fun LiquidGlassQuickAddFab(
 ) {
     val colors = SpatialTheme.colors
     val reducedMotion = rememberReducedMotionEnabled()
+    val isLow = glassIntensity == GlassIntensity.SUBTLE
+    val isHigh = glassIntensity == GlassIntensity.RICH
+    val desiredQualityMode = remember(glassIntensity) {
+        LiquidGlassCapabilities.qualityModeFor(glassIntensity)
+    }
     val spec = remember(colors, glassIntensity) {
         LiquidGlassPresets.quickAddFab(colors, glassIntensity)
     }
@@ -558,22 +712,42 @@ private fun LiquidGlassQuickAddFab(
         }
     }
 
+    val targetScale = when {
+        !isPressed || reducedMotion -> 1f
+        isLow -> 0.96f
+        isHigh -> 1.09f
+        else -> 1.04f
+    }
+    val scaleAnimSpec = if (isLow) {
+        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+    } else if (isPressed) {
+        LiquidGlassSprings.Press
+    } else {
+        LiquidGlassSprings.Release
+    }
     val scale by animateFloatAsState(
-        targetValue = if (isPressed && !reducedMotion) 1.09f else 1f,
-        animationSpec = if (isPressed) LiquidGlassSprings.Press else LiquidGlassSprings.Release,
+        targetValue = targetScale,
+        animationSpec = scaleAnimSpec,
         label = "lg_fab_scale"
     )
     val press by animateFloatAsState(
-        targetValue = if (isPressed && !reducedMotion) 1f else 0f,
+        targetValue = if (isPressed && !reducedMotion && !isLow) 1f else 0f,
         animationSpec = if (isPressed) LiquidGlassSprings.Press else LiquidGlassSprings.Release,
         label = "lg_fab_press"
     )
+    val bloomAlpha = if (isHigh) press else press * 0.5f
+    val iconRotation = when {
+        reducedMotion || isLow -> 0f
+        isHigh -> 90f * press
+        else -> 45f * press
+    }
 
     LiquidGlassSurface(
         backdropState = backdropState,
         spec = spec,
+        qualityModeOverride = desiredQualityMode,
         touchPosition = touchPos,
-        touchAlpha = press,
+        touchAlpha = bloomAlpha,
         modifier = modifier
             .size(buttonSize)
             .graphicsLayer {
@@ -598,7 +772,7 @@ private fun LiquidGlassQuickAddFab(
                 tint = colors.primaryAction,
                 modifier = Modifier
                     .size(26.dp)
-                    .graphicsLayer { rotationZ = if (reducedMotion) 0f else 90f * press }
+                    .graphicsLayer { rotationZ = iconRotation }
             )
         }
     }
@@ -684,6 +858,7 @@ private fun FloatingNavTabItem(
     isSelected: Boolean,
     reducedMotion: Boolean,
     useLiquidGlass: Boolean = false,
+    solidLiquidMode: Boolean = false,
     lensLift: Float = 0f,
     forceIdleInk: Boolean = false,
     forceActiveBlueInk: Boolean = false,
@@ -693,7 +868,7 @@ private fun FloatingNavTabItem(
 ) {
     val colors = SpatialTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
-    val idleInk = if (useLiquidGlass) {
+    val idleInk = if (useLiquidGlass && !solidLiquidMode) {
         if (colors.isDark) Color.White.copy(alpha = 0.86f) else colors.primaryText.copy(alpha = 0.72f)
     } else {
         colors.secondaryText

@@ -660,11 +660,7 @@ private fun AppearanceSettingsScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("Glass Intensity", style = typography.cardTitle, color = colors.primaryText)
                         Text(
-                            text = when (settings.glassIntensity) {
-                                GlassIntensity.SUBTLE -> "Optical frost fallback (lowest GPU use)"
-                                GlassIntensity.BALANCED -> "Live refraction with scroll optimization"
-                                GlassIntensity.RICH -> "Stronger bevel refraction & specular rim"
-                            },
+                            text = settings.glassIntensity.summary,
                             style = typography.caption,
                             color = colors.secondaryText
                         )

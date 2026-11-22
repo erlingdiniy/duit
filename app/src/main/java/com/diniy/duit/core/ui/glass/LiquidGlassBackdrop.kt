@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -83,7 +84,10 @@ fun Modifier.liquidGlassBackdropSource(state: LiquidGlassBackdropState): Modifie
             state.sourceBoundsInRoot = coords.boundsInRoot()
         }
         .drawWithContent {
-            if (size.width >= 1f && size.height >= 1f) {
+            if (state.qualityMode == LiquidGlassQualityMode.FALLBACK) {
+                state.hasRecordedBackdrop = false
+                drawContent()
+            } else if (size.width >= 1f && size.height >= 1f) {
                 state.backdropLayer.record(
                     size = IntSize(size.width.roundToInt(), size.height.roundToInt())
                 ) {
@@ -93,6 +97,26 @@ fun Modifier.liquidGlassBackdropSource(state: LiquidGlassBackdropState): Modifie
                 drawLayer(state.backdropLayer)
             } else {
                 drawContent()
+            }
+        }
+
+/**
+ * Records a container into [state] ONLY (without painting it to screen), used as an isolated
+ * optical refraction source for the active chromatic bottom-nav lens.
+ */
+fun Modifier.liquidGlassHiddenBackdropSource(state: LiquidGlassBackdropState): Modifier =
+    this
+        .onGloballyPositioned { coords ->
+            state.sourceBoundsInRoot = coords.boundsInRoot()
+        }
+        .drawWithContent {
+            if (size.width >= 1f && size.height >= 1f) {
+                state.backdropLayer.record(
+                    size = IntSize(size.width.roundToInt(), size.height.roundToInt())
+                ) {
+                    this@drawWithContent.drawContent()
+                }
+                state.hasRecordedBackdrop = true
             }
         }
 
@@ -109,6 +133,7 @@ fun LiquidGlassSurface(
     backdropState: LiquidGlassBackdropState?,
     spec: LiquidGlassSurfaceSpec,
     modifier: Modifier = Modifier,
+    qualityModeOverride: LiquidGlassQualityMode? = null,
     touchPosition: Offset = Offset.Zero,
     touchAlpha: Float = 0f,
     content: @Composable BoxScope.() -> Unit
@@ -118,11 +143,13 @@ fun LiquidGlassSurface(
     val reducedMotion = rememberReducedMotionEnabled()
     val isLowRam = remember(context) { LiquidGlassCapabilities.isLowRam(context) }
 
+    val effectiveQualityMode = qualityModeOverride ?: backdropState?.qualityMode ?: LiquidGlassQualityMode.AUTO
     val tier = LiquidGlassCapabilities.resolveTier(
         sdkInt = Build.VERSION.SDK_INT,
         isLowRamDevice = isLowRam,
-        qualityMode = backdropState?.qualityMode ?: LiquidGlassQualityMode.AUTO
+        qualityMode = effectiveQualityMode
     )
+    val isSolidMode = tier == LiquidGlassTier.OpticalFallback && spec.tintAlpha >= 0.99f && spec.rimAlpha <= 0.01f
 
     val targetRefract = LiquidGlassCapabilities.resolveRefractionFactor(
         tier = tier,
@@ -147,8 +174,10 @@ fun LiquidGlassSurface(
     val thicknessPx = with(density) { spec.thickness.toPx() }
     val blurPx = with(density) { spec.blurRadius.toPx() }
 
-    val borderBrush = remember(spec.rimColor, spec.rimAlpha, spec.borderColor, spec.isDark, tier) {
-        if (spec.isDark) {
+    val borderBrush = remember(spec.rimColor, spec.rimAlpha, spec.borderColor, spec.isDark, tier, isSolidMode) {
+        if (isSolidMode) {
+            SolidColor(spec.borderColor)
+        } else if (spec.isDark) {
             // Soft obsidian glass hairline (never a harsh white wireframe border)
             Brush.linearGradient(
                 colors = listOf(
@@ -169,21 +198,38 @@ fun LiquidGlassSurface(
         }
     }
     val borderWidth = if (tier == LiquidGlassTier.FullAgsl) 0.75.dp else 1.dp
+    val borderModifier = if (isSolidMode && spec.borderColor.alpha <= 0.001f) {
+        Modifier
+    } else {
+        Modifier.border(BorderStroke(borderWidth, borderBrush), shape)
+    }
 
     Box(
         modifier = modifier
-            .shadow(
-                elevation = spec.shadowElevation,
-                shape = shape,
-                ambientColor = spec.shadowColor,
-                spotColor = spec.shadowColor,
-                clip = false
+            .then(
+                if (spec.shadowElevation > 0.dp) {
+                    Modifier.shadow(
+                        elevation = spec.shadowElevation,
+                        shape = shape,
+                        ambientColor = spec.shadowColor,
+                        spotColor = spec.shadowColor,
+                        clip = false
+                    )
+                } else {
+                    Modifier
+                }
             )
             .clip(shape)
             .onGloballyPositioned { coords ->
                 surfaceBoundsInRoot = coords.boundsInRoot()
             }
             .drawBehind {
+                if (isSolidMode) {
+                    // LOW intensity: clean opaque solid UI — zero blur, refraction, gloss or shader cost
+                    drawRect(color = spec.tintColor)
+                    return@drawBehind
+                }
+
                 val canSampleBackdrop = backdropState != null &&
                     backdropState.hasRecordedBackdrop &&
                     size.width >= 2f &&
@@ -275,7 +321,7 @@ fun LiquidGlassSurface(
                     )
                 }
             }
-            .border(BorderStroke(borderWidth, borderBrush), shape),
+            .then(borderModifier),
         content = content
     )
 }

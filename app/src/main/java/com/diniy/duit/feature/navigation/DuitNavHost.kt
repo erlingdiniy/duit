@@ -171,9 +171,11 @@ fun DuitAppShell(
     val glassBackdropState = com.diniy.duit.core.ui.glass.rememberLiquidGlassBackdropState(
         initialQualityMode = com.diniy.duit.core.ui.glass.LiquidGlassCapabilities.qualityModeFor(glassIntensity)
     )
-    LaunchedEffect(glassIntensity) {
-        glassBackdropState.qualityMode =
-            com.diniy.duit.core.ui.glass.LiquidGlassCapabilities.qualityModeFor(glassIntensity)
+    androidx.compose.runtime.SideEffect {
+        val targetMode = com.diniy.duit.core.ui.glass.LiquidGlassCapabilities.qualityModeFor(glassIntensity)
+        if (glassBackdropState.qualityMode != targetMode) {
+            glassBackdropState.qualityMode = targetMode
+        }
     }
     LaunchedEffect(glassScrollPulse) {
         if (glassScrollPulse > 0) {

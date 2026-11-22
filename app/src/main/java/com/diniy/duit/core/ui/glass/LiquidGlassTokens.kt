@@ -176,148 +176,259 @@ object LiquidGlassPresets {
         colors: SpatialColorTokens,
         intensity: GlassIntensity = GlassIntensity.BALANCED
     ): LiquidGlassSurfaceSpec {
+        if (intensity == GlassIntensity.SUBTLE) {
+            return LiquidGlassSurfaceSpec(
+                kind = LiquidGlassKind.Surface,
+                cornerRadius = 32.dp,
+                bezel = 0.dp,
+                thickness = 0.dp,
+                blurRadius = 0.dp,
+                ior = 1.0f,
+                zoom = 1.0f,
+                dispersion = 0f,
+                saturation = 1.0f,
+                tintColor = colors.floatingNavSurface,
+                tintAlpha = 1.0f,
+                rimColor = Color.Transparent,
+                rimAlpha = 0f,
+                borderColor = if (colors.isDark) Color(0x28FFFFFF) else Color(0x1E0F172A),
+                shadowColor = if (colors.isDark) Color.Black.copy(alpha = 0.42f) else Color(0x140F172A),
+                shadowElevation = 6.dp,
+                isDark = colors.isDark
+            )
+        }
         val rich = intensity == GlassIntensity.RICH
         return if (colors.isDark) {
             LiquidGlassSurfaceSpec(
                 kind = LiquidGlassKind.Surface,
                 cornerRadius = 32.dp,
-                bezel = if (rich) 18.dp else 16.dp,
-                thickness = if (rich) 30.dp else 26.dp,
-                blurRadius = if (rich) 10.dp else 8.dp,
-                ior = 1.52f,
-                saturation = if (rich) 1.80f else 1.65f,
-                tintColor = Color(0xFF0E1117),
-                tintAlpha = if (rich) 0.36f else 0.44f,
+                bezel = if (rich) 18.dp else 12.dp,
+                thickness = if (rich) 30.dp else 16.dp,
+                blurRadius = if (rich) 9.dp else 14.dp,
+                ior = if (rich) 1.52f else 1.38f,
+                saturation = if (rich) 1.80f else 1.25f,
+                tintColor = if (rich) Color(0xFF0E1117) else Color(0xFF121620),
+                tintAlpha = if (rich) 0.34f else 0.56f,
                 rimColor = Color.White,
-                rimAlpha = if (rich) 0.46f else 0.36f,
-                borderColor = Color(0x12FFFFFF),
-                shadowColor = Color.Black.copy(alpha = 0.50f),
-                shadowElevation = 14.dp,
+                rimAlpha = if (rich) 0.48f else 0.36f,
+                borderColor = Color(0x14FFFFFF),
+                shadowColor = Color.Black.copy(alpha = if (rich) 0.50f else 0.44f),
+                shadowElevation = if (rich) 14.dp else 10.dp,
                 isDark = true
             )
         } else {
             LiquidGlassSurfaceSpec(
                 kind = LiquidGlassKind.Surface,
                 cornerRadius = 32.dp,
-                bezel = if (rich) 18.dp else 16.dp,
-                thickness = if (rich) 30.dp else 26.dp,
-                blurRadius = if (rich) 9.dp else 7.dp,
-                ior = 1.52f,
-                saturation = if (rich) 2.00f else 1.85f,
+                bezel = if (rich) 18.dp else 12.dp,
+                thickness = if (rich) 30.dp else 16.dp,
+                blurRadius = if (rich) 8.dp else 12.dp,
+                ior = if (rich) 1.52f else 1.38f,
+                saturation = if (rich) 2.00f else 1.32f,
                 tintColor = Color(0xFFF8FAFF),
-                tintAlpha = if (rich) 0.44f else 0.52f,
+                tintAlpha = if (rich) 0.42f else 0.58f,
                 rimColor = Color.White,
-                rimAlpha = 0.88f,
-                borderColor = Color(0x100F172A),
+                rimAlpha = if (rich) 0.90f else 0.65f,
+                borderColor = Color(0x120F172A),
                 shadowColor = Color(0x180F172A),
-                shadowElevation = 12.dp,
+                shadowElevation = if (rich) 12.dp else 10.dp,
                 isDark = false
             )
         }
     }
 
     /**
-     * Smooth translucent Liquid Glass active tab lens (restored clean `p10b2` optics).
-     * Slides cleanly behind crisp foreground icons/labels with soft specular edge (zero harsh
-     * outlines, zero unintended white sticker pill, zero blue glyph artifacts).
+     * Active bottom-nav indicator spec across all 3 Glass Intensity levels:
+     * - LOW ([GlassIntensity.SUBTLE]): solid opaque pill, zero blur/refraction/dispersion.
+     * - MID ([GlassIntensity.BALANCED]): soft frosted glass pill sliding behind crisp glyphs.
+     * - HIGH ([GlassIntensity.RICH]): raised convex chromatic glass lens with Snell refraction,
+     *   RGB dispersion along the curved bezel, and dark upper/lower internal reflections.
      */
     fun floatingNavLens(
         colors: SpatialColorTokens,
         intensity: GlassIntensity = GlassIntensity.BALANCED,
         motionBoost: Float = 0f
     ): LiquidGlassSurfaceSpec {
-        val rich = intensity == GlassIntensity.RICH
+        if (intensity == GlassIntensity.SUBTLE) {
+            return LiquidGlassSurfaceSpec(
+                kind = LiquidGlassKind.Surface,
+                cornerRadius = 24.dp,
+                bezel = 0.dp,
+                thickness = 0.dp,
+                blurRadius = 0.dp,
+                ior = 1.0f,
+                zoom = 1.0f,
+                dispersion = 0f,
+                saturation = 1.0f,
+                tintColor = colors.floatingNavActivePill,
+                tintAlpha = 1.0f,
+                rimColor = Color.Transparent,
+                rimAlpha = 0f,
+                borderColor = Color.Transparent,
+                shadowColor = Color.Transparent,
+                shadowElevation = 0.dp,
+                isDark = colors.isDark
+            )
+        }
         val boost = motionBoost.coerceIn(0f, 1f)
+        if (intensity == GlassIntensity.BALANCED) {
+            return if (colors.isDark) {
+                LiquidGlassSurfaceSpec(
+                    kind = LiquidGlassKind.Surface,
+                    cornerRadius = 24.dp,
+                    bezel = 10.dp,
+                    thickness = 14.dp,
+                    blurRadius = 6.dp,
+                    ior = 1.36f,
+                    zoom = 1.03f,
+                    dispersion = 0f,
+                    saturation = 1.30f,
+                    tintColor = Color(0xFF202A3D),
+                    tintAlpha = 0.48f,
+                    rimColor = Color.White,
+                    rimAlpha = 0.38f,
+                    borderColor = Color(0x1CFFFFFF),
+                    shadowColor = Color.Black.copy(alpha = 0.28f),
+                    shadowElevation = 4.dp,
+                    isDark = true
+                )
+            } else {
+                LiquidGlassSurfaceSpec(
+                    kind = LiquidGlassKind.Surface,
+                    cornerRadius = 24.dp,
+                    bezel = 10.dp,
+                    thickness = 14.dp,
+                    blurRadius = 6.dp,
+                    ior = 1.36f,
+                    zoom = 1.03f,
+                    dispersion = 0f,
+                    saturation = 1.35f,
+                    tintColor = Color(0xFFEAF2FF),
+                    tintAlpha = 0.52f,
+                    rimColor = Color.White,
+                    rimAlpha = 0.68f,
+                    borderColor = Color(0x140F172A),
+                    shadowColor = Color(0x120F172A),
+                    shadowElevation = 4.dp,
+                    isDark = false
+                )
+            }
+        }
+        val zoom = 1.07f + 0.055f * boost
+        val dispersion = (1.35f + 0.30f * boost).coerceAtMost(1.65f)
         return if (colors.isDark) {
             LiquidGlassSurfaceSpec(
                 kind = LiquidGlassKind.Lens,
-                cornerRadius = 24.dp,
-                bezel = if (rich) 16.dp else 14.dp,
-                thickness = if (rich) 28.dp else 24.dp,
-                blurRadius = 4.dp,
-                ior = 1.52f,
-                zoom = (if (rich) 1.12f else 1.09f) + 0.04f * boost,
-                dispersion = 0f,
-                saturation = 1.70f,
-                tintColor = Color(0xFF1C2333),
-                tintAlpha = if (rich) 0.28f else 0.34f,
+                cornerRadius = 30.dp,
+                bezel = 10.5.dp,
+                thickness = 30.dp,
+                blurRadius = 0.dp,
+                ior = 1.54f,
+                zoom = zoom,
+                dispersion = dispersion,
+                saturation = 1.55f,
+                tintColor = Color.White,
+                tintAlpha = 0.03f,
                 rimColor = Color.White,
-                rimAlpha = if (rich) 0.54f else 0.44f,
-                borderColor = Color(0x1AFFFFFF),
-                shadowColor = Color.Black.copy(alpha = 0.36f),
-                shadowElevation = 6.dp,
+                rimAlpha = 0.88f,
+                borderColor = Color(0x1EFFFFFF),
+                shadowColor = Color.Black.copy(alpha = 0.54f),
+                shadowElevation = 10.dp,
                 isDark = true
             )
         } else {
             LiquidGlassSurfaceSpec(
                 kind = LiquidGlassKind.Lens,
-                cornerRadius = 24.dp,
-                bezel = if (rich) 16.dp else 14.dp,
-                thickness = if (rich) 28.dp else 24.dp,
-                blurRadius = 5.dp,
-                ior = 1.52f,
-                zoom = (if (rich) 1.12f else 1.09f) + 0.04f * boost,
-                dispersion = 0f,
-                saturation = 1.85f,
-                // Subtle cool optical tint (avoids flat white sticker pill look on Light canvas)
-                tintColor = Color(0xFFEAF2FF),
-                tintAlpha = if (rich) 0.34f else 0.40f,
+                cornerRadius = 30.dp,
+                bezel = 10.5.dp,
+                thickness = 30.dp,
+                blurRadius = 0.dp,
+                ior = 1.54f,
+                zoom = zoom,
+                dispersion = dispersion,
+                saturation = 1.65f,
+                tintColor = Color.White,
+                tintAlpha = 0.04f,
                 rimColor = Color.White,
-                rimAlpha = 0.86f,
-                borderColor = Color(0x120F172A),
-                shadowColor = Color(0x140F172A),
-                shadowElevation = 5.dp,
+                rimAlpha = 0.94f,
+                borderColor = Color(0x140F172A),
+                shadowColor = Color(0x240F172A),
+                shadowElevation = 10.dp,
                 isDark = false
             )
         }
     }
 
     /**
-     * Detached optical Liquid Glass Quick Add orb docked beside the floating bottom bar.
+     * Detached Quick Add orb docked beside the floating bottom bar across all 3 Glass Intensity levels:
+     * - LOW ([GlassIntensity.SUBTLE]): solid opaque button matching the Liquid Glass palette.
+     * - MID ([GlassIntensity.BALANCED]): soft frosted glass orb with subtle blur and refraction.
+     * - HIGH ([GlassIntensity.RICH]): full convex chromatic Liquid Glass lens orb with RGB dispersion.
      */
     fun quickAddFab(
         colors: SpatialColorTokens,
         intensity: GlassIntensity = GlassIntensity.BALANCED
     ): LiquidGlassSurfaceSpec {
+        if (intensity == GlassIntensity.SUBTLE) {
+            return LiquidGlassSurfaceSpec(
+                kind = LiquidGlassKind.Surface,
+                cornerRadius = 28.dp,
+                bezel = 0.dp,
+                thickness = 0.dp,
+                blurRadius = 0.dp,
+                ior = 1.0f,
+                zoom = 1.0f,
+                dispersion = 0f,
+                saturation = 1.0f,
+                tintColor = colors.floatingNavSurface,
+                tintAlpha = 1.0f,
+                rimColor = Color.Transparent,
+                rimAlpha = 0f,
+                borderColor = if (colors.isDark) Color(0x28FFFFFF) else Color(0x1E0F172A),
+                shadowColor = if (colors.isDark) Color.Black.copy(alpha = 0.42f) else Color(0x140F172A),
+                shadowElevation = 6.dp,
+                isDark = colors.isDark
+            )
+        }
         val rich = intensity == GlassIntensity.RICH
         return if (colors.isDark) {
             LiquidGlassSurfaceSpec(
-                kind = LiquidGlassKind.Lens,
+                kind = if (rich) LiquidGlassKind.Lens else LiquidGlassKind.Surface,
                 cornerRadius = 28.dp,
-                bezel = if (rich) 17.dp else 15.dp,
-                thickness = if (rich) 30.dp else 26.dp,
-                blurRadius = if (rich) 5.dp else 6.dp,
-                ior = 1.52f,
-                zoom = if (rich) 1.12f else 1.09f,
-                dispersion = 0f,
-                saturation = 1.70f,
-                tintColor = Color(0xFF111622),
-                tintAlpha = if (rich) 0.38f else 0.44f,
+                bezel = if (rich) 10.5.dp else 12.dp,
+                thickness = if (rich) 28.dp else 16.dp,
+                blurRadius = if (rich) 2.dp else 11.dp,
+                ior = if (rich) 1.54f else 1.38f,
+                zoom = if (rich) 1.12f else 1.03f,
+                dispersion = if (rich) 0.90f else 0f,
+                saturation = if (rich) 1.72f else 1.30f,
+                tintColor = if (rich) Color(0xFF111622) else Color(0xFF161B26),
+                tintAlpha = if (rich) 0.36f else 0.54f,
                 rimColor = Color.White,
-                rimAlpha = if (rich) 0.52f else 0.44f,
-                borderColor = Color(0x16FFFFFF),
-                shadowColor = Color.Black.copy(alpha = 0.52f),
-                shadowElevation = 14.dp,
+                rimAlpha = if (rich) 0.84f else 0.40f,
+                borderColor = Color(0x1CFFFFFF),
+                shadowColor = Color.Black.copy(alpha = if (rich) 0.54f else 0.44f),
+                shadowElevation = if (rich) 14.dp else 10.dp,
                 isDark = true
             )
         } else {
             LiquidGlassSurfaceSpec(
-                kind = LiquidGlassKind.Lens,
+                kind = if (rich) LiquidGlassKind.Lens else LiquidGlassKind.Surface,
                 cornerRadius = 28.dp,
-                bezel = if (rich) 17.dp else 15.dp,
-                thickness = if (rich) 30.dp else 26.dp,
-                blurRadius = if (rich) 5.dp else 6.dp,
-                ior = 1.52f,
-                zoom = if (rich) 1.12f else 1.09f,
-                dispersion = 0f,
-                saturation = 1.90f,
+                bezel = if (rich) 10.5.dp else 12.dp,
+                thickness = if (rich) 28.dp else 16.dp,
+                blurRadius = if (rich) 2.dp else 11.dp,
+                ior = if (rich) 1.54f else 1.38f,
+                zoom = if (rich) 1.12f else 1.03f,
+                dispersion = if (rich) 0.90f else 0f,
+                saturation = if (rich) 1.85f else 1.35f,
                 tintColor = Color(0xFFF6FAFF),
-                tintAlpha = if (rich) 0.46f else 0.54f,
+                tintAlpha = if (rich) 0.38f else 0.58f,
                 rimColor = Color.White,
-                rimAlpha = 0.90f,
-                borderColor = Color(0x120F172A),
-                shadowColor = Color(0x1C0F172A),
-                shadowElevation = 12.dp,
+                rimAlpha = if (rich) 0.92f else 0.68f,
+                borderColor = Color(0x140F172A),
+                shadowColor = Color(0x1E0F172A),
+                shadowElevation = if (rich) 12.dp else 10.dp,
                 isDark = false
             )
         }

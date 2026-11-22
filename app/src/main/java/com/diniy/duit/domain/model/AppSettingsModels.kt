@@ -13,9 +13,9 @@ enum class GlassIntensity(
     val alphaScale: Float,
     val summary: String
 ) {
-    SUBTLE("Subtle", 0.5f, "Flatter candy surfaces with the lightest shadows"),
-    BALANCED("Balanced", 1.0f, "Soft candy shadows"),
-    RICH("Rich", 1.6f, "Deeper shadows for extra pop")
+    SUBTLE("Low", 0.5f, "Solid surfaces, no blur or refraction"),
+    BALANCED("Mid", 1.0f, "Soft frosted glass with subtle refraction"),
+    RICH("High", 1.6f, "Full Liquid Glass with chromatic lens")
 }
 
 enum class AnimationIntensity(

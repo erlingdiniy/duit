@@ -209,7 +209,11 @@ fun DuitTheme(
         VisualTheme.CANDY_BUBBLE -> if (isDark) DarkSpatialColors else LightSpatialColors
         VisualTheme.LIQUID_GLASS -> if (isDark) LiquidGlassDarkSpatialColors else LiquidGlassLightSpatialColors
     }
-    val spatialColors = baseSpatialColors.withGlassIntensity(glassIntensity)
+    val spatialColors = if (visualTheme == VisualTheme.LIQUID_GLASS) {
+        baseSpatialColors.withGlassIntensity(glassIntensity)
+    } else {
+        baseSpatialColors
+    }
     val glassTokens = spatialColors.toPrismaticGlassTokens()
 
     CompositionLocalProvider(
