@@ -206,10 +206,10 @@ class LiquidGlassArchitectureTest {
             val highFab = LiquidGlassPresets.quickAddFab(palette, GlassIntensity.RICH)
             assertTrue(highBar.thickness > midBar.thickness)
             assertEquals(LiquidGlassKind.Lens, highLens.kind)
-            assertTrue(highLens.dispersion >= 1.2f)
+            assertTrue(highLens.dispersion in 0.35f..0.80f)
             assertEquals(0.dp, highLens.blurRadius)
             assertEquals(LiquidGlassKind.Lens, highFab.kind)
-            assertTrue(highFab.dispersion >= 0.8f)
+            assertTrue(highFab.dispersion in 0.30f..0.75f)
 
             // WCAG AA >= 4.5:1 across all 3 intensities in Light & Dark
             listOf(GlassIntensity.SUBTLE, GlassIntensity.BALANCED, GlassIntensity.RICH).forEach { level ->
@@ -257,7 +257,7 @@ class LiquidGlassArchitectureTest {
             assertTrue(midCard.rimHighlightAlpha > 0f)
 
             assertTrue(highCard.topSheenAlpha > midCard.topSheenAlpha)
-            assertTrue(highCard.chromaticGlintAlpha > 0.2f)
+            assertEquals(0f, highCard.chromaticGlintAlpha, 0.001f)
             assertTrue(highCard.rimHighlightAlpha > midCard.rimHighlightAlpha)
             assertTrue(highCard.usesLiquidSpring)
 
@@ -267,7 +267,8 @@ class LiquidGlassArchitectureTest {
             assertEquals(1f, lowOrb.fillColor.alpha, 0.001f)
             assertEquals(0f, lowOrb.chromaticGlintAlpha, 0.001f)
             assertEquals(0f, midOrb.chromaticGlintAlpha, 0.001f)
-            assertTrue(highOrb.chromaticGlintAlpha > 0.3f)
+            assertEquals(0f, highOrb.chromaticGlintAlpha, 0.001f)
+            assertTrue(highOrb.rimHighlightAlpha > midOrb.rimHighlightAlpha)
 
             val heroLens = LiquidGlassPanelPresets.heroMedallionLens(palette)
             assertEquals(LiquidGlassKind.Lens, heroLens.kind)

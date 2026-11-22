@@ -552,10 +552,9 @@ fun PrismaticFloatingBottomBar(
                         }
                     }
 
-                    // Layer 3: Raised convex chromatic glass lens riding cleanly over the bar.
-                    // Uses real animated bounds (no graphicsLayer scale drift) and overhangs the
-                    // bar slightly (+2dp rest, +7dp moving) so icons/labels sit inside the flat
-                    // clear core while curved top/bottom/side walls show TIR depth & RGB dispersion.
+                    // Layer 3: Natural convex Liquid Glass droplet lens riding over the bar.
+                    // Nestled flush inside the capsule at rest (no protruding bubble), organically
+                    // inflating with spring lift & jelly physics while dragging or switching tabs.
                     BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -565,12 +564,13 @@ fun PrismaticFloatingBottomBar(
                         val trackWidthDp = (maxWidth - innerPadH * 2).coerceAtLeast(1.dp)
                         val slotWidthDp = trackWidthDp / totalSlots
                         val slotWidthPx = with(density) { slotWidthDp.toPx() }
-                        val extraW = 8.dp * (lensLift + abs(lensJelly) * 2.5f).coerceIn(0f, 1.4f)
-                        val extraH = 2.dp + 5.dp * lensLift
+                        val restInsetV = 5.dp
+                        val extraW = 8.dp * (lensLift + abs(lensJelly) * 2.5f).coerceIn(0f, 1.3f)
+                        val liftGrowH = 10.dp * lensLift
                         val lensW = slotWidthDp + extraW
-                        val lensH = (barHeightDp + extraH).coerceAtLeast(56.dp)
+                        val lensH = (barHeightDp - restInsetV * 2 + liftGrowH).coerceAtLeast(48.dp)
                         val extraWPx = with(density) { extraW.toPx() }
-                        val baseY = with(density) { (-extraH / 2f).toPx() }
+                        val baseY = with(density) { (restInsetV - liftGrowH / 2f).toPx() }
 
                         LiquidGlassSurface(
                             backdropState = lensTrackBackdrop,

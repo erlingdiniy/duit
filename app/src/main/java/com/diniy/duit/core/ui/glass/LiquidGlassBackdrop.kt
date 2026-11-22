@@ -197,7 +197,7 @@ fun LiquidGlassSurface(
             )
         }
     }
-    val borderWidth = if (tier == LiquidGlassTier.FullAgsl) 0.75.dp else 1.dp
+    val borderWidth = if (tier == LiquidGlassTier.FullAgsl) 0.5.dp else 1.dp
     val borderModifier = if (isSolidMode && spec.borderColor.alpha <= 0.001f) {
         Modifier
     } else {

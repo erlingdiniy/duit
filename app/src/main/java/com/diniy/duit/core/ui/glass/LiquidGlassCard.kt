@@ -148,7 +148,7 @@ object LiquidGlassPanelPresets {
                 topSheenAlpha = if (colors.isDark) 0.16f else 0.78f,
                 bottomReflectionAlpha = if (colors.isDark) 0.22f else 0.08f,
                 rimHighlightAlpha = if (colors.isDark) 0.44f else 0.96f,
-                chromaticGlintAlpha = if (colors.isDark) 0.34f else 0.28f,
+                chromaticGlintAlpha = 0f,
                 borderColor = if (colors.isDark) Color(0x28FFFFFF) else Color(0x180F172A),
                 borderWidth = 1.dp,
                 shadowElevation = if (colors.isDark) 10.dp else 8.dp,
@@ -198,17 +198,17 @@ object LiquidGlassPanelPresets {
         )
 
         GlassIntensity.RICH -> LiquidGlassPanelSpec(
-            fillColor = if (colors.isDark) Color(0xFF181E2B).copy(alpha = 0.74f) else Color(0xFFF5F9FF).copy(alpha = 0.80f),
-            topSheenAlpha = if (colors.isDark) 0.22f else 0.88f,
-            bottomReflectionAlpha = if (colors.isDark) 0.32f else 0.10f,
-            rimHighlightAlpha = if (colors.isDark) 0.56f else 0.96f,
-            chromaticGlintAlpha = if (colors.isDark) 0.48f else 0.38f,
-            borderColor = if (colors.isDark) Color(0x2EFFFFFF) else Color(0x180F172A),
-            borderWidth = 1.dp,
-            shadowElevation = if (colors.isDark) 10.dp else 9.dp,
-            shadowColor = if (colors.isDark) Color.Black.copy(alpha = 0.55f) else Color(0x1E0F172A),
-            pressScale = 1.08f,
-            touchBloomAlpha = 0.24f,
+            fillColor = if (colors.isDark) Color(0xFF181E2B).copy(alpha = 0.46f) else Color.White.copy(alpha = 0.56f),
+            topSheenAlpha = if (colors.isDark) 0.16f else 0.72f,
+            bottomReflectionAlpha = if (colors.isDark) 0.14f else 0.05f,
+            rimHighlightAlpha = if (colors.isDark) 0.42f else 0.92f,
+            chromaticGlintAlpha = 0f,
+            borderColor = if (colors.isDark) Color(0x22FFFFFF) else Color(0x120F172A),
+            borderWidth = 0.65.dp,
+            shadowElevation = if (colors.isDark) 6.dp else 6.dp,
+            shadowColor = if (colors.isDark) Color.Black.copy(alpha = 0.38f) else Color(0x140F172A),
+            pressScale = 1.07f,
+            touchBloomAlpha = 0.22f,
             usesLiquidSpring = true,
             isDark = colors.isDark
         )

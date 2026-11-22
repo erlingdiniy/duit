@@ -84,36 +84,37 @@ internal object LiquidGlassShaderSource {
                 n = float2(0.0, sign(p.y));
             }
 
-            // Chromatic convex lens mode (used ONLY by floatingNavLens when uDispersion > 0.01;
-            // outer nav bar and Quick Add FAB keep the restored baseline path 100% untouched).
-            bool chromaticLens = (uIsLens > 0.5) && (uDispersion > 0.01);
+            // Natural convex optical refraction (zakisheriff/Liquid-Glass Snell bevel profile).
+            // Curved bezel refracts underlying content smoothly; interior stays optically clean.
+            bool isConvexLens = (uIsLens > 0.5);
+            bool hasDispersion = isConvexLens && (uDispersion > 0.01);
             float u = clamp(d / max(1.0, uBezel), 0.0, 1.0);
             float edgeCurve = (d >= 0.0 && u < 1.0) ? (1.0 - u) : 0.0;
 
+            float snell = bevelShift(d, uBezel, uThickness, uIor);
             float shift;
-            if (chromaticLens) {
-                // Strong curved bevel refraction strictly on the outer convex glass walls;
-                // interior center (d >= uBezel) stays undistorted so icons & labels remain crisp.
-                float snell = bevelShift(d, uBezel, uThickness, uIor);
-                float rimCurve = -uBezel * 0.44 * edgeCurve * edgeCurve;
-                shift = (rimCurve - snell * 0.28) * uRefractFactor;
+            if (isConvexLens) {
+                // Smooth convex lens edge wrap + Snell bevel bend (no abrupt seam)
+                float rimCurve = -uBezel * 0.30 * edgeCurve * edgeCurve;
+                shift = (rimCurve - snell * 0.55) * uRefractFactor;
             } else {
-                float dir = uIsLens > 0.5 ? 1.0 : -1.0;
-                shift = bevelShift(d, uBezel, uThickness, uIor) * dir * uRefractFactor;
+                // Floating bar surface: clean inward Snell bevel bend
+                shift = -snell * uRefractFactor;
             }
             float2 baseOffset = n * shift;
 
-            // Controlled interior magnification (Lens mode only)
-            float mag = uIsLens > 0.5 ? (1.0 - 1.0 / max(0.75, uZoom)) * uRefractFactor : 0.0;
+            // Controlled optical dome magnification (Lens mode only)
+            float mag = isConvexLens ? (1.0 - 1.0 / max(0.75, uZoom)) * uRefractFactor : 0.0;
             float2 zoomOffset = -p * mag;
 
             float2 sampleBase = clamp(fragCoord + baseOffset + zoomOffset, float2(0.5), uSize - float2(0.5));
             float3 refractedRgb;
-            if (chromaticLens && uRefractFactor > 0.05 && edgeCurve > 0.01) {
-                // Strong, controlled physical RGB chromatic dispersion along curved top/bottom/side edges
-                float bevelWeight = pow(edgeCurve, 1.15);
-                float2 dispVec = baseOffset * (0.76 * uDispersion * bevelWeight)
-                    + n * (edgeCurve * edgeCurve * uBezel * 0.24 * uDispersion * uRefractFactor);
+            if (hasDispersion && uRefractFactor > 0.05 && edgeCurve > 0.01) {
+                // 100% physical RGB chromatic dispersion strictly from refracted backdrop samples
+                // (zero synthetic rainbow tint; color fringe appears only on real refracted edges).
+                float bevelWeight = pow(edgeCurve, 1.25);
+                float2 dispVec = baseOffset * (0.42 * uDispersion * bevelWeight)
+                    + n * (edgeCurve * edgeCurve * uBezel * 0.12 * uDispersion * uRefractFactor);
                 float2 pR = clamp(fragCoord + baseOffset + dispVec + zoomOffset, float2(0.5), uSize - float2(0.5));
                 float2 pB = clamp(fragCoord + baseOffset - dispVec + zoomOffset, float2(0.5), uSize - float2(0.5));
                 float rCh = float(backdrop.eval(pR).r);
@@ -124,60 +125,35 @@ internal object LiquidGlassShaderSource {
                 refractedRgb = float3(backdrop.eval(sampleBase).rgb);
             }
 
-            // Optical brightness: lift softly in Light only so Dark stays pure deep obsidian
-            float brightLift = chromaticLens
-                ? (uIsDark > 0.5 ? 1.06 : 1.02)
-                : (uIsDark > 0.5 ? 1.0 : 1.04);
+            // Natural optical vibrancy lift
+            float brightLift = uIsDark > 0.5 ? (isConvexLens ? 1.05 : 1.02) : 1.03;
             float3 color = clamp(adjustSaturation(refractedRgb, uSaturation) * brightLift, 0.0, 1.0);
 
-            // Clean glass tint veil
+            // Crystal-clear glass tint veil (keeps transparency natural, never opaque bubble)
             color = mix(color, uTint.rgb, uTint.a);
-
-            // Reference-matched dark specular internal reflection (TIR) along upper & lower curved
-            // lens walls + subtle chromatic caustic dispersion along curved side & corner meniscus.
-            if (chromaticLens) {
-                float vertWall = smoothstep(0.32, 0.92, abs(n.y));
-                float tirBand = exp(-pow((d - uBezel * 0.34) / max(2.2, uBezel * 0.28), 2.0));
-                float darkTir = vertWall * tirBand;
-                float3 tirInk = uIsDark > 0.5 ? float3(0.01, 0.012, 0.02) : float3(0.08, 0.11, 0.17);
-                float tirStrength = uIsDark > 0.5 ? 0.76 : 0.34;
-                color = mix(color, tirInk, darkTir * tirStrength);
-
-                // Controlled physical chromatic caustic shimmer on the curved bevel meniscus
-                float causticBand = exp(-pow((d - uBezel * 0.22) / max(1.8, uBezel * 0.22), 2.0));
-                float h = atan(n.y, n.x);
-                float3 prismTint = float3(
-                    0.5 + 0.5 * cos(h + 0.35),
-                    0.5 + 0.5 * cos(h - 1.75),
-                    0.5 + 0.5 * cos(h + 2.35)
-                );
-                float sideEmphasis = 0.42 + 0.58 * abs(n.x);
-                float causticStrength = causticBand * sideEmphasis * (uIsDark > 0.5 ? 0.24 : 0.16) * clamp(uDispersion, 0.0, 1.5);
-                color = clamp(color + prismTint * causticStrength, 0.0, 1.0);
-            }
 
             // Interactive touch-point radial bloom
             if (uTouchAlpha > 0.005) {
                 float touchDist = length(fragCoord - uTouchPos);
-                float bloomRadius = max(uSize.x, uSize.y) * 0.42;
+                float bloomRadius = max(uSize.x, uSize.y) * 0.44;
                 float bloom = exp(-(touchDist * touchDist) / max(1.0, bloomRadius * bloomRadius * 0.35));
-                color = clamp(color + uRim.rgb * (bloom * 0.18 * uTouchAlpha), 0.0, 1.0);
+                color = clamp(color + uRim.rgb * (bloom * 0.20 * uTouchAlpha), 0.0, 1.0);
             }
 
-            // Silky diagonal specular rim + subtle Fresnel edge
+            // Natural diagonal directional lighting (upper-left catch-light + opposite internal bounce)
             float facing = -(n.x + n.y) * 0.70710678;
-            float light = (uIsDark > 0.5 ? 0.14 : 0.20) +
-                (uIsDark > 0.5 ? 0.86 : 0.80) * pow(abs(facing), 2.4) * (facing > 0.0 ? 1.0 : 0.50);
-            float hair = chromaticLens ? 1.25 : 1.4;
+            // Subtle lower-right optical thickness shading (depth without smoky dark ring)
+            float shadowFace = clamp(-facing, 0.0, 1.0);
+            float innerDepth = edgeCurve * edgeCurve * shadowFace * (isConvexLens ? (uIsDark > 0.5 ? 0.14 : 0.06) : 0.03);
+            color = mix(color, float3(0.02, 0.03, 0.05), innerDepth);
+
+            float light = (uIsDark > 0.5 ? 0.16 : 0.22) +
+                (uIsDark > 0.5 ? 0.84 : 0.78) * pow(abs(facing), 2.2) * (facing > 0.0 ? 1.0 : 0.48);
+            float hair = isConvexLens ? 1.35 : 1.45;
             float line = exp(-pow((d - hair) / hair, 2.0));
-            float innerFresnel = exp(-pow(d / max(2.0, uBezel * 0.25), 2.0)) * (uIsDark > 0.5 ? 0.04 : 0.07);
-            float rimGain = chromaticLens ? 0.88 : (uIsLens > 0.5 ? 0.72 : 0.58);
+            float innerFresnel = exp(-pow(d / max(2.2, uBezel * 0.28), 2.0)) * (uIsDark > 0.5 ? 0.06 : 0.09);
+            float rimGain = isConvexLens ? 0.78 : 0.60;
             float rimStrength = clamp((line * rimGain + innerFresnel) * light, 0.0, 1.0) * uRim.a;
-            // Bright horizontal catch-light right at the outer top/bottom lip of the raised chromatic lens
-            if (chromaticLens) {
-                float lipCatch = line * smoothstep(0.55, 0.98, abs(n.y)) * (uIsDark > 0.5 ? 0.48 : 0.36) * uRim.a;
-                rimStrength = clamp(rimStrength + lipCatch, 0.0, 1.0);
-            }
             color = clamp(color + uRim.rgb * rimStrength, 0.0, 1.0);
 
             float aa = clamp(d + 0.75, 0.0, 1.0);

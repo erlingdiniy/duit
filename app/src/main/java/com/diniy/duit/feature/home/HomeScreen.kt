@@ -76,6 +76,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SwapHoriz
@@ -129,20 +130,10 @@ import com.diniy.duit.core.ui.state.PrivacyMask
 import com.diniy.duit.core.ui.state.maskedAmount
 import com.diniy.duit.core.ui.state.maskedBalance
 import com.diniy.duit.core.ui.state.privacySafeAmountSemantics
-import com.diniy.duit.core.ui.glass.LiquidGlassActionPill
-import com.diniy.duit.core.ui.glass.LiquidGlassCapabilities
 import com.diniy.duit.core.ui.glass.LiquidGlassOrbButton
-import com.diniy.duit.core.ui.glass.LiquidGlassPanel
-import com.diniy.duit.core.ui.glass.LiquidGlassPanelBox
-import com.diniy.duit.core.ui.glass.LiquidGlassPanelPresets
-import com.diniy.duit.core.ui.glass.LiquidGlassSurface
-import com.diniy.duit.core.ui.glass.liquidGlassBackdropSource
-import com.diniy.duit.core.ui.glass.rememberLiquidGlassBackdropState
 import com.diniy.duit.core.ui.theme.DuitTheme
-import com.diniy.duit.core.ui.theme.LocalGlassIntensity
 import com.diniy.duit.core.ui.theme.LocalVisualTheme
 import com.diniy.duit.core.ui.theme.SpatialTheme
-import com.diniy.duit.domain.model.GlassIntensity
 import com.diniy.duit.domain.model.VisualTheme
 import com.diniy.duit.core.util.DateTimeFormatters
 import com.diniy.duit.domain.calculator.ObligationCalculator
@@ -521,14 +512,16 @@ private fun HomeSectionHeader(
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = title,
@@ -537,19 +530,11 @@ private fun HomeSectionHeader(
                     modifier = Modifier.semantics { heading() }
                 )
                 if (count != null) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(colors.primaryAction.copy(alpha = if (colors.isDark) 0.22f else 0.14f))
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = count.toString(),
-                            style = typography.caption,
-                            color = colors.primaryAction
-                        )
-                    }
+                    Text(
+                        text = count.toString(),
+                        style = typography.caption,
+                        color = colors.secondaryText
+                    )
                 }
             }
             if (!subtitle.isNullOrBlank()) {
@@ -561,13 +546,17 @@ private fun HomeSectionHeader(
             }
         }
         if (actionLabel != null && onAction != null) {
-            LiquidGlassActionPill(
-                onClick = onAction,
-                onClickLabel = actionLabel
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .candyPressable(onClick = onAction, onClickLabel = actionLabel)
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = actionLabel,
-                    style = typography.caption,
+                    style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
                     color = colors.primaryAction
                 )
             }
@@ -737,11 +726,10 @@ private fun SpatialSafeToSpendHeroCard(
 }
 
 /**
- * Phase 10E Liquid Glass Safe-to-Spend Hero Card (Home only):
- * - LOW: crisp solid optical blue card, flat border, solid inner tray, flat RM badge.
- * - MID: soft frosted optical blue glass, delicate top catch-light sheen, frosted RM medallion.
- * - HIGH: full Liquid Glass with specular bevel, subtle chromatic corner glint, and a genuine
- *   AGSL convex chromatic glass `RM` lens medallion refracting the hero optical highlight.
+ * Phase 10E Natural Liquid Glass Safe-to-Spend Hero (Home only):
+ * Minimal, typography-led focal section directly on the calm canvas — zero large blue card,
+ * zero gradients, zero decorative pills or sticker coins. Actual optical Liquid Glass is
+ * reserved for the floating navigation bar, convex chromatic lens, FAB and interactive overlays.
  */
 @Composable
 private fun LiquidGlassSafeToSpendHeroCard(
@@ -752,356 +740,101 @@ private fun LiquidGlassSafeToSpendHeroCard(
 ) {
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
-    val intensity = LocalGlassIntensity.current
     val privacySettings = LocalPrivacySettings.current
     val isMasked = privacySettings.isAnyMaskActive
     val isTight = safeToSpendSen < 0L
-    val isLow = intensity == GlassIntensity.SUBTLE
-    val isHigh = intensity == GlassIntensity.RICH
 
-    val heroBase = when {
-        isTight -> colors.expenseContainer
-        colors.isDark -> Color(0xFF0A54BD)
-        else -> Color(0xFF0062CC)
-    }
-    val heroInk = if (isTight) colors.onExpenseContainer else Color.White
-    val trayFill = when {
-        isTight -> heroInk.copy(alpha = if (isLow) 0.14f else 0.10f)
-        isLow -> if (colors.isDark) Color(0xFF063B8A) else Color(0xFF004B9E)
-        isHigh -> Color(0xFF002D66).copy(alpha = if (colors.isDark) 0.44f else 0.32f)
-        else -> Color(0xFF00387A).copy(alpha = if (colors.isDark) 0.36f else 0.26f)
-    }
-    val hidePillBg = when {
-        isTight -> heroInk
-        colors.isDark -> Color(0xFF0B2545).copy(alpha = if (isLow) 1f else 0.86f)
-        else -> Color(0xFFF2F7FF).copy(alpha = if (isLow) 1f else 0.92f)
-    }
-    val hidePillInk = when {
-        isTight -> heroBase
-        colors.isDark -> Color(0xFFD6EAFF)
-        else -> Color(0xFF0055B8)
-    }
-
-    val heroSpec = remember(colors, intensity, heroBase) {
-        LiquidGlassPanelPresets.card(
-            colors = colors,
-            intensity = intensity,
-            elevated = true
-        ).copy(
-            fillColor = heroBase,
-            topSheenAlpha = when (intensity) {
-                GlassIntensity.SUBTLE -> 0f
-                GlassIntensity.BALANCED -> 0.26f
-                GlassIntensity.RICH -> 0.44f
-            },
-            bottomReflectionAlpha = when (intensity) {
-                GlassIntensity.SUBTLE -> 0f
-                GlassIntensity.BALANCED -> 0.10f
-                GlassIntensity.RICH -> 0.24f
-            },
-            rimHighlightAlpha = when (intensity) {
-                GlassIntensity.SUBTLE -> 0f
-                GlassIntensity.BALANCED -> 0.46f
-                GlassIntensity.RICH -> 0.72f
-            },
-            chromaticGlintAlpha = if (isHigh) 0.42f else 0f,
-            borderColor = if (isLow) {
-                if (colors.isDark) Color(0x2EFFFFFF) else Color(0x24002B5C)
-            } else {
-                Color(0x38FFFFFF)
-            }
-        )
-    }
-    val desiredQuality = remember(intensity) { LiquidGlassCapabilities.qualityModeFor(intensity) }
-    val heroBackdrop = rememberLiquidGlassBackdropState(initialQualityMode = desiredQuality)
-    androidx.compose.runtime.SideEffect {
-        if (heroBackdrop.qualityMode != desiredQuality) {
-            heroBackdrop.qualityMode = desiredQuality
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxWidth().candyEntrance("home_hero")) {
-        LiquidGlassPanelBox(
-            spec = heroSpec,
-            shape = RoundedCornerShape(32.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (isHigh) Modifier.liquidGlassBackdropSource(heroBackdrop) else Modifier)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .candyEntrance("home_hero")
+            .padding(top = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Subtle calibrated optical depth highlight inside hero (HIGH/MID only; zero bubbles in LOW)
-            if (!isLow) {
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .drawBehind {
-                            val topGlowAlpha = if (isHigh) 0.22f else 0.12f
-                            drawCircle(
-                                brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = topGlowAlpha),
-                                        Color.Transparent
-                                    ),
-                                    center = Offset(size.width * 0.88f, size.height * 0.14f),
-                                    radius = size.width * 0.52f
-                                ),
-                                center = Offset(size.width * 0.88f, size.height * 0.14f),
-                                radius = size.width * 0.52f
-                            )
-                        }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Safe to spend",
+                    style = typography.cardTitle.copy(fontSize = 15.sp),
+                    color = colors.secondaryText
                 )
-            }
-
-            Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp)) {
-                Text(text = "Safe to spend", style = typography.cardTitle.copy(fontSize = 18.sp), color = heroInk)
                 Text(
                     text = activeReservePeriodLabel,
                     style = typography.caption,
-                    color = heroInk.copy(alpha = 0.86f),
+                    color = colors.secondaryText.copy(alpha = 0.80f),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(end = 68.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
-
-                Spacer(Modifier.height(12.dp))
-
-                SpatialAnimatedCounterText(
-                    amountSen = safeToSpendSen,
-                    accessibilityLabel = "Safe to Spend",
-                    style = typography.heroBalance.copy(fontSize = 50.sp, lineHeight = 56.sp, letterSpacing = (-1.5).sp),
-                    color = heroInk,
-                    splitMinorScale = 0.46f
+            }
+            Row(
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .candyPressable(
+                        onClick = onToggleBalanceVisibility,
+                        onClickLabel = if (isMasked) "Show sensitive amounts" else "Hide sensitive amounts"
+                    )
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = if (isMasked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                    contentDescription = null,
+                    tint = colors.primaryAction,
+                    modifier = Modifier.size(17.dp)
                 )
-
-                Spacer(Modifier.height(8.dp))
-
-                // Optical status chip (upright, clean contrast across all intensities)
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            if (isLow) {
-                                if (colors.isDark) Color(0xFF0B2545) else Color(0xFFF2F7FF)
-                            } else {
-                                Color.White.copy(alpha = if (colors.isDark) 0.18f else 0.90f)
-                            }
-                        )
-                        .border(
-                            BorderStroke(
-                                width = if (isLow) 1.dp else 0.75.dp,
-                                color = if (isLow) Color(0x24FFFFFF) else Color.White.copy(alpha = 0.55f)
-                            ),
-                            RoundedCornerShape(50)
-                        )
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    val statusTint = if (colors.isDark && !isLow) Color.White else hidePillInk
-                    Icon(
-                        imageVector = if (isTight) Icons.Rounded.Warning else Icons.Rounded.CheckCircle,
-                        contentDescription = null,
-                        tint = statusTint,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = if (isTight) "Overcommitted" else "Good to go",
-                        style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
-                        color = statusTint,
-                        maxLines = 1
-                    )
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(trayFill)
-                        .then(
-                            if (!isLow) {
-                                Modifier.border(
-                                    BorderStroke(0.75.dp, Color.White.copy(alpha = if (isHigh) 0.28f else 0.18f)),
-                                    RoundedCornerShape(18.dp)
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
-                        .padding(start = 12.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Lock,
-                        contentDescription = null,
-                        tint = heroInk,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (upcomingUnreservedSen > 0L) {
-                            "${maskedBalance(upcomingUnreservedSen)} set aside for this cycle's bills. Savings protected."
-                        } else {
-                            "This cycle's bills are settled. Savings protected."
-                        },
-                        style = typography.caption,
-                        color = heroInk,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Row(
-                        modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(hidePillBg)
-                            .then(
-                                if (!isLow) {
-                                    Modifier.border(
-                                        BorderStroke(0.75.dp, Color.White.copy(alpha = if (isHigh) 0.55f else 0.32f)),
-                                        RoundedCornerShape(50)
-                                    )
-                                } else {
-                                    Modifier
-                                }
-                            )
-                            .candyPressable(
-                                onClick = onToggleBalanceVisibility,
-                                onClickLabel = if (isMasked) "Show sensitive amounts" else "Hide sensitive amounts"
-                            )
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isMasked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                            contentDescription = null,
-                            tint = hidePillInk,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = if (isMasked) "Show" else "Hide",
-                            style = typography.caption,
-                            color = hidePillInk
-                        )
-                    }
-                }
-            }
-        }
-
-        // Upright optical RM medallion (decorative, hidden from TalkBack):
-        // HIGH = genuine AGSL convex chromatic glass lens; MID = soft frosted disc; LOW = flat solid disc.
-        val medallionMod = Modifier
-            .align(Alignment.TopEnd)
-            .padding(top = 16.dp, end = 16.dp)
-            .size(54.dp)
-            .clearAndSetSemantics { }
-
-        if (isHigh) {
-            val lensSpec = remember(colors) { LiquidGlassPanelPresets.heroMedallionLens(colors) }
-            LiquidGlassSurface(
-                backdropState = heroBackdrop,
-                spec = lensSpec,
-                qualityModeOverride = desiredQuality,
-                modifier = medallionMod
-            ) {
-                Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "RM",
-                        style = typography.cardTitle.copy(fontSize = 15.sp),
-                        color = Color.White
-                    )
-                }
-            }
-        } else {
-            Box(
-                modifier = medallionMod
-                    .clip(CircleShape)
-                    .background(
-                        if (isLow) {
-                            if (colors.isDark) Color(0xFF063B8A) else Color(0xFF004B9E)
-                        } else {
-                            Color.White.copy(alpha = 0.22f)
-                        }
-                    )
-                    .border(
-                        BorderStroke(
-                            width = if (isLow) 1.dp else 0.85.dp,
-                            color = Color.White.copy(alpha = if (isLow) 0.26f else 0.50f)
-                        ),
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
                 Text(
-                    text = "RM",
-                    style = typography.cardTitle.copy(fontSize = 15.sp),
-                    color = heroInk
+                    text = if (isMasked) "Show" else "Hide",
+                    style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
+                    color = colors.primaryAction
                 )
             }
         }
-    }
-}
 
-@Composable
-private fun HomeGlassOrBubbleCard(
-    tone: CandyTone,
-    modifier: Modifier = Modifier,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(SpatialTheme.geometry.radiusLg),
-    decor: CandyDecor = CandyDecor.Bubbles,
-    contentPadding: PaddingValues = PaddingValues(16.dp),
-    onClick: (() -> Unit)? = null,
-    onClickLabel: String? = null,
-    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
-) {
-    if (LocalVisualTheme.current == VisualTheme.LIQUID_GLASS) {
-        val accent = if (tone == CandyTone.Neutral) null else candyTone(tone).fill
-        LiquidGlassPanel(
-            modifier = modifier,
-            shape = shape,
-            accentTint = accent,
-            contentPadding = contentPadding,
-            onClick = onClick,
-            onClickLabel = onClickLabel,
-            content = content
-        )
-    } else {
-        CandyBubbleCard(
-            tone = tone,
-            modifier = modifier,
-            shape = shape,
-            decor = decor,
-            contentPadding = contentPadding,
-            onClick = onClick,
-            onClickLabel = onClickLabel,
-            content = content
-        )
-    }
-}
+        Spacer(Modifier.height(6.dp))
 
-@Composable
-private fun HomeGlassOrSpatialCard(
-    modifier: Modifier = Modifier,
-    tier: SpatialGlassTier = SpatialGlassTier.Standard,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(28.dp),
-    contentPadding: PaddingValues = PaddingValues(vertical = 6.dp, horizontal = 4.dp),
-    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
-) {
-    if (LocalVisualTheme.current == VisualTheme.LIQUID_GLASS) {
-        LiquidGlassPanel(
-            modifier = modifier,
-            shape = shape,
-            elevated = tier == SpatialGlassTier.Elevated,
-            contentPadding = contentPadding,
-            content = content
+        SpatialAnimatedCounterText(
+            amountSen = safeToSpendSen,
+            accessibilityLabel = "Safe to Spend",
+            style = typography.heroBalance.copy(fontSize = 52.sp, lineHeight = 58.sp, letterSpacing = (-1.6).sp),
+            color = if (isTight) colors.expense else colors.primaryText,
+            splitMinorScale = 0.46f
         )
-    } else {
-        SpatialGlassCard(
-            modifier = modifier,
-            tier = tier,
-            shape = shape,
-            contentPadding = contentPadding,
-            content = content
-        )
+
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = if (isTight) Icons.Rounded.Warning else Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = if (isTight) colors.expense else colors.income,
+                modifier = Modifier.size(15.dp)
+            )
+            val statusSummary = if (upcomingUnreservedSen > 0L) {
+                val lead = if (isTight) "Overcommitted" else "Good to go"
+                "$lead · ${maskedBalance(upcomingUnreservedSen)} reserved for this cycle"
+            } else {
+                val lead = if (isTight) "Overcommitted" else "Good to go"
+                "$lead · Cycle bills settled"
+            }
+            Text(
+                text = statusSummary,
+                style = typography.caption,
+                color = colors.secondaryText,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
     }
 }
 
@@ -1123,7 +856,6 @@ private fun SpatialSecondaryFinancialBento(
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
     val isLiquidGlass = LocalVisualTheme.current == VisualTheme.LIQUID_GLASS
-    val glassIntensity = LocalGlassIntensity.current
     val privacy = LocalPrivacySettings.current
     val walletCaption = if (walletCount == 1) "1 wallet" else "$walletCount wallets"
     val goalFraction = if (savingsBalanceSen > 0L) {
@@ -1131,6 +863,123 @@ private fun SpatialSecondaryFinancialBento(
     } else 0f
     val totalText = maskedBalance(totalBalanceSen)
     val savingsText = maskedBalance(savingsBalanceSen)
+    val reservedText = maskedBalance(currentCycleReservedSen)
+    val futureText = maskedBalance(upcomingFutureBillsSen)
+
+    if (isLiquidGlass) {
+        Column(modifier = Modifier.fillMaxWidth().candyEntrance("home_summary")) {
+            // Simple, well-spaced metrics: Total Balance & Protected Savings
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 68.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .candyPressable(onClick = onOpenAllWallets, onClickLabel = "View all wallets")
+                        .padding(vertical = 6.dp, horizontal = 4.dp)
+                        .privacySafeAmountSemantics("Total balance, $walletCaption", privacy.isAnyMaskActive, totalText)
+                ) {
+                    Text("Total balance", style = typography.caption, color = colors.secondaryText)
+                    Spacer(Modifier.height(4.dp))
+                    CandyMoneyText(totalText, typography.cardBalance.copy(fontSize = 22.sp), colors.primaryText)
+                    Spacer(Modifier.height(3.dp))
+                    Text(walletCaption, style = typography.caption, color = colors.secondaryText)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .width(1.dp)
+                        .fillMaxHeight(0.74f)
+                        .background(colors.divider)
+                )
+
+                val savingsCaption = if (activeGoalsCount > 0) {
+                    val unit = if (activeGoalsCount == 1) "goal" else "goals"
+                    "$activeGoalsCount $unit · ${(goalFraction * 100).toInt()}% set"
+                } else {
+                    "Protected"
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 68.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .candyPressable(onClick = onOpenSavingsGoals, onClickLabel = "Open savings goals")
+                        .padding(vertical = 6.dp, horizontal = 4.dp)
+                        .privacySafeAmountSemantics("Protected savings", privacy.isAnyMaskActive, savingsText)
+                ) {
+                    Text("Protected savings", style = typography.caption, color = colors.secondaryText)
+                    Spacer(Modifier.height(4.dp))
+                    CandyMoneyText(savingsText, typography.cardBalance.copy(fontSize = 22.sp), colors.primaryText)
+                    Spacer(Modifier.height(3.dp))
+                    Text(savingsCaption, style = typography.caption, color = colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+
+            // Clean Bills Reserve row (no pastel ticket card)
+            val billsSub = buildString {
+                if (upcomingCount > 0) {
+                    append("$upcomingCount due")
+                } else {
+                    append("No unpaid bills")
+                }
+                if (upcomingFutureCount > 0) {
+                    append(" · Next $futureText")
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 60.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .candyPressable(onClick = onOpenCommitments, onClickLabel = "Open commitments")
+                    .padding(vertical = 12.dp, horizontal = 2.dp)
+                    .privacySafeAmountSemantics("Current cycle reserved", privacy.isAnyMaskActive, reservedText),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(colors.baseSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ReceiptLong,
+                        contentDescription = null,
+                        tint = colors.primaryText,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Reserved this cycle", style = typography.transactionDescription, color = colors.primaryText)
+                    Text(billsSub, style = typography.caption, color = colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.width(8.dp))
+                CandyMoneyText(reservedText, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
+                Spacer(Modifier.width(2.dp))
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = colors.secondaryText,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+        }
+        return
+    }
 
     Column(
         modifier = Modifier.candyEntrance("home_summary"),
@@ -1143,13 +992,13 @@ private fun SpatialSecondaryFinancialBento(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Wallet pocket: total balance across included wallets
-            HomeGlassOrBubbleCard(
+            CandyBubbleCard(
                 tone = CandyTone.Sky,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
                     .privacySafeAmountSemantics("Total balance, $walletCaption", privacy.isAnyMaskActive, totalText),
-                shape = if (isLiquidGlass) RoundedCornerShape(26.dp) else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 12.dp),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 12.dp),
                 onClick = onOpenAllWallets,
                 onClickLabel = "View all wallets"
             ) {
@@ -1162,13 +1011,13 @@ private fun SpatialSecondaryFinancialBento(
             }
 
             // Savings jar: protected balance with goal-allocation ring
-            HomeGlassOrBubbleCard(
+            CandyBubbleCard(
                 tone = CandyTone.Sunny,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
                     .privacySafeAmountSemantics("Protected savings", privacy.isAnyMaskActive, savingsText),
-                shape = if (isLiquidGlass) RoundedCornerShape(26.dp) else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 12.dp, bottomEnd = 28.dp),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 12.dp, bottomEnd = 28.dp),
                 onClick = onOpenSavingsGoals,
                 onClickLabel = "Open savings goals"
             ) {
@@ -1188,9 +1037,15 @@ private fun SpatialSecondaryFinancialBento(
 
         // Bill ticket: current-cycle reserve with a perforated next-cycle stub
         val peach = candyTone(CandyTone.Peach)
-        val reservedText = maskedBalance(currentCycleReservedSen)
-        val futureText = maskedBalance(upcomingFutureBillsSen)
-        val ticketContent: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
+        SpatialGlassSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .privacySafeAmountSemantics("Current cycle reserved", privacy.isAnyMaskActive, reservedText),
+            shape = CandyTicketShape(notchFraction = 0.66f),
+            containerColor = peach.container,
+            onClick = onOpenCommitments,
+            onClickLabel = "Open commitments"
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1236,36 +1091,6 @@ private fun SpatialSecondaryFinancialBento(
                 }
             }
         }
-        if (isLiquidGlass) {
-            val ticketSpec = remember(colors, glassIntensity, peach.fill) {
-                LiquidGlassPanelPresets.card(
-                    colors = colors,
-                    intensity = glassIntensity,
-                    accentTint = peach.fill
-                )
-            }
-            LiquidGlassPanelBox(
-                spec = ticketSpec,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .privacySafeAmountSemantics("Current cycle reserved", privacy.isAnyMaskActive, reservedText),
-                shape = CandyTicketShape(notchFraction = 0.66f),
-                onClick = onOpenCommitments,
-                onClickLabel = "Open commitments",
-                content = ticketContent
-            )
-        } else {
-            SpatialGlassSurface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .privacySafeAmountSemantics("Current cycle reserved", privacy.isAnyMaskActive, reservedText),
-                shape = CandyTicketShape(notchFraction = 0.66f),
-                containerColor = peach.container,
-                onClick = onOpenCommitments,
-                onClickLabel = "Open commitments",
-                content = ticketContent
-            )
-        }
     }
 }
 
@@ -1279,7 +1104,53 @@ private fun SpatialPendingCommissionsCard(
     val privacy = LocalPrivacySettings.current
     val amount = maskedBalance(pendingCommissionsSen)
 
-    HomeGlassOrBubbleCard(
+    if (LocalVisualTheme.current == VisualTheme.LIQUID_GLASS) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 60.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .candyPressable(onClick = onClick, onClickLabel = "Open commissions")
+                    .padding(vertical = 10.dp, horizontal = 2.dp)
+                    .privacySafeAmountSemantics("Pending commissions, awaiting payout", privacy.isAnyMaskActive, amount),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(colors.baseSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Payments,
+                        contentDescription = null,
+                        tint = colors.primaryText,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Pending commissions", style = typography.transactionDescription, color = colors.primaryText)
+                    Text("Awaiting payout", style = typography.caption, color = colors.secondaryText)
+                }
+                Spacer(Modifier.width(8.dp))
+                CandyMoneyText(amount, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
+                Spacer(Modifier.width(2.dp))
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = colors.secondaryText,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+        }
+        return
+    }
+
+    CandyBubbleCard(
         tone = CandyTone.Sunny,
         decor = CandyDecor.Corner,
         modifier = Modifier
@@ -1314,14 +1185,101 @@ private fun SpatialUpcomingPaymentsPreviewSection(
     val privacy = LocalPrivacySettings.current
     val previewItems = commitments.take(3)
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val isLiquidGlass = LocalVisualTheme.current == VisualTheme.LIQUID_GLASS
+    Column(verticalArrangement = Arrangement.spacedBy(if (isLiquidGlass) 4.dp else 10.dp)) {
         HomeSectionHeader(
             title = if (isSamplePreview) "Coming up · Sample" else "Coming up",
             count = commitments.size,
             actionLabel = "All bills",
             onAction = onViewAllCommitments
         )
-        HomeGlassOrSpatialCard(
+        if (isLiquidGlass) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                previewItems.forEachIndexed { idx, commitment ->
+                    if (idx > 0) {
+                        HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+                    }
+                    val isInCurrentCycle = ObligationCalculator.isDueWithinHorizon(
+                        dueDateEpochDay = commitment.dueDateEpochDay,
+                        activeCycle = activeCycle
+                    )
+                    val remainingSen = (commitment.amountSen - commitment.paidSen.coerceAtLeast(0L)).coerceAtLeast(0L)
+                    val cycleLabel = when {
+                        commitment.status == CommitmentStatus.PAID -> "Paid"
+                        isInCurrentCycle -> "This cycle"
+                        else -> "Next cycle"
+                    }
+                    val dueSub = if (commitment.status == CommitmentStatus.PARTIALLY_PAID) {
+                        "${DateTimeFormatters.formatEpochDay(commitment.dueDateEpochDay)} · Paid ${maskedAmount(commitment.paidSen)}"
+                    } else {
+                        "${DateTimeFormatters.formatEpochDay(commitment.dueDateEpochDay)} · $cycleLabel"
+                    }
+                    val formattedRemaining = maskedBalance(remainingSen)
+                    val localDate = java.time.LocalDate.ofEpochDay(commitment.dueDateEpochDay)
+                    val monthShort = localDate.month.name.take(3)
+                    val dayStr = localDate.dayOfMonth.toString()
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 58.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .candyPressable(onClick = onViewAllCommitments, onClickLabel = "Open ${commitment.title}")
+                            .padding(vertical = 10.dp, horizontal = 2.dp)
+                            .privacySafeAmountSemantics(
+                                label = "${commitment.title}, $dueSub",
+                                isMasked = privacy.isAnyMaskActive,
+                                visibleFormattedAmount = formattedRemaining
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .size(width = 42.dp, height = 42.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(colors.baseSurface),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = monthShort,
+                                style = typography.caption.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                                color = colors.secondaryText,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = dayStr,
+                                style = typography.cardTitle.copy(fontSize = 15.sp, lineHeight = 16.sp),
+                                color = colors.primaryText,
+                                maxLines = 1
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = commitment.title,
+                                style = typography.transactionDescription,
+                                color = colors.primaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = dueSub,
+                                style = typography.caption,
+                                color = colors.secondaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        CandyMoneyText(formattedRemaining, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
+                    }
+                }
+                HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+            }
+            return
+        }
+        SpatialGlassCard(
             modifier = Modifier.fillMaxWidth(),
             tier = SpatialGlassTier.Standard,
             shape = RoundedCornerShape(28.dp),
@@ -1424,7 +1382,8 @@ private fun SpatialWalletsPreviewSection(
     val privacy = LocalPrivacySettings.current
     val totalWalletsCount = activeWallets.size + archivedCount
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val isLiquidGlass = LocalVisualTheme.current == VisualTheme.LIQUID_GLASS
+    Column(verticalArrangement = Arrangement.spacedBy(if (isLiquidGlass) 4.dp else 10.dp)) {
         HomeSectionHeader(
             title = if (isSamplePreview) "Wallets · Sample" else "Wallets",
             count = activeWallets.size,
@@ -1440,6 +1399,89 @@ private fun SpatialWalletsPreviewSection(
                 trailingPrimaryColor = colors.primaryAction,
                 onClick = onViewAllWallets
             )
+        } else if (isLiquidGlass) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                activeWallets.take(6).forEachIndexed { idx, wallet ->
+                    if (idx > 0) {
+                        HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+                    }
+                    val tags = walletTags(wallet)
+                    val balance = maskedBalance(wallet.balanceSen)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 58.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .candyPressable(onClick = { onSelectWallet(wallet) }, onClickLabel = "Manage ${wallet.name}")
+                            .padding(vertical = 10.dp, horizontal = 2.dp)
+                            .privacySafeAmountSemantics(
+                                label = "${wallet.name}, ${tags.joinToString(", ")}",
+                                isMasked = privacy.isAnyMaskActive,
+                                visibleFormattedAmount = balance
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(colors.baseSurface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = walletIcon(wallet.type),
+                                contentDescription = null,
+                                tint = colors.primaryText,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = wallet.name,
+                                style = typography.transactionDescription,
+                                color = colors.primaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = tags.joinToString(" · "),
+                                style = typography.caption,
+                                color = colors.secondaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        CandyMoneyText(balance, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
+                    }
+                }
+                if (!isSamplePreview) {
+                    HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .candyPressable(onClick = onAddWallet, onClickLabel = "Add wallet")
+                            .padding(vertical = 12.dp, horizontal = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = colors.primaryAction,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Add wallet",
+                            style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
+                            color = colors.primaryAction
+                        )
+                    }
+                }
+            }
         } else {
             // Wallet "pockets": a swipeable row of distinct candy cards.
             Row(
@@ -1453,7 +1495,7 @@ private fun SpatialWalletsPreviewSection(
                     val tone = walletTone(wallet.accentToken)
                     val tags = walletTags(wallet)
                     val balance = maskedBalance(wallet.balanceSen)
-                    HomeGlassOrBubbleCard(
+                    CandyBubbleCard(
                         tone = tone,
                         decor = CandyDecor.Corner,
                         modifier = Modifier
@@ -1551,13 +1593,88 @@ private fun SpatialRecentTransactionsPreviewSection(
     val typography = SpatialTheme.typography
     val privacy = LocalPrivacySettings.current
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val isLiquidGlass = LocalVisualTheme.current == VisualTheme.LIQUID_GLASS
+    Column(verticalArrangement = Arrangement.spacedBy(if (isLiquidGlass) 4.dp else 10.dp)) {
         HomeSectionHeader(
             title = if (isSamplePreview) "Recent activity · Sample" else "Recent activity",
             actionLabel = "View all",
             onAction = onViewAllActivity
         )
-        HomeGlassOrSpatialCard(
+        if (isLiquidGlass) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                transactions.forEachIndexed { idx, tx ->
+                    if (idx > 0) {
+                        HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+                    }
+                    val walletName = walletsById[tx.walletId]?.name ?: "Wallet"
+                    val targetName = tx.targetWalletId?.let { walletsById[it]?.name }
+                    val iconKey = CategoryIconMapper.inferIconKeyFromName(tx.category, tx.type)
+                    val amountColor = when (tx.type) {
+                        TransactionType.INCOME -> colors.income
+                        TransactionType.EXPENSE -> colors.primaryText
+                        TransactionType.TRANSFER -> colors.savings
+                    }
+                    val formattedAmount = if (privacy.isAnyMaskActive) {
+                        PrivacyMask.MASKED_MYR
+                    } else {
+                        when (tx.type) {
+                            TransactionType.INCOME -> MyrFormatter.format(tx.amountSen, includePlusSign = true)
+                            TransactionType.EXPENSE -> MyrFormatter.format(-tx.amountSen)
+                            TransactionType.TRANSFER -> MyrFormatter.format(tx.amountSen)
+                        }
+                    }
+                    val subtitle = if (tx.type == TransactionType.TRANSFER && targetName != null) {
+                        "$walletName → $targetName"
+                    } else {
+                        "${tx.category} · $walletName"
+                    }
+                    val dateLabel = DateTimeFormatters.formatDateOnly(tx.occurredAtEpochMs)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 58.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .candyPressable(onClick = { onSelectTransaction(tx) }, onClickLabel = "Inspect ${tx.title}")
+                            .padding(vertical = 10.dp, horizontal = 2.dp)
+                            .privacySafeAmountSemantics(
+                                label = "${tx.title}, $subtitle, $dateLabel",
+                                isMasked = privacy.isAnyMaskActive,
+                                visibleFormattedAmount = formattedAmount
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(colors.baseSurface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = CategoryIconMapper.iconFor(iconKey, tx.type),
+                                contentDescription = null,
+                                tint = if (tx.type == TransactionType.INCOME) colors.income else colors.primaryText,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(tx.title, style = typography.transactionDescription, color = colors.primaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(subtitle, style = typography.caption, color = colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(horizontalAlignment = Alignment.End) {
+                            CandyMoneyText(formattedAmount, typography.transactionAmount.copy(fontSize = 16.sp), amountColor, minorScale = 0.72f)
+                            Text(dateLabel, style = typography.caption, color = colors.secondaryText, maxLines = 1)
+                        }
+                    }
+                }
+                HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+            }
+            return
+        }
+        SpatialGlassCard(
             modifier = Modifier.fillMaxWidth(),
             tier = SpatialGlassTier.Standard,
             shape = RoundedCornerShape(28.dp),
@@ -1658,6 +1775,7 @@ private fun AllWalletsBottomSheet(
             Spacer(Modifier.height(if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) 20.dp else 14.dp))
         }
 
+        val isLiquidGlass = LocalVisualTheme.current == VisualTheme.LIQUID_GLASS
         if (activeWallets.isNotEmpty()) {
             Text(
                 text = "Active Wallets (${activeWallets.size})",
@@ -1665,23 +1783,36 @@ private fun AllWalletsBottomSheet(
                 color = colors.primaryText,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            HomeGlassOrSpatialCard(
-                modifier = Modifier.fillMaxWidth(),
-                tier = SpatialGlassTier.Standard,
-                shape = RoundedCornerShape(24.dp),
-                contentPadding = PaddingValues(vertical = 6.dp)
-            ) {
-                activeWallets.forEachIndexed { idx, wallet ->
-                    if (idx > 0) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = colors.divider
+            if (isLiquidGlass) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    activeWallets.forEachIndexed { idx, wallet ->
+                        if (idx > 0) {
+                            HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+                        }
+                        CompactWalletRowItem(
+                            wallet = wallet,
+                            onClick = { onSelectWallet(wallet) }
                         )
                     }
-                    CompactWalletRowItem(
-                        wallet = wallet,
-                        onClick = { onSelectWallet(wallet) }
-                    )
+                }
+            } else {
+                SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    tier = SpatialGlassTier.Standard,
+                    contentPadding = PaddingValues(vertical = 6.dp)
+                ) {
+                    activeWallets.forEachIndexed { idx, wallet ->
+                        if (idx > 0) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = colors.divider
+                            )
+                        }
+                        CompactWalletRowItem(
+                            wallet = wallet,
+                            onClick = { onSelectWallet(wallet) }
+                        )
+                    }
                 }
             }
         }
@@ -1694,23 +1825,36 @@ private fun AllWalletsBottomSheet(
                 color = colors.secondaryText,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            HomeGlassOrSpatialCard(
-                modifier = Modifier.fillMaxWidth(),
-                tier = SpatialGlassTier.Subtle,
-                shape = RoundedCornerShape(24.dp),
-                contentPadding = PaddingValues(vertical = 6.dp)
-            ) {
-                archivedWallets.forEachIndexed { idx, wallet ->
-                    if (idx > 0) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = colors.divider
+            if (isLiquidGlass) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    archivedWallets.forEachIndexed { idx, wallet ->
+                        if (idx > 0) {
+                            HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+                        }
+                        CompactWalletRowItem(
+                            wallet = wallet,
+                            onClick = { onSelectWallet(wallet) }
                         )
                     }
-                    CompactWalletRowItem(
-                        wallet = wallet,
-                        onClick = { onSelectWallet(wallet) }
-                    )
+                }
+            } else {
+                SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    tier = SpatialGlassTier.Subtle,
+                    contentPadding = PaddingValues(vertical = 6.dp)
+                ) {
+                    archivedWallets.forEachIndexed { idx, wallet ->
+                        if (idx > 0) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = colors.divider
+                            )
+                        }
+                        CompactWalletRowItem(
+                            wallet = wallet,
+                            onClick = { onSelectWallet(wallet) }
+                        )
+                    }
                 }
             }
         }
