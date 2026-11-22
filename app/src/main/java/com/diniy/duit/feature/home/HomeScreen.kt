@@ -131,9 +131,13 @@ import com.diniy.duit.core.ui.state.maskedAmount
 import com.diniy.duit.core.ui.state.maskedBalance
 import com.diniy.duit.core.ui.state.privacySafeAmountSemantics
 import com.diniy.duit.core.ui.glass.LiquidGlassOrbButton
+import com.diniy.duit.core.ui.glass.LiquidGlassPanelBox
+import com.diniy.duit.core.ui.glass.LiquidGlassPanelPresets
 import com.diniy.duit.core.ui.theme.DuitTheme
+import com.diniy.duit.core.ui.theme.LocalGlassIntensity
 import com.diniy.duit.core.ui.theme.LocalVisualTheme
 import com.diniy.duit.core.ui.theme.SpatialTheme
+import com.diniy.duit.domain.model.GlassIntensity
 import com.diniy.duit.domain.model.VisualTheme
 import com.diniy.duit.core.util.DateTimeFormatters
 import com.diniy.duit.domain.calculator.ObligationCalculator
@@ -238,6 +242,8 @@ fun HomeScreen(
                         safeToSpendSen = uiState.summary.safeToSpendSen,
                         upcomingUnreservedSen = uiState.summary.upcomingCommitmentsUnreservedSen,
                         activeReservePeriodLabel = uiState.summary.activeReservePeriodLabel,
+                        totalBalanceSen = uiState.summary.totalBalanceSen,
+                        savingsBalanceSen = uiState.summary.savingsBalanceSen,
                         onToggleBalanceVisibility = {
                             performHaptic(HapticFeedbackType.TextHandleMove)
                             onToggleBalanceVisibility()
@@ -569,6 +575,8 @@ private fun SpatialSafeToSpendHeroCard(
     safeToSpendSen: Long,
     upcomingUnreservedSen: Long,
     activeReservePeriodLabel: String,
+    totalBalanceSen: Long = 0L,
+    savingsBalanceSen: Long = 0L,
     onToggleBalanceVisibility: () -> Unit
 ) {
     if (LocalVisualTheme.current == VisualTheme.LIQUID_GLASS) {
@@ -576,6 +584,8 @@ private fun SpatialSafeToSpendHeroCard(
             safeToSpendSen = safeToSpendSen,
             upcomingUnreservedSen = upcomingUnreservedSen,
             activeReservePeriodLabel = activeReservePeriodLabel,
+            totalBalanceSen = totalBalanceSen,
+            savingsBalanceSen = savingsBalanceSen,
             onToggleBalanceVisibility = onToggleBalanceVisibility
         )
         return
@@ -726,115 +736,283 @@ private fun SpatialSafeToSpendHeroCard(
 }
 
 /**
- * Phase 10E Natural Liquid Glass Safe-to-Spend Hero (Home only):
- * Minimal, typography-led focal section directly on the calm canvas — zero large blue card,
- * zero gradients, zero decorative pills or sticker coins. Actual optical Liquid Glass is
- * reserved for the floating navigation bar, convex chromatic lens, FAB and interactive overlays.
+ * Phase 10E Professional Liquid Glass Safe-to-Spend Hero Surface (Home only):
+ * Single prominent optical glass surface anchoring Home with clean typography, real allocation
+ * breakdown bar (Safe vs Bills vs Savings), and disciplined LOW/MID/HIGH optics — zero generic
+ * blue-purple gradients, zero rainbow borders, zero decorative stickers.
  */
 @Composable
 private fun LiquidGlassSafeToSpendHeroCard(
     safeToSpendSen: Long,
     upcomingUnreservedSen: Long,
     activeReservePeriodLabel: String,
+    totalBalanceSen: Long,
+    savingsBalanceSen: Long,
     onToggleBalanceVisibility: () -> Unit
 ) {
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
+    val intensity = LocalGlassIntensity.current
     val privacySettings = LocalPrivacySettings.current
     val isMasked = privacySettings.isAnyMaskActive
     val isTight = safeToSpendSen < 0L
+    val isLow = intensity == GlassIntensity.SUBTLE
+    val isHigh = intensity == GlassIntensity.RICH
 
-    Column(
+    val heroSpec = remember(colors, intensity) {
+        LiquidGlassPanelPresets.card(
+            colors = colors,
+            intensity = intensity,
+            elevated = true
+        ).copy(
+            fillColor = when (intensity) {
+                GlassIntensity.SUBTLE -> colors.elevatedSurface
+                GlassIntensity.BALANCED -> if (colors.isDark) Color(0xFF171A23).copy(alpha = 0.90f) else Color.White.copy(alpha = 0.88f)
+                GlassIntensity.RICH -> if (colors.isDark) Color(0xFF161A25).copy(alpha = 0.80f) else Color.White.copy(alpha = 0.78f)
+            },
+            topSheenAlpha = when (intensity) {
+                GlassIntensity.SUBTLE -> 0f
+                GlassIntensity.BALANCED -> if (colors.isDark) 0.10f else 0.55f
+                GlassIntensity.RICH -> if (colors.isDark) 0.18f else 0.82f
+            },
+            bottomReflectionAlpha = when (intensity) {
+                GlassIntensity.SUBTLE -> 0f
+                GlassIntensity.BALANCED -> if (colors.isDark) 0.06f else 0.03f
+                GlassIntensity.RICH -> if (colors.isDark) 0.20f else 0.06f
+            },
+            rimHighlightAlpha = when (intensity) {
+                GlassIntensity.SUBTLE -> 0f
+                GlassIntensity.BALANCED -> if (colors.isDark) 0.28f else 0.85f
+                GlassIntensity.RICH -> if (colors.isDark) 0.46f else 0.96f
+            },
+            chromaticGlintAlpha = 0f,
+            borderColor = if (colors.isDark) Color(0x22FFFFFF) else Color(0x160F172A),
+            shadowElevation = when (intensity) {
+                GlassIntensity.SUBTLE -> if (colors.isDark) 0.dp else 2.dp
+                GlassIntensity.BALANCED -> 6.dp
+                GlassIntensity.RICH -> if (colors.isDark) 10.dp else 9.dp
+            }
+        )
+    }
+
+    val safePart = safeToSpendSen.coerceAtLeast(0L).toFloat()
+    val reservedPart = upcomingUnreservedSen.coerceAtLeast(0L).toFloat()
+    val savingsPart = savingsBalanceSen.coerceAtLeast(0L).toFloat()
+    val allocationTotal = (safePart + reservedPart + savingsPart).coerceAtLeast(
+        totalBalanceSen.coerceAtLeast(0L).toFloat()
+    )
+    val showAllocationBar = !isMasked && allocationTotal > 0f && !isTight
+
+    LiquidGlassPanelBox(
+        spec = heroSpec,
+        shape = RoundedCornerShape(28.dp),
         modifier = Modifier
             .fillMaxWidth()
             .candyEntrance("home_hero")
-            .padding(top = 8.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        // Subtle architectural optical light catch in HIGH mode only (never a generic AI neon gradient)
+        if (isHigh) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .drawBehind {
+                        val accentGlow = if (isTight) colors.expense else colors.primaryAction
+                        drawCircle(
+                            brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                                colors = listOf(
+                                    accentGlow.copy(alpha = if (colors.isDark) 0.12f else 0.06f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width * 0.90f, size.height * 0.12f),
+                                radius = size.width * 0.62f
+                            ),
+                            center = Offset(size.width * 0.90f, size.height * 0.12f),
+                            radius = size.width * 0.62f
+                        )
+                    }
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 18.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Safe to spend",
-                    style = typography.cardTitle.copy(fontSize = 15.sp),
-                    color = colors.secondaryText
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Safe to spend",
+                        style = typography.cardTitle.copy(fontSize = 15.sp),
+                        color = colors.secondaryText
+                    )
+                    Text(
+                        text = activeReservePeriodLabel,
+                        style = typography.caption,
+                        color = colors.secondaryText.copy(alpha = 0.80f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            if (isLow) colors.baseSurface
+                            else colors.baseSurface.copy(alpha = if (colors.isDark) 0.65f else 0.72f)
+                        )
+                        .candyPressable(
+                            onClick = onToggleBalanceVisibility,
+                            onClickLabel = if (isMasked) "Show sensitive amounts" else "Hide sensitive amounts"
+                        )
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isMasked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        contentDescription = null,
+                        tint = colors.primaryAction,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = if (isMasked) "Show" else "Hide",
+                        style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
+                        color = colors.primaryAction
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            SpatialAnimatedCounterText(
+                amountSen = safeToSpendSen,
+                accessibilityLabel = "Safe to Spend",
+                style = typography.heroBalance.copy(fontSize = 46.sp, lineHeight = 52.sp, letterSpacing = (-1.4).sp),
+                color = if (isTight) colors.expense else colors.primaryText,
+                splitMinorScale = 0.48f
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(if (isTight) colors.expense else colors.income)
                 )
                 Text(
-                    text = activeReservePeriodLabel,
+                    text = if (isTight) "Overcommitted" else "Good to go",
+                    style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
+                    color = if (isTight) colors.expense else colors.income
+                )
+                Text(
+                    text = if (upcomingUnreservedSen > 0L) {
+                        "· ${maskedBalance(upcomingUnreservedSen)} reserved for bills"
+                    } else {
+                        "· Cycle bills settled"
+                    },
                     style = typography.caption,
-                    color = colors.secondaryText.copy(alpha = 0.80f),
+                    color = colors.secondaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Row(
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .candyPressable(
-                        onClick = onToggleBalanceVisibility,
-                        onClickLabel = if (isMasked) "Show sensitive amounts" else "Hide sensitive amounts"
-                    )
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                Icon(
-                    imageVector = if (isMasked) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                    contentDescription = null,
-                    tint = colors.primaryAction,
-                    modifier = Modifier.size(17.dp)
-                )
-                Text(
-                    text = if (isMasked) "Show" else "Hide",
-                    style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
-                    color = colors.primaryAction
-                )
+
+            if (showAllocationBar) {
+                val safeW = (safePart / allocationTotal).coerceIn(0f, 1f)
+                val reservedW = (reservedPart / allocationTotal).coerceIn(0f, 1f)
+                val savingsW = (savingsPart / allocationTotal).coerceIn(0f, 1f)
+                val activeSegments = listOf(safeW, reservedW, savingsW).count { it > 0.01f }
+
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(colors.baseSurface),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (safeW > 0.01f) {
+                        Box(
+                            modifier = Modifier
+                                .weight(safeW)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(colors.primaryAction)
+                        )
+                    }
+                    if (reservedW > 0.01f) {
+                        Box(
+                            modifier = Modifier
+                                .weight(reservedW)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(colors.warning)
+                        )
+                    }
+                    if (savingsW > 0.01f) {
+                        Box(
+                            modifier = Modifier
+                                .weight(savingsW)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(colors.income)
+                        )
+                    }
+                }
+
+                if (activeSegments > 1) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (safeW > 0.01f) {
+                            AllocationLegendDot(label = "Safe", dotColor = colors.primaryAction)
+                        }
+                        if (reservedW > 0.01f) {
+                            AllocationLegendDot(label = "Bills", dotColor = colors.warning)
+                        }
+                        if (savingsW > 0.01f) {
+                            AllocationLegendDot(label = "Savings", dotColor = colors.income)
+                        }
+                    }
+                }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(6.dp))
-
-        SpatialAnimatedCounterText(
-            amountSen = safeToSpendSen,
-            accessibilityLabel = "Safe to Spend",
-            style = typography.heroBalance.copy(fontSize = 52.sp, lineHeight = 58.sp, letterSpacing = (-1.6).sp),
-            color = if (isTight) colors.expense else colors.primaryText,
-            splitMinorScale = 0.46f
+@Composable
+private fun AllocationLegendDot(label: String, dotColor: Color) {
+    val colors = SpatialTheme.colors
+    val typography = SpatialTheme.typography
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(dotColor)
         )
-
-        Spacer(Modifier.height(10.dp))
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(
-                imageVector = if (isTight) Icons.Rounded.Warning else Icons.Rounded.CheckCircle,
-                contentDescription = null,
-                tint = if (isTight) colors.expense else colors.income,
-                modifier = Modifier.size(15.dp)
-            )
-            val statusSummary = if (upcomingUnreservedSen > 0L) {
-                val lead = if (isTight) "Overcommitted" else "Good to go"
-                "$lead · ${maskedBalance(upcomingUnreservedSen)} reserved for this cycle"
-            } else {
-                val lead = if (isTight) "Overcommitted" else "Good to go"
-                "$lead · Cycle bills settled"
-            }
-            Text(
-                text = statusSummary,
-                style = typography.caption,
-                color = colors.secondaryText,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        Spacer(Modifier.height(20.dp))
-        HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
+        Text(
+            text = label,
+            style = typography.caption.copy(fontSize = 11.sp),
+            color = colors.secondaryText
+        )
     }
 }
 
@@ -951,13 +1129,13 @@ private fun SpatialSecondaryFinancialBento(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(RoundedCornerShape(11.dp))
-                        .background(colors.baseSurface),
+                        .background(colors.warning.copy(alpha = if (colors.isDark) 0.18f else 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ReceiptLong,
                         contentDescription = null,
-                        tint = colors.primaryText,
+                        tint = colors.warning,
                         modifier = Modifier.size(19.dp)
                     )
                 }
@@ -1120,13 +1298,13 @@ private fun SpatialPendingCommissionsCard(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(RoundedCornerShape(11.dp))
-                        .background(colors.baseSurface),
+                        .background(colors.primaryAction.copy(alpha = if (colors.isDark) 0.18f else 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Payments,
                         contentDescription = null,
-                        tint = colors.primaryText,
+                        tint = colors.primaryAction,
                         modifier = Modifier.size(19.dp)
                     )
                 }
@@ -1194,7 +1372,15 @@ private fun SpatialUpcomingPaymentsPreviewSection(
             onAction = onViewAllCommitments
         )
         if (isLiquidGlass) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            val listShape = RoundedCornerShape(20.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(listShape)
+                    .background(colors.elevatedSurface)
+                    .border(BorderStroke(0.75.dp, colors.divider), listShape)
+                    .padding(horizontal = 14.dp, vertical = 4.dp)
+            ) {
                 previewItems.forEachIndexed { idx, commitment ->
                     if (idx > 0) {
                         HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
@@ -1223,9 +1409,9 @@ private fun SpatialUpcomingPaymentsPreviewSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 58.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .candyPressable(onClick = onViewAllCommitments, onClickLabel = "Open ${commitment.title}")
-                            .padding(vertical = 10.dp, horizontal = 2.dp)
+                            .padding(vertical = 10.dp)
                             .privacySafeAmountSemantics(
                                 label = "${commitment.title}, $dueSub",
                                 isMasked = privacy.isAnyMaskActive,
@@ -1237,14 +1423,14 @@ private fun SpatialUpcomingPaymentsPreviewSection(
                             modifier = Modifier
                                 .size(width = 42.dp, height = 42.dp)
                                 .clip(RoundedCornerShape(11.dp))
-                                .background(colors.baseSurface),
+                                .background(colors.primaryAction.copy(alpha = if (colors.isDark) 0.16f else 0.10f)),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
                                 text = monthShort,
                                 style = typography.caption.copy(fontSize = 9.sp, lineHeight = 10.sp),
-                                color = colors.secondaryText,
+                                color = colors.primaryAction,
                                 maxLines = 1
                             )
                             Text(
@@ -1275,7 +1461,6 @@ private fun SpatialUpcomingPaymentsPreviewSection(
                         CandyMoneyText(formattedRemaining, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
                     }
                 }
-                HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
             }
             return
         }
@@ -1400,84 +1585,97 @@ private fun SpatialWalletsPreviewSection(
                 onClick = onViewAllWallets
             )
         } else if (isLiquidGlass) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                activeWallets.take(6).forEachIndexed { idx, wallet ->
-                    if (idx > 0) {
-                        HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
-                    }
+            // Clean horizontal compact wallet strip (breaks vertical list monotony without pastel cards)
+            val tileShape = RoundedCornerShape(20.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                activeWallets.take(6).forEach { wallet ->
                     val tags = walletTags(wallet)
                     val balance = maskedBalance(wallet.balanceSen)
-                    Row(
+                    val accentColor = when (wallet.type) {
+                        WalletType.SAVINGS -> colors.income
+                        WalletType.BANK -> colors.primaryAction
+                        WalletType.EWALLET -> colors.savings
+                        WalletType.CASH -> colors.warning
+                    }
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 58.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .width(154.dp)
+                            .fillMaxHeight()
+                            .clip(tileShape)
+                            .background(colors.elevatedSurface)
+                            .border(BorderStroke(0.75.dp, colors.divider), tileShape)
                             .candyPressable(onClick = { onSelectWallet(wallet) }, onClickLabel = "Manage ${wallet.name}")
-                            .padding(vertical = 10.dp, horizontal = 2.dp)
+                            .padding(14.dp)
                             .privacySafeAmountSemantics(
                                 label = "${wallet.name}, ${tags.joinToString(", ")}",
                                 isMasked = privacy.isAnyMaskActive,
                                 visibleFormattedAmount = balance
-                            ),
-                        verticalAlignment = Alignment.CenterVertically
+                            )
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(11.dp))
-                                .background(colors.baseSurface),
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(accentColor.copy(alpha = if (colors.isDark) 0.18f else 0.11f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = walletIcon(wallet.type),
                                 contentDescription = null,
-                                tint = colors.primaryText,
-                                modifier = Modifier.size(19.dp)
+                                tint = accentColor,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = wallet.name,
-                                style = typography.transactionDescription,
-                                color = colors.primaryText,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = tags.joinToString(" · "),
-                                style = typography.caption,
-                                color = colors.secondaryText,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        CandyMoneyText(balance, typography.transactionAmount, colors.primaryText, minorScale = 0.72f)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = wallet.name,
+                            style = typography.transactionDescription,
+                            color = colors.primaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = tags.joinToString(" · "),
+                            style = typography.caption,
+                            color = colors.secondaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        CandyMoneyText(balance, typography.cardBalance.copy(fontSize = 17.sp), colors.primaryText)
                     }
                 }
                 if (!isSamplePreview) {
-                    HorizontalDivider(color = colors.divider, thickness = 0.75.dp)
-                    Row(
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .width(108.dp)
+                            .fillMaxHeight()
+                            .clip(tileShape)
+                            .background(colors.baseSurface.copy(alpha = 0.72f))
+                            .border(BorderStroke(0.75.dp, colors.divider), tileShape)
                             .candyPressable(onClick = onAddWallet, onClickLabel = "Add wallet")
-                            .padding(vertical = 12.dp, horizontal = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = null,
                             tint = colors.primaryAction,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(22.dp)
                         )
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             text = "Add wallet",
                             style = typography.caption.copy(fontFamily = typography.cardTitle.fontFamily),
-                            color = colors.primaryAction
+                            color = colors.primaryAction,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1644,17 +1842,27 @@ private fun SpatialRecentTransactionsPreviewSection(
                             ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val txIconTint = when (tx.type) {
+                            TransactionType.INCOME -> colors.income
+                            TransactionType.TRANSFER -> colors.savings
+                            TransactionType.EXPENSE -> colors.primaryText
+                        }
+                        val txIconBg = when (tx.type) {
+                            TransactionType.INCOME -> colors.income.copy(alpha = if (colors.isDark) 0.18f else 0.11f)
+                            TransactionType.TRANSFER -> colors.savings.copy(alpha = if (colors.isDark) 0.18f else 0.11f)
+                            TransactionType.EXPENSE -> colors.baseSurface
+                        }
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(11.dp))
-                                .background(colors.baseSurface),
+                                .background(txIconBg),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = CategoryIconMapper.iconFor(iconKey, tx.type),
                                 contentDescription = null,
-                                tint = if (tx.type == TransactionType.INCOME) colors.income else colors.primaryText,
+                                tint = txIconTint,
                                 modifier = Modifier.size(19.dp)
                             )
                         }
