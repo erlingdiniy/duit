@@ -57,6 +57,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -80,6 +81,7 @@ import com.diniy.duit.core.ui.components.PrismaticLoadingCard
 import com.diniy.duit.core.ui.components.PrismaticNavItem
 import com.diniy.duit.core.ui.components.PrismaticNavigationRail
 import com.diniy.duit.core.ui.components.rememberReducedMotionEnabled
+import com.diniy.duit.core.ui.glass.liquidGlassBackdropSource
 import com.diniy.duit.domain.model.FinanceTransaction
 import com.diniy.duit.domain.model.TransactionType
 import com.diniy.duit.feature.activity.ActivityScreen
@@ -164,12 +166,26 @@ fun DuitAppShell(
     var requestedPlanningTab by rememberSaveable { mutableStateOf<PlanningSectionTab?>(null) }
     var requestCommissionSection by rememberSaveable { mutableStateOf(false) }
     val celebrate = com.diniy.duit.core.ui.components.LocalCandyCelebrate.current
-    // Floating + hides while the user scrolls down (so it never covers rows) and returns on scroll up.
-    var fabVisible by remember { mutableStateOf(true) }
+    var glassScrollPulse by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val glassIntensity = com.diniy.duit.core.ui.theme.LocalGlassIntensity.current
+    val glassBackdropState = com.diniy.duit.core.ui.glass.rememberLiquidGlassBackdropState(
+        initialQualityMode = com.diniy.duit.core.ui.glass.LiquidGlassCapabilities.qualityModeFor(glassIntensity)
+    )
+    LaunchedEffect(glassIntensity) {
+        glassBackdropState.qualityMode =
+            com.diniy.duit.core.ui.glass.LiquidGlassCapabilities.qualityModeFor(glassIntensity)
+    }
+    LaunchedEffect(glassScrollPulse) {
+        if (glassScrollPulse > 0) {
+            glassBackdropState.isScrolling = true
+            kotlinx.coroutines.delay(140L)
+            glassBackdropState.isScrolling = false
+        }
+    }
     val fabScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < -4f) fabVisible = false else if (available.y > 4f) fabVisible = true
+                if (kotlin.math.abs(available.y) > 1.5f) glassScrollPulse++
                 return Offset.Zero
             }
         }
@@ -693,7 +709,14 @@ fun DuitAppShell(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val useNavigationRail = maxWidth >= 600.dp
             val layoutDirection = LocalLayoutDirection.current
+            val visualTheme = com.diniy.duit.core.ui.theme.LocalVisualTheme.current
+            val enableLiquidChrome = !useNavigationRail &&
+                visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
 
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.diniy.duit.core.ui.glass.LocalLiquidGlassBackdrop provides
+                    if (enableLiquidChrome) glassBackdropState else null
+            ) {
             Scaffold(
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets.safeDrawing,
@@ -703,34 +726,23 @@ fun DuitAppShell(
                             items = navItems,
                             currentRoute = currentRoute,
                             onSelect = { navigateToRoute(it.route) },
-                            // Experiment 01: quick action lives in the FAB, so the bar shows 4 even tabs.
-                            onQuickAddClick = null
+                            // Dock Quick Add beside the floating 4-tab capsule so it never covers
+                            // bottom-right card CTAs such as Add Funds or row amounts.
+                            onQuickAddClick = null,
+                            onTrailingQuickAddClick = if (!WindowInsets.isImeVisible) {
+                                { showQuickAddSheet = true }
+                            } else {
+                                null
+                            }
                         )
-                    }
-                },
-                floatingActionButton = {
-                    if (!useNavigationRail) {
-                        val reduced = com.diniy.duit.core.ui.components.rememberReducedMotionEnabled()
-                        // A new tab starts with the quick action visible again.
-                        androidx.compose.runtime.LaunchedEffect(currentRoute) { fabVisible = true }
-                        AnimatedVisibility(
-                            visible = fabVisible && !WindowInsets.isImeVisible,
-                            enter = if (reduced) EnterTransition.None else scaleIn() + fadeIn(),
-                            exit = if (reduced) ExitTransition.None else scaleOut() + fadeOut()
-                        ) {
-                            DuitQuickActionFab(
-                                onClick = { showQuickAddSheet = true },
-                                modifier = Modifier.padding(end = 4.dp, bottom = 4.dp)
-                            )
-                        }
                     }
                 }
             ) { innerPadding ->
                 val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-                // Extra clearance so the last list item can scroll above the floating quick action.
-                // FAB (60dp) + Scaffold margin (16dp) + breathing room, so the last row can always clear it.
-                val fabClearance = if (useNavigationRail) 0.dp else 96.dp
-                val baseBottom = innerPadding.calculateBottomPadding() + 20.dp + fabClearance
+                // Generous bottom clearance so the last scrollable card & CTA scroll completely
+                // above the floating bottom dock without ever being obscured.
+                val extraDockBreathing = if (useNavigationRail) 20.dp else 32.dp
+                val baseBottom = innerPadding.calculateBottomPadding() + extraDockBreathing
                 val screenPadding = PaddingValues(
                     start = if (useNavigationRail) 12.dp else innerPadding.calculateStartPadding(layoutDirection) + 16.dp,
                     end = innerPadding.calculateEndPadding(layoutDirection) + 16.dp,
@@ -738,7 +750,16 @@ fun DuitAppShell(
                     bottom = maxOf(baseBottom, imeBottom + 16.dp)
                 )
 
-                Row(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = if (enableLiquidChrome) {
+                        Modifier
+                            .fillMaxSize()
+                            .liquidGlassBackdropSource(glassBackdropState)
+                            .background(com.diniy.duit.core.ui.theme.SpatialTheme.colors.appBackground)
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
+                ) {
                     if (useNavigationRail) {
                         PrismaticNavigationRail(
                             items = navItems,
@@ -1045,6 +1066,7 @@ fun DuitAppShell(
                         }
                     }
                 }
+            }
             }
         }
     }

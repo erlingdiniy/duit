@@ -273,25 +273,34 @@ fun CandyBubbleCard(
     onClickLabel: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val t = candyTone(tone)
+    val effectiveFill = if (isLiquidGlass && containerColor == null && tone != CandyTone.Neutral) {
+        lerp(SpatialTheme.colors.glassSurface, t.fill, if (SpatialTheme.colors.isDark) 0.14f else 0.10f)
+    } else {
+        containerColor ?: t.container
+    }
     SpatialGlassSurface(
         modifier = modifier,
         shape = shape,
-        containerColor = containerColor ?: t.container,
-        sticker = sticker,
+        containerColor = effectiveFill,
+        sticker = sticker && !isLiquidGlass,
         onClick = onClick,
         onClickLabel = onClickLabel
     ) {
-        Box(
-            Modifier
-                .matchParentSize()
-                .candyDecor(decor, t.fill, SpatialTheme.colors.isDark)
-        )
+        if (!isLiquidGlass) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .candyDecor(decor, t.fill, SpatialTheme.colors.isDark)
+            )
+        }
         Column(modifier = Modifier.padding(contentPadding), content = content)
     }
 }
 
-/** Squircle icon container, optionally tilted like a sticker. */
+/** Squircle icon container, optionally tilted like a sticker (flat optical squircle in Liquid Glass). */
 @Composable
 fun CandyIconBlob(
     icon: ImageVector,
@@ -301,11 +310,14 @@ fun CandyIconBlob(
     tilt: Float = 0f,
     solid: Boolean = false
 ) {
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val t = candyTone(tone)
+    val effectiveTilt = if (isLiquidGlass) 0f else tilt
     Box(
         modifier = modifier
             .size(size)
-            .rotate(tilt)
+            .rotate(effectiveTilt)
             .clip(RoundedCornerShape(size * 0.36f))
             .background(if (solid) t.fill else t.container),
         contentAlignment = Alignment.Center
@@ -316,12 +328,12 @@ fun CandyIconBlob(
             tint = if (solid) t.onFill else t.ink,
             modifier = Modifier
                 .size(size * 0.5f)
-                .rotate(-tilt)
+                .rotate(-effectiveTilt)
         )
     }
 }
 
-/** Sticker label: bold outline + small hard offset shadow, slightly tilted. Use sparingly. */
+/** Sticker label: bold outline + small hard offset shadow in Candy Bubble; crisp frosted pill in Liquid Glass. */
 @Composable
 fun CandySticker(
     text: String,
@@ -330,28 +342,42 @@ fun CandySticker(
     tilt: Float = -4f,
     leadingIcon: ImageVector? = null
 ) {
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val t = candyTone(tone)
-    val ink = SpatialTheme.colors.sticker
+    val colors = SpatialTheme.colors
+    val ink = colors.sticker
     val shape = RoundedCornerShape(50)
     Row(
         modifier = modifier
-            .rotate(tilt)
-            .drawBehind {
-                val o = 2.dp.toPx()
-                val outline = shape.createOutline(size, layoutDirection, this)
-                translate(left = o, top = o) { drawOutline(outline, ink) }
-            }
-            .clip(shape)
-            .background(t.fill)
-            .border(BorderStroke(2.dp, ink), shape)
+            .then(
+                if (isLiquidGlass) {
+                    Modifier
+                        .clip(shape)
+                        .background(colors.glassSurfaceElevated.copy(alpha = if (colors.isDark) 0.72f else 0.85f))
+                        .border(BorderStroke(1.dp, colors.glassBorder), shape)
+                } else {
+                    Modifier
+                        .rotate(tilt)
+                        .drawBehind {
+                            val o = 2.dp.toPx()
+                            val outline = shape.createOutline(size, layoutDirection, this)
+                            translate(left = o, top = o) { drawOutline(outline, ink) }
+                        }
+                        .clip(shape)
+                        .background(t.fill)
+                        .border(BorderStroke(2.dp, ink), shape)
+                }
+            )
             .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        val labelColor = if (isLiquidGlass) colors.primaryText else t.onFill
         if (leadingIcon != null) {
-            Icon(leadingIcon, contentDescription = null, tint = t.onFill, modifier = Modifier.size(14.dp))
+            Icon(leadingIcon, contentDescription = null, tint = labelColor, modifier = Modifier.size(14.dp))
         }
-        Text(text = text, style = SpatialTheme.typography.caption.copy(fontFamily = SpatialTheme.typography.cardTitle.fontFamily), color = t.onFill, maxLines = 1)
+        Text(text = text, style = SpatialTheme.typography.caption.copy(fontFamily = SpatialTheme.typography.cardTitle.fontFamily), color = labelColor, maxLines = 1)
     }
 }
 
@@ -590,6 +616,8 @@ fun CandyMintIconButton(
     modifier: Modifier = Modifier,
     pressedTilt: Float = 30f
 ) {
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val colors = SpatialTheme.colors
     val motion = SpatialTheme.motion
     val reduced = rememberReducedMotionEnabled()
@@ -597,9 +625,28 @@ fun CandyMintIconButton(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val spec = prismaticSpring<Float>(reduced, motion.pressDampingRatio, motion.pressStiffness)
-    val scale by animateFloatAsState(if (pressed && !reduced) 0.92f else 1f, spec, label = "mint_btn_scale")
-    val tilt by animateFloatAsState(if (pressed && !reduced) pressedTilt else 0f, spec, label = "mint_btn_tilt")
-    val shape = RoundedCornerShape(16.dp)
+    val scale by animateFloatAsState(
+        if (pressed && !reduced) (if (isLiquidGlass) 1.06f else 0.92f) else 1f,
+        spec,
+        label = "mint_btn_scale"
+    )
+    val tilt by animateFloatAsState(
+        if (pressed && !reduced && !isLiquidGlass) pressedTilt else 0f,
+        spec,
+        label = "mint_btn_tilt"
+    )
+    val shape = if (isLiquidGlass) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(16.dp)
+    val bg = if (isLiquidGlass) {
+        colors.glassSurfaceElevated.copy(alpha = if (colors.isDark) 0.72f else 0.84f)
+    } else {
+        colors.aqua
+    }
+    val borderStroke = if (isLiquidGlass) {
+        BorderStroke(1.dp, colors.glassBorder)
+    } else {
+        BorderStroke(2.dp, colors.sticker)
+    }
+    val iconTint = if (isLiquidGlass) colors.primaryText else colors.onCoral
 
     Box(
         modifier = modifier
@@ -609,8 +656,8 @@ fun CandyMintIconButton(
                 scaleY = scale
             }
             .clip(shape)
-            .background(colors.aqua)
-            .border(BorderStroke(2.dp, colors.sticker), shape)
+            .background(bg)
+            .border(borderStroke, shape)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -626,9 +673,9 @@ fun CandyMintIconButton(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = colors.onCoral,
+            tint = iconTint,
             modifier = Modifier
-                .size(24.dp)
+                .size(22.dp)
                 .graphicsLayer { rotationZ = tilt }
         )
     }

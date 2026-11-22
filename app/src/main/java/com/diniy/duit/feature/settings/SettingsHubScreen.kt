@@ -145,6 +145,7 @@ fun SettingsHubContainerScreen(
         SettingsHubRoute.APPEARANCE -> AppearanceSettingsScreen(
             uiState = uiState,
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onSelectVisualTheme = viewModel::setVisualTheme,
             onSelectTheme = viewModel::setThemeMode,
             onSelectGlassIntensity = viewModel::setGlassIntensity,
             onOpenMotion = { onNavigateRoute(SettingsHubRoute.MOTION_HAPTICS) },
@@ -154,6 +155,7 @@ fun SettingsHubContainerScreen(
         SettingsHubRoute.MOTION_HAPTICS -> AppearanceSettingsScreen(
             uiState = uiState,
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onSelectVisualTheme = viewModel::setVisualTheme,
             onSelectTheme = viewModel::setThemeMode,
             onSelectGlassIntensity = viewModel::setGlassIntensity,
             onOpenHomeLayout = { onNavigateRoute(SettingsHubRoute.DASHBOARD) }
@@ -271,7 +273,7 @@ private fun SettingsHubOverviewScreen(
                         icon = Icons.Rounded.Palette,
                         accent = colors.coral,
                         title = "Appearance",
-                        subtitle = "${app.themeMode.label} theme · Home layout",
+                        subtitle = "${app.visualTheme.label} · ${app.themeMode.label}",
                         onClick = { onSelectRoute(SettingsHubRoute.APPEARANCE) }
                     )
                     if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
@@ -556,13 +558,12 @@ private fun SettingsHubOverviewScreen(
 private fun AppearanceSettingsScreen(
     uiState: SettingsHubUiState,
     onBack: () -> Unit,
+    onSelectVisualTheme: (com.diniy.duit.domain.model.VisualTheme) -> Unit,
     onSelectTheme: (ThemeMode) -> Unit,
     onSelectGlassIntensity: (GlassIntensity) -> Unit,
     onOpenMotion: () -> Unit = {},
     onOpenHomeLayout: () -> Unit = {}
 ) {
-    // Phase 11A: Card depth is no longer shown here. The stored preference (default Balanced
-    // when none is saved) is left untouched for backward compatibility.
     val settings = uiState.appSettings
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
@@ -570,20 +571,21 @@ private fun AppearanceSettingsScreen(
 
     SettingsPageScaffold(
         title = "Appearance",
-        subtitle = "Theme and Home layout",
+        subtitle = "Design theme, color mode & Home layout",
         onBack = onBack
     ) {
-        item(key = "theme_mode") {
+        item(key = "visual_theme") {
             com.diniy.duit.core.ui.components.SpatialGlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(28.dp),
                 contentPadding = PaddingValues(16.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val isLiquid = settings.visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .rotate(-6f)
+                            .rotate(if (isLiquid) 0f else -6f)
                             .clip(RoundedCornerShape(14.dp))
                             .background(colors.coral),
                         contentAlignment = Alignment.Center
@@ -594,12 +596,43 @@ private fun AppearanceSettingsScreen(
                             tint = colors.onCoral,
                             modifier = Modifier
                                 .size(20.dp)
-                                .rotate(6f)
+                                .rotate(if (isLiquid) 0f else 6f)
                         )
                     }
                     Spacer(Modifier.width(12.dp))
-                    Text("Theme", style = typography.cardTitle, color = colors.primaryText)
+                    Column {
+                        Text("Design Theme", style = typography.cardTitle, color = colors.primaryText)
+                        Text(
+                            text = settings.visualTheme.summary,
+                            style = typography.caption,
+                            color = colors.secondaryText
+                        )
+                    }
                 }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    com.diniy.duit.domain.model.VisualTheme.entries.forEach { style ->
+                        com.diniy.duit.core.ui.components.SpatialGlassPill(
+                            label = style.label,
+                            modifier = Modifier.weight(1f),
+                            selected = settings.visualTheme == style,
+                            onClick = { onSelectVisualTheme(style) }
+                        )
+                    }
+                }
+            }
+        }
+
+        item(key = "theme_mode") {
+            com.diniy.duit.core.ui.components.SpatialGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                Text("Color Mode", style = typography.cardTitle, color = colors.primaryText)
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -612,6 +645,43 @@ private fun AppearanceSettingsScreen(
                             selected = settings.themeMode == mode,
                             onClick = { onSelectTheme(mode) }
                         )
+                    }
+                }
+            }
+        }
+
+        if (settings.visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS) {
+            item(key = "glass_intensity") {
+                com.diniy.duit.core.ui.components.SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Glass Intensity", style = typography.cardTitle, color = colors.primaryText)
+                        Text(
+                            text = when (settings.glassIntensity) {
+                                GlassIntensity.SUBTLE -> "Optical frost fallback (lowest GPU use)"
+                                GlassIntensity.BALANCED -> "Live refraction with scroll optimization"
+                                GlassIntensity.RICH -> "Stronger bevel refraction & specular rim"
+                            },
+                            style = typography.caption,
+                            color = colors.secondaryText
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        GlassIntensity.entries.forEach { level ->
+                            com.diniy.duit.core.ui.components.SpatialGlassPill(
+                                label = level.label,
+                                modifier = Modifier.weight(1f),
+                                selected = settings.glassIntensity == level,
+                                onClick = { onSelectGlassIntensity(level) }
+                            )
+                        }
                     }
                 }
             }

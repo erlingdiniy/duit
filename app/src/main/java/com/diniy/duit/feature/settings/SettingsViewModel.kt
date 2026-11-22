@@ -119,6 +119,10 @@ class SettingsViewModel(
         viewModelScope.launch { userPreferencesRepository.setThemeMode(mode) }
     }
 
+    fun setVisualTheme(theme: com.diniy.duit.domain.model.VisualTheme) {
+        viewModelScope.launch { userPreferencesRepository.setVisualTheme(theme) }
+    }
+
     fun setGlassIntensity(intensity: GlassIntensity) {
         viewModelScope.launch { userPreferencesRepository.setGlassIntensity(intensity) }
     }

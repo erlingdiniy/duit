@@ -85,10 +85,18 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.diniy.duit.core.ui.glass.LiquidGlassPresets
+import com.diniy.duit.core.ui.glass.LiquidGlassSprings
+import com.diniy.duit.core.ui.glass.LiquidGlassSurface
+import com.diniy.duit.core.ui.glass.LocalLiquidGlassBackdrop
+import com.diniy.duit.core.ui.theme.LocalGlassIntensity
 import com.diniy.duit.core.ui.theme.SpatialTheme
+import com.diniy.duit.domain.model.GlassIntensity
 import com.diniy.duit.domain.model.TransactionType
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.tanh
 
 data class PrismaticNavItem(
     val route: String,
@@ -111,12 +119,19 @@ fun PrismaticFloatingBottomBar(
     currentRoute: String,
     onSelect: (PrismaticNavItem) -> Unit,
     modifier: Modifier = Modifier,
-    onQuickAddClick: (() -> Unit)? = null
+    onQuickAddClick: (() -> Unit)? = null,
+    onTrailingQuickAddClick: (() -> Unit)? = null
 ) {
     if (items.isEmpty()) return
 
     val colors = SpatialTheme.colors
     val geometry = SpatialTheme.geometry
+    val visualTheme = com.diniy.duit.core.ui.theme.LocalVisualTheme.current
+    val glassIntensity = LocalGlassIntensity.current
+    val hasCenterAction = onQuickAddClick != null && items.size == 4
+    val totalSlots = if (hasCenterAction) items.size + 1 else items.size
+    val backdropState = LocalLiquidGlassBackdrop.current
+    val useLiquidGlass = visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS && backdropState != null
     val reducedMotion = rememberReducedMotionEnabled()
     val performHaptic = rememberDuitHaptic()
     val density = LocalDensity.current
@@ -125,9 +140,6 @@ fun PrismaticFloatingBottomBar(
     val selectedIndex = items.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
     val pillShape = RoundedCornerShape(geometry.radiusFloatingNav)
     val activeIndicatorShape = RoundedCornerShape(24.dp)
-
-    val hasCenterAction = onQuickAddClick != null && items.size == 4
-    val totalSlots = if (hasCenterAction) items.size + 1 else items.size
 
     fun itemIndexToVisualSlot(itemIdx: Int): Int =
         if (hasCenterAction && itemIdx >= 2) itemIdx + 1 else itemIdx
@@ -145,225 +157,451 @@ fun PrismaticFloatingBottomBar(
     val animatedSlot = remember { Animatable(targetVisualSlot) }
     var isDragging by remember { mutableStateOf(false) }
     var dragHoverIndex by remember { mutableIntStateOf(selectedIndex) }
+    var tapLiftPulse by remember { mutableStateOf(false) }
+    var jellyTarget by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var rowHeightPx by remember { mutableIntStateOf(with(density) { 56.dp.roundToPx() }) }
 
-    LaunchedEffect(targetVisualSlot, isDragging, reducedMotion) {
+    LaunchedEffect(targetVisualSlot, isDragging, reducedMotion, useLiquidGlass) {
         if (!isDragging) {
+            jellyTarget = 0f
             if (reducedMotion) {
                 animatedSlot.snapTo(targetVisualSlot)
             } else {
+                val moved = abs(animatedSlot.value - targetVisualSlot) > 0.05f
+                if (useLiquidGlass && moved) {
+                    tapLiftPulse = true
+                    jellyTarget = 0.09f
+                }
                 animatedSlot.animateTo(
                     targetValue = targetVisualSlot,
-                    animationSpec = spring(
-                        // Phase 11K: critically damped (no overshoot/wobble), ~250ms glide
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
+                    animationSpec = if (useLiquidGlass) {
+                        LiquidGlassSprings.Snap
+                    } else {
+                        spring(
+                            // Phase 11K: critically damped (no overshoot/wobble), ~250ms glide
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    }
                 )
+                tapLiftPulse = false
+                jellyTarget = 0f
             }
         }
     }
 
+    val isLensLifted = useLiquidGlass && (isDragging || tapLiftPulse) && !reducedMotion
+    val lensLift by animateFloatAsState(
+        targetValue = if (isLensLifted) 1f else 0f,
+        animationSpec = if (isLensLifted) LiquidGlassSprings.Lift else LiquidGlassSprings.Settle,
+        label = "nav_lens_lift"
+    )
+    val lensJelly by animateFloatAsState(
+        targetValue = if (useLiquidGlass && !reducedMotion) jellyTarget else 0f,
+        animationSpec = LiquidGlassSprings.Jelly,
+        label = "nav_lens_jelly"
+    )
+    val barSwell by animateFloatAsState(
+        targetValue = if (useLiquidGlass && isDragging && !reducedMotion) 1.018f else 1f,
+        animationSpec = if (isDragging) LiquidGlassSprings.Press else LiquidGlassSprings.Release,
+        label = "nav_bar_swell"
+    )
+
+    // Subtle gesture-bar-only bottom edge fade keeps clipped text out of the system inset strip
+    // while leaving the floating glass dock itself crystal-clear over live refracted content.
+    val containerScrim = if (useLiquidGlass) {
+        Modifier.background(
+            Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.0f to Color.Transparent,
+                    0.68f to Color.Transparent,
+                    0.88f to colors.appBackground.copy(alpha = 0.58f),
+                    1.0f to colors.appBackground.copy(alpha = 0.92f)
+                )
+            )
+        )
+    } else {
+        Modifier.background(
+            Brush.verticalGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    colors.appBackground.copy(alpha = 0.86f),
+                    colors.appBackground.copy(alpha = 0.98f)
+                )
+            )
+        )
+    }
+
+    val hasTrailingQuickAdd = onTrailingQuickAddClick != null
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        colors.appBackground.copy(alpha = 0.86f),
-                        colors.appBackground.copy(alpha = 0.98f)
-                    )
-                )
-            )
+            .then(containerScrim)
             .navigationBarsPadding()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(
+                horizontal = if (hasTrailingQuickAdd) 12.dp else 16.dp,
+                vertical = 10.dp
+            ),
         contentAlignment = Alignment.Center
     ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .widthIn(max = geometry.maxFloatingNavWidth)
-                .fillMaxWidth()
-                // Candy Bubble nav: sticker capsule (outline + hard offset shadow)
-                .drawBehind {
-                    val o = 3.dp.toPx()
-                    val outline = pillShape.createOutline(size, layoutDirection, this)
-                    translate(left = 0f, top = o) { drawOutline(outline, colors.sticker) }
-                }
-                .clip(pillShape)
-                .background(colors.floatingNavSurface)
-                .border(BorderStroke(2.dp, colors.sticker), pillShape)
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-        ) {
-            val totalWidthPx = with(density) { maxWidth.toPx() }
-            val slotWidthPx = (totalWidthPx / totalSlots).coerceAtLeast(1f)
-            val slotWidthDp = maxWidth / totalSlots
+        val barContent: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (hasTrailingQuickAdd) 6.dp else 8.dp, vertical = 6.dp)
+            ) {
+                val totalWidthPx = with(density) { maxWidth.toPx() }
+                val slotWidthPx = (totalWidthPx / totalSlots).coerceAtLeast(1f)
+                val slotWidthDp = maxWidth / totalSlots
 
-            val dragModifier = Modifier.pointerInput(totalSlots, slotWidthPx, selectedIndex) {
-                detectHorizontalDragGestures(
-                    onDragStart = { startOffset ->
-                        val slot = (startOffset.x / slotWidthPx).toInt().coerceIn(0, totalSlots - 1)
-                        val mapped = visualSlotToItemIndex(slot)
-                        if (mapped != null) {
-                            isDragging = true
-                            dragHoverIndex = mapped
-                        }
-                    },
-                    onHorizontalDrag = { change, dragAmount ->
-                        if (!isDragging) return@detectHorizontalDragGestures
-                        change.consume()
-                        val deltaFraction = dragAmount / slotWidthPx
-                        val nextSlot = (animatedSlot.value + deltaFraction)
-                            .coerceIn(0f, (totalSlots - 1).toFloat())
-                        scope.launch { animatedSlot.snapTo(nextSlot) }
-                        val nearestSlot = nextSlot.roundToInt().coerceIn(0, totalSlots - 1)
-                        val hoveredItem = visualSlotToItemIndex(nearestSlot)
-                        if (hoveredItem != null && hoveredItem != dragHoverIndex) {
-                            dragHoverIndex = hoveredItem
-                            performHaptic(HapticFeedbackType.TextHandleMove)
-                        }
-                    },
-                    onDragEnd = {
-                        if (!isDragging) return@detectHorizontalDragGestures
-                        isDragging = false
-                        val targetItem = dragHoverIndex.coerceIn(0, items.lastIndex)
-                        if (targetItem != selectedIndex) {
-                            performHaptic(HapticFeedbackType.TextHandleMove)
-                            onSelect(items[targetItem])
-                        } else {
-                            scope.launch {
-                                if (reducedMotion) {
-                                    animatedSlot.snapTo(targetVisualSlot)
-                                } else {
-                                    animatedSlot.animateTo(
-                                        targetValue = targetVisualSlot,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = Spring.StiffnessMedium
+                val dragModifier = Modifier.pointerInput(totalSlots, slotWidthPx, selectedIndex, useLiquidGlass) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { startOffset ->
+                            val slot = (startOffset.x / slotWidthPx).toInt().coerceIn(0, totalSlots - 1)
+                            val mapped = visualSlotToItemIndex(slot)
+                            if (mapped != null) {
+                                isDragging = true
+                                dragHoverIndex = mapped
+                            }
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            if (!isDragging) return@detectHorizontalDragGestures
+                            change.consume()
+                            val deltaFraction = dragAmount / slotWidthPx
+                            val nextSlot = (animatedSlot.value + deltaFraction)
+                                .coerceIn(0f, (totalSlots - 1).toFloat())
+                            scope.launch { animatedSlot.snapTo(nextSlot) }
+                            if (useLiquidGlass) {
+                                jellyTarget = (0.14f * tanh(abs(dragAmount) / 28.0)).toFloat()
+                            }
+                            val nearestSlot = nextSlot.roundToInt().coerceIn(0, totalSlots - 1)
+                            val hoveredItem = visualSlotToItemIndex(nearestSlot)
+                            if (hoveredItem != null && hoveredItem != dragHoverIndex) {
+                                dragHoverIndex = hoveredItem
+                                performHaptic(HapticFeedbackType.TextHandleMove)
+                            }
+                        },
+                        onDragEnd = {
+                            if (!isDragging) return@detectHorizontalDragGestures
+                            isDragging = false
+                            jellyTarget = 0f
+                            val targetItem = dragHoverIndex.coerceIn(0, items.lastIndex)
+                            if (targetItem != selectedIndex) {
+                                performHaptic(HapticFeedbackType.SegmentTick)
+                                onSelect(items[targetItem])
+                            } else {
+                                scope.launch {
+                                    if (reducedMotion) {
+                                        animatedSlot.snapTo(targetVisualSlot)
+                                    } else {
+                                        animatedSlot.animateTo(
+                                            targetValue = targetVisualSlot,
+                                            animationSpec = if (useLiquidGlass) {
+                                                LiquidGlassSprings.Snap
+                                            } else {
+                                                spring(
+                                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                                    stiffness = Spring.StiffnessMedium
+                                                )
+                                            }
                                         )
-                                    )
+                                    }
                                 }
                             }
-                        }
-                    },
-                    onDragCancel = {
-                        isDragging = false
-                        scope.launch { animatedSlot.animateTo(targetVisualSlot) }
-                    }
-                )
-            }
-
-            Box(modifier = Modifier.fillMaxWidth().then(dragModifier)) {
-                val indicatorHeightDp = with(density) { rowHeightPx.toDp() }
-                Box(
-                    modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                x = (animatedSlot.value * slotWidthPx).roundToInt(),
-                                y = 0
-                            )
-                        }
-                        .width(slotWidthDp)
-                        .height(indicatorHeightDp)
-                        .clip(activeIndicatorShape)
-                        .background(colors.coral)
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onSizeChanged { size ->
-                            if (size.height > 0) rowHeightPx = size.height
                         },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val activeHighlightIndex = if (isDragging) dragHoverIndex else selectedIndex
-
-                    if (hasCenterAction) {
-                        items.take(2).forEachIndexed { idx, item ->
-                            FloatingNavTabItem(
-                                item = item,
-                                isSelected = idx == activeHighlightIndex,
-                                reducedMotion = reducedMotion,
-                                onClick = {
-                                    if (idx != selectedIndex) {
-                                        performHaptic(HapticFeedbackType.SegmentTick)
-                                        onSelect(item)
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
+                        onDragCancel = {
+                            isDragging = false
+                            jellyTarget = 0f
+                            scope.launch { animatedSlot.animateTo(targetVisualSlot) }
                         }
+                    )
+                }
 
-                        Box(
-                            modifier = Modifier.weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            SpatialQuickAddCenterButton(
-                                onClick = {
-                                    performHaptic(HapticFeedbackType.TextHandleMove)
-                                    onQuickAddClick?.invoke()
+                Box(modifier = Modifier.fillMaxWidth().then(dragModifier)) {
+                    val indicatorHeightDp = with(density) { rowHeightPx.toDp() }
+                    if (useLiquidGlass) {
+                        val lensSpec = remember(colors, glassIntensity) {
+                            LiquidGlassPresets.floatingNavLens(colors, glassIntensity)
+                        }
+                        val lensScaleX = (1f + 0.06f * lensLift) * (1f + lensJelly)
+                        val lensScaleY = (1f + 0.10f * lensLift) * (1f - lensJelly * 0.50f)
+                        LiquidGlassSurface(
+                            backdropState = backdropState,
+                            spec = lensSpec,
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        x = (animatedSlot.value * slotWidthPx).roundToInt(),
+                                        y = 0
+                                    )
                                 }
-                            )
-                        }
-
-                        items.drop(2).forEachIndexed { offsetIdx, item ->
-                            val idx = offsetIdx + 2
-                            FloatingNavTabItem(
-                                item = item,
-                                isSelected = idx == activeHighlightIndex,
-                                reducedMotion = reducedMotion,
-                                onClick = {
-                                    if (idx != selectedIndex) {
-                                        performHaptic(HapticFeedbackType.SegmentTick)
-                                        onSelect(item)
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                                .width(slotWidthDp)
+                                .height(indicatorHeightDp)
+                                .graphicsLayer {
+                                    scaleX = lensScaleX
+                                    scaleY = lensScaleY
+                                }
+                        ) {}
                     } else {
-                        items.forEachIndexed { index, item ->
-                            FloatingNavTabItem(
-                                item = item,
-                                isSelected = index == activeHighlightIndex,
-                                reducedMotion = reducedMotion,
-                                onClick = {
-                                    if (index != selectedIndex) {
-                                        performHaptic(HapticFeedbackType.SegmentTick)
-                                        onSelect(item)
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        x = (animatedSlot.value * slotWidthPx).roundToInt(),
+                                        y = 0
+                                    )
+                                }
+                                .width(slotWidthDp)
+                                .height(indicatorHeightDp)
+                                .clip(activeIndicatorShape)
+                                .background(colors.coral)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { size ->
+                                if (size.height > 0) rowHeightPx = size.height
+                            },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val activeHighlightIndex = if (isDragging) dragHoverIndex else selectedIndex
+
+                        if (hasCenterAction) {
+                            items.take(2).forEachIndexed { idx, item ->
+                                FloatingNavTabItem(
+                                    item = item,
+                                    isSelected = idx == activeHighlightIndex,
+                                    reducedMotion = reducedMotion,
+                                    useLiquidGlass = useLiquidGlass,
+                                    lensLift = lensLift,
+                                    onClick = {
+                                        if (idx != selectedIndex) {
+                                            performHaptic(HapticFeedbackType.SegmentTick)
+                                            onSelect(item)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                SpatialQuickAddCenterButton(
+                                    onClick = {
+                                        performHaptic(HapticFeedbackType.TextHandleMove)
+                                        onQuickAddClick?.invoke()
                                     }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
+                                )
+                            }
+
+                            items.drop(2).forEachIndexed { offsetIdx, item ->
+                                val idx = offsetIdx + 2
+                                FloatingNavTabItem(
+                                    item = item,
+                                    isSelected = idx == activeHighlightIndex,
+                                    reducedMotion = reducedMotion,
+                                    useLiquidGlass = useLiquidGlass,
+                                    lensLift = lensLift,
+                                    onClick = {
+                                        if (idx != selectedIndex) {
+                                            performHaptic(HapticFeedbackType.SegmentTick)
+                                            onSelect(item)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        } else {
+                            items.forEachIndexed { index, item ->
+                                FloatingNavTabItem(
+                                    item = item,
+                                    isSelected = index == activeHighlightIndex,
+                                    reducedMotion = reducedMotion,
+                                    useLiquidGlass = useLiquidGlass,
+                                    lensLift = lensLift,
+                                    onClick = {
+                                        if (index != selectedIndex) {
+                                            performHaptic(HapticFeedbackType.SegmentTick)
+                                            onSelect(item)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
+
+        val capsuleSurface: @Composable (Modifier) -> Unit = { capsuleMod ->
+            if (useLiquidGlass) {
+                val barSpec = remember(colors, glassIntensity) {
+                    LiquidGlassPresets.floatingNavBar(colors, glassIntensity)
+                }
+                LiquidGlassSurface(
+                    backdropState = backdropState,
+                    spec = barSpec,
+                    modifier = capsuleMod.graphicsLayer {
+                        scaleX = barSwell
+                        scaleY = 1f
+                    },
+                    content = barContent
+                )
+            } else {
+                Box(
+                    modifier = capsuleMod
+                        // Classic Candy Bubble reversible fallback: sticker capsule (outline + hard offset shadow)
+                        .drawBehind {
+                            val o = 3.dp.toPx()
+                            val outline = pillShape.createOutline(size, layoutDirection, this)
+                            translate(left = 0f, top = o) { drawOutline(outline, colors.sticker) }
+                        }
+                        .clip(pillShape)
+                        .background(colors.floatingNavSurface)
+                        .border(BorderStroke(2.dp, colors.sticker), pillShape),
+                    content = barContent
+                )
+            }
+        }
+
+        if (onTrailingQuickAddClick != null) {
+            Row(
+                modifier = Modifier
+                    .widthIn(max = geometry.maxFloatingNavWidth + 66.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                capsuleSurface(Modifier.weight(1f))
+                DuitQuickActionFab(
+                    onClick = onTrailingQuickAddClick,
+                    buttonSize = 56.dp
+                )
+            }
+        } else {
+            capsuleSurface(
+                Modifier
+                    .widthIn(max = geometry.maxFloatingNavWidth)
+                    .fillMaxWidth()
+            )
         }
     }
 }
 
 /**
- * Experiment 01: stand-alone floating quick action (bottom-right, above the nav bar).
- * Coral sticker, 60dp (>= 48dp touch target), subtle press sink + squash; opens the existing
- * quick-action sheet via [onClick]. Reduce Motion disables the press motion.
+ * Floating Quick Add FAB (docked beside the floating bottom bar on phones).
+ * Uses optical Liquid Glass droplet lens refraction when Liquid Glass theme is active;
+ * preserves classic Candy Bubble sticker button under Candy Bubble 2.0.
  */
 @Composable
 fun DuitQuickActionFab(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buttonSize: androidx.compose.ui.unit.Dp = 56.dp
 ) {
     val performHaptic = rememberDuitHaptic()
-    SpatialQuickAddCenterButton(
-        onClick = {
-            performHaptic(HapticFeedbackType.ContextClick)
-            onClick()
-        },
-        modifier = modifier,
-        buttonSize = 60.dp
+    val visualTheme = com.diniy.duit.core.ui.theme.LocalVisualTheme.current
+    val glassIntensity = LocalGlassIntensity.current
+    val backdropState = LocalLiquidGlassBackdrop.current
+    val useLiquidGlass = visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS && backdropState != null
+
+    if (useLiquidGlass) {
+        LiquidGlassQuickAddFab(
+            backdropState = backdropState,
+            glassIntensity = glassIntensity,
+            onClick = {
+                performHaptic(HapticFeedbackType.ContextClick)
+                onClick()
+            },
+            modifier = modifier,
+            buttonSize = buttonSize
+        )
+    } else {
+        SpatialQuickAddCenterButton(
+            onClick = {
+                performHaptic(HapticFeedbackType.ContextClick)
+                onClick()
+            },
+            modifier = modifier,
+            buttonSize = buttonSize
+        )
+    }
+}
+
+@Composable
+private fun LiquidGlassQuickAddFab(
+    backdropState: com.diniy.duit.core.ui.glass.LiquidGlassBackdropState?,
+    glassIntensity: GlassIntensity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    buttonSize: androidx.compose.ui.unit.Dp = 56.dp
+) {
+    val colors = SpatialTheme.colors
+    val reducedMotion = rememberReducedMotionEnabled()
+    val spec = remember(colors, glassIntensity) {
+        LiquidGlassPresets.quickAddFab(colors, glassIntensity)
+    }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    var touchPos by remember { mutableStateOf(androidx.compose.ui.geometry.Offset(76f, 76f)) }
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collect { interaction ->
+            if (interaction is androidx.compose.foundation.interaction.PressInteraction.Press) {
+                touchPos = interaction.pressPosition
+            }
+        }
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && !reducedMotion) 1.09f else 1f,
+        animationSpec = if (isPressed) LiquidGlassSprings.Press else LiquidGlassSprings.Release,
+        label = "lg_fab_scale"
     )
+    val press by animateFloatAsState(
+        targetValue = if (isPressed && !reducedMotion) 1f else 0f,
+        animationSpec = if (isPressed) LiquidGlassSprings.Press else LiquidGlassSprings.Release,
+        label = "lg_fab_press"
+    )
+
+    LiquidGlassSurface(
+        backdropState = backdropState,
+        spec = spec,
+        touchPosition = touchPos,
+        touchAlpha = press,
+        modifier = modifier
+            .size(buttonSize)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .semantics {
+                contentDescription = "Quick add transaction or action"
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Quick add transaction",
+                onClick = onClick
+            )
+    ) {
+        Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = null,
+                tint = colors.primaryAction,
+                modifier = Modifier
+                    .size(26.dp)
+                    .graphicsLayer { rotationZ = if (reducedMotion) 0f else 90f * press }
+            )
+        }
+    }
 }
 
 @Composable
@@ -445,27 +683,52 @@ private fun FloatingNavTabItem(
     item: PrismaticNavItem,
     isSelected: Boolean,
     reducedMotion: Boolean,
+    useLiquidGlass: Boolean = false,
+    lensLift: Float = 0f,
+    forceIdleInk: Boolean = false,
+    forceActiveBlueInk: Boolean = false,
+    interactive: Boolean = true,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = SpatialTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
+    val idleInk = if (useLiquidGlass) {
+        if (colors.isDark) Color.White.copy(alpha = 0.86f) else colors.primaryText.copy(alpha = 0.72f)
+    } else {
+        colors.secondaryText
+    }
+    val selectedInk = when {
+        forceActiveBlueInk -> if (colors.isDark) Color(0xFF38A3FF) else colors.primaryAction
+        useLiquidGlass -> colors.primaryAction
+        else -> colors.onCoral
+    }
+    val targetInk = when {
+        forceActiveBlueInk -> selectedInk
+        forceIdleInk -> idleInk
+        isSelected -> selectedInk
+        else -> idleInk
+    }
 
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected) colors.onCoral else colors.secondaryText,
+        targetValue = targetInk,
         animationSpec = prismaticTween(reducedMotion = reducedMotion, durationMillis = 180),
         label = "nav_item_tint"
     )
 
     val iconTint by animateColorAsState(
-        targetValue = if (isSelected) colors.onCoral else colors.secondaryText,
+        targetValue = targetInk,
         animationSpec = prismaticTween(reducedMotion = reducedMotion, durationMillis = 180),
         label = "nav_icon_tint"
     )
 
     val iconScale by animateFloatAsState(
-        targetValue = if (isSelected && !reducedMotion) 1.06f else 1f,
-        animationSpec = prismaticSpring(reducedMotion = reducedMotion, dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        targetValue = if (!forceIdleInk && !forceActiveBlueInk && isSelected && !reducedMotion) (1.06f + 0.06f * lensLift) else 1f,
+        animationSpec = if (useLiquidGlass) {
+            LiquidGlassSprings.Snap
+        } else {
+            prismaticSpring(reducedMotion = reducedMotion, dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+        },
         label = "nav_icon_scale"
     )
 
@@ -473,15 +736,22 @@ private fun FloatingNavTabItem(
         modifier = modifier
             .heightIn(min = 52.dp)
             .clip(RoundedCornerShape(24.dp))
-            .semantics(mergeDescendants = true) {
-                selected = isSelected
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                role = Role.Tab,
-                onClickLabel = "Open ${item.label}",
-                onClick = onClick
+            .then(
+                if (interactive) {
+                    Modifier
+                        .semantics(mergeDescendants = true) {
+                            selected = isSelected
+                        }
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            role = Role.Tab,
+                            onClickLabel = "Open ${item.label}",
+                            onClick = onClick
+                        )
+                } else {
+                    Modifier
+                }
             )
             .padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

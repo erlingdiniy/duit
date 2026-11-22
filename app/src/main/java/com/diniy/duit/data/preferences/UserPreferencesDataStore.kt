@@ -18,6 +18,7 @@ import com.diniy.duit.domain.model.CommissionFormulaConfig
 import com.diniy.duit.domain.model.DashboardSectionKey
 import com.diniy.duit.domain.model.GlassIntensity
 import com.diniy.duit.domain.model.ThemeMode
+import com.diniy.duit.domain.model.VisualTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -31,6 +32,7 @@ class UserPreferencesDataStore(context: Context) {
 
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val VISUAL_THEME = stringPreferencesKey("visual_theme")
         val GLASS_INTENSITY = stringPreferencesKey("glass_intensity")
         val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
@@ -57,6 +59,7 @@ class UserPreferencesDataStore(context: Context) {
         }
         .map { prefs ->
             val theme = ThemeMode.entries.firstOrNull { it.name == prefs[Keys.THEME_MODE] } ?: ThemeMode.SYSTEM
+            val visualTheme = VisualTheme.entries.firstOrNull { it.name == prefs[Keys.VISUAL_THEME] } ?: VisualTheme.CANDY_BUBBLE
             val glass = GlassIntensity.entries.firstOrNull { it.name == prefs[Keys.GLASS_INTENSITY] } ?: GlassIntensity.BALANCED
             val anim = AnimationIntensity.entries.firstOrNull { it.name == prefs[Keys.ANIMATION_INTENSITY] } ?: AnimationIntensity.BALANCED
             val hidden = prefs[Keys.HIDDEN_DASHBOARD_SECTIONS]
@@ -80,6 +83,7 @@ class UserPreferencesDataStore(context: Context) {
 
             AppSettingsSnapshot(
                 themeMode = theme,
+                visualTheme = visualTheme,
                 glassIntensity = glass,
                 hapticFeedbackEnabled = prefs[Keys.HAPTIC_FEEDBACK_ENABLED] ?: true,
                 reduceMotion = prefs[Keys.REDUCE_MOTION] ?: false,
@@ -130,6 +134,10 @@ class UserPreferencesDataStore(context: Context) {
         dataStore.edit { prefs ->
             prefs[Keys.THEME_MODE] = mode.name
         }
+    }
+
+    suspend fun setVisualTheme(theme: VisualTheme) {
+        dataStore.edit { it[Keys.VISUAL_THEME] = theme.name }
     }
 
     suspend fun setGlassIntensity(intensity: GlassIntensity) {
@@ -229,6 +237,7 @@ class UserPreferencesDataStore(context: Context) {
     suspend fun applyPortableSettings(snapshot: AppSettingsSnapshot) {
         dataStore.edit { prefs ->
             prefs[Keys.THEME_MODE] = snapshot.themeMode.name
+            prefs[Keys.VISUAL_THEME] = snapshot.visualTheme.name
             prefs[Keys.GLASS_INTENSITY] = snapshot.glassIntensity.name
             prefs[Keys.HAPTIC_FEEDBACK_ENABLED] = snapshot.hapticFeedbackEnabled
             prefs[Keys.REDUCE_MOTION] = snapshot.reduceMotion

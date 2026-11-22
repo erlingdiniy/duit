@@ -122,3 +122,84 @@ object PrismaticPalette {
     val LightStickerInk = DeepTeal
     val DarkStickerInk = Color(0xFF0A1418)
 }
+
+/**
+ * Distinct Liquid Glass optical palette derived from `zakisheriff/Liquid-Glass` (`base.css`).
+ * Cool neutral translucent glass, crisp hairline specular rims, optical iOS Blue accent,
+ * and clean Apple semantic Green/Red — zero Candy Bubble cream or coral forced into glass.
+ */
+object LiquidGlassPalette {
+    // Light mode (base.css:3-51)
+    val LightCanvas = Color(0xFFF2F4F8)
+    val LightCanvasElevated = Color(0xFFFFFFFF)
+    val LightSurfaceSubtle = Color(0xFFE6EAF2)
+    val LightGlassBase = Color(0xFFFFFFFF)
+    val LightGlassSubtle = Color(0xFFF7F9FC)
+    val LightSheetSurface = Color(0xFFFAFBFD)
+    val LightInk = Color(0xFF111215)
+    val LightInkMuted = Color(0xFF52555E)
+    val LightInkDisabled = Color(0xFF989CA6)
+
+    // Optical Blue & semantics (AA >= 4.5:1 on white/light glass)
+    val LightAccentFill = Color(0xFF007AFF)
+    val LightAccentText = Color(0xFF0062CC)
+    val LightAccentContainer = Color(0xFFE1F0FF)
+    val LightOnAccentContainer = Color(0xFF003B7A)
+
+    val LightIncome = Color(0xFF1A7F37)
+    val LightIncomeContainer = Color(0xFFE2F6E9)
+    val LightOnIncomeContainer = Color(0xFF0E5322)
+
+    val LightExpense = Color(0xFFC62828)
+    val LightExpenseContainer = Color(0xFFFFE5E7)
+    val LightOnExpenseContainer = Color(0xFF7A1416)
+
+    val LightSavings = Color(0xFF0B5FA5)
+    val LightSavingsContainer = Color(0xFFE3F2FD)
+    val LightOnSavingsContainer = Color(0xFF073B66)
+
+    val LightWarning = Color(0xFF9A5B00)
+    val LightWarningContainer = Color(0xFFFFF2DB)
+    val LightOnWarningContainer = Color(0xFF5C3500)
+
+    val LightError = Color(0xFFC62828)
+    val LightErrorContainer = Color(0xFFFFE5E7)
+    val LightOnErrorContainer = Color(0xFF7A1416)
+
+    // Dark mode (base.css:54-93)
+    val DarkCanvas = Color(0xFF0B0C0F)
+    val DarkCanvasElevated = Color(0xFF191A1F)
+    val DarkSurfaceSubtle = Color(0xFF24262D)
+    val DarkGlassBase = Color(0xFF1C1D22)
+    val DarkGlassElevated = Color(0xFF282A31)
+    val DarkGlassSubtle = Color(0xFF141519)
+    val DarkSheetSurface = Color(0xFF1A1B20)
+    val DarkInk = Color(0xFFF5F6FA)
+    val DarkInkMuted = Color(0xFFA2A6B3)
+    val DarkInkDisabled = Color(0xFF636773)
+
+    val DarkAccentFill = Color(0xFF0A84FF)
+    val DarkAccentText = Color(0xFF4DA8FF)
+    val DarkAccentContainer = Color(0xFF153252)
+    val DarkOnAccentContainer = Color(0xFFD6EAFF)
+
+    val DarkIncome = Color(0xFF30D158)
+    val DarkIncomeContainer = Color(0xFF143520)
+    val DarkOnIncomeContainer = Color(0xFFC9F6D5)
+
+    val DarkExpense = Color(0xFFFF5E57)
+    val DarkExpenseContainer = Color(0xFF44191B)
+    val DarkOnExpenseContainer = Color(0xFFFFD8D6)
+
+    val DarkSavings = Color(0xFF64D2FF)
+    val DarkSavingsContainer = Color(0xFF133345)
+    val DarkOnSavingsContainer = Color(0xFFD6F3FF)
+
+    val DarkWarning = Color(0xFFFFB340)
+    val DarkWarningContainer = Color(0xFF402C10)
+    val DarkOnWarningContainer = Color(0xFFFFE5BE)
+
+    val DarkError = Color(0xFFFF6961)
+    val DarkErrorContainer = Color(0xFF4A1818)
+    val DarkOnErrorContainer = Color(0xFFFFDAD6)
+}

@@ -141,6 +141,9 @@ fun SpatialGlassSurface(
     val colors = SpatialTheme.colors
     val geometry = SpatialTheme.geometry
     val motion = SpatialTheme.motion
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    val effectiveSticker = sticker && !isLiquidGlass
     val reducedMotion = rememberReducedMotionEnabled()
     val performHaptic = rememberDuitHaptic()
 
@@ -150,7 +153,7 @@ fun SpatialGlassSurface(
 
     val scale by animateFloatAsState(
         targetValue = motion.resolvePressScale(
-            isPressed = pressedActive && !sticker,
+            isPressed = pressedActive && !effectiveSticker,
             enabled = enabled,
             reduceMotion = reducedMotion,
             targetScale = motion.pressedScaleCard
@@ -163,9 +166,9 @@ fun SpatialGlassSurface(
         label = "spatial_surface_scale"
     )
 
-    // Sticker press: the card slides into its own offset shadow.
+    // Sticker press: the card slides into its own offset shadow (Candy Bubble only).
     val stickerShift by animateDpAsState(
-        targetValue = if (sticker && pressedActive) geometry.stickerOffset - 1.dp else 0.dp,
+        targetValue = if (effectiveSticker && pressedActive) geometry.stickerOffset - 1.dp else 0.dp,
         animationSpec = prismaticSpring(
             reducedMotion = reducedMotion,
             dampingRatio = motion.pressDampingRatio,
@@ -189,6 +192,7 @@ fun SpatialGlassSurface(
     val targetFill = when {
         !enabled -> tinted.copy(alpha = 0.6f)
         pressedActive -> colors.pressedStateOverlay.compositeOverSolid(tinted)
+        isLiquidGlass -> tinted.copy(alpha = if (colors.isDark) 0.78f else 0.82f)
         else -> tinted
     }
 
@@ -199,7 +203,8 @@ fun SpatialGlassSurface(
     )
 
     val baseElevation: Dp = when {
-        sticker -> 0.dp // the hard offset shadow replaces soft elevation
+        effectiveSticker -> 0.dp // the hard offset shadow replaces soft elevation
+        isLiquidGlass -> if (colors.isDark) 8.dp else 6.dp
         tier == SpatialGlassTier.Subtle -> geometry.elevationNone
         tier == SpatialGlassTier.Standard -> if (colors.isDark) geometry.elevationCardDark else geometry.elevationCardLight
         tier == SpatialGlassTier.Elevated -> if (colors.isDark) geometry.elevationElevatedDark else geometry.elevationElevatedLight
@@ -214,9 +219,19 @@ fun SpatialGlassSurface(
 
     val stickerInk = colors.sticker
     val stickerOffset = geometry.stickerOffset
+    val liquidRimBrush = if (isLiquidGlass) {
+        Brush.linearGradient(
+            colors = listOf(
+                colors.glassHighlight,
+                colors.glassBorder,
+                colors.glassHighlight.copy(alpha = if (colors.isDark) 0.22f else 0.45f)
+            )
+        )
+    } else null
     val outline: BorderStroke? = when {
-        sticker -> BorderStroke(geometry.stickerBorder, stickerInk)
+        effectiveSticker -> BorderStroke(geometry.stickerBorder, stickerInk)
         selected -> BorderStroke(geometry.borderFocused, accentTint ?: colors.primaryAction)
+        isLiquidGlass && liquidRimBrush != null -> BorderStroke(1.dp, liquidRimBrush)
         colors.isDark -> BorderStroke(geometry.borderHairline, colors.glassBorder)
         else -> null
     }
@@ -227,7 +242,7 @@ fun SpatialGlassSurface(
             scaleY = scale
         }
         .then(
-            if (sticker) {
+            if (effectiveSticker) {
                 Modifier.drawBehind {
                     // Public: the shadow stays put while the face slides onto it, so ink never peeks out top-left on press.
                     val o = (if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) stickerOffset else stickerOffset - stickerShift).toPx()

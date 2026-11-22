@@ -271,6 +271,7 @@ interface UserPreferencesRepository {
     fun observeThemeMode(): Flow<ThemeMode>
     fun observeCommissionFormulaConfig(): Flow<CommissionFormulaConfig>
     suspend fun setThemeMode(mode: ThemeMode)
+    suspend fun setVisualTheme(theme: com.diniy.duit.domain.model.VisualTheme) = Unit
     suspend fun setGlassIntensity(intensity: GlassIntensity)
     suspend fun setHapticFeedbackEnabled(enabled: Boolean)
     suspend fun setReduceMotion(enabled: Boolean)
@@ -2335,6 +2336,7 @@ class OfflineUserPreferencesRepository(
         dataStore.commissionFormulaConfig
 
     override suspend fun setThemeMode(mode: ThemeMode) = dataStore.setThemeMode(mode)
+    override suspend fun setVisualTheme(theme: com.diniy.duit.domain.model.VisualTheme) = dataStore.setVisualTheme(theme)
     override suspend fun setGlassIntensity(intensity: GlassIntensity) = dataStore.setGlassIntensity(intensity)
     override suspend fun setHapticFeedbackEnabled(enabled: Boolean) = dataStore.setHapticFeedbackEnabled(enabled)
     override suspend fun setReduceMotion(enabled: Boolean) = dataStore.setReduceMotion(enabled)

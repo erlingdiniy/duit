@@ -1,5 +1,13 @@
 package com.diniy.duit.domain.model
 
+enum class VisualTheme(
+    val label: String,
+    val summary: String
+) {
+    CANDY_BUBBLE("Candy Bubble", "Playful pastel cards, sticker outlines & soft shadows"),
+    LIQUID_GLASS("Liquid Glass", "Translucent optical glass, bevel refraction & specular rims")
+}
+
 enum class GlassIntensity(
     val label: String,
     val alphaScale: Float,
@@ -48,6 +56,7 @@ enum class DashboardSectionKey(
 
 data class AppSettingsSnapshot(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val visualTheme: VisualTheme = VisualTheme.CANDY_BUBBLE,
     val glassIntensity: GlassIntensity = GlassIntensity.BALANCED,
     val hapticFeedbackEnabled: Boolean = true,
     val reduceMotion: Boolean = false,

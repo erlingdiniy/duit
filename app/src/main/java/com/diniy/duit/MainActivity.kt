@@ -144,6 +144,7 @@ class MainActivity : FragmentActivity() {
 
             DuitTheme(
                 themeMode = themeMode,
+                visualTheme = appSettings.visualTheme,
                 glassIntensity = appSettings.glassIntensity
             ) {
                 CompositionLocalProvider(
