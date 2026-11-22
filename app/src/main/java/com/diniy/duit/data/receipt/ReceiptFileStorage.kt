@@ -37,7 +37,16 @@ class ReceiptFileStorage(private val rootDir: File) {
 
     constructor(context: Context) : this(File(context.filesDir, RECEIPTS_DIR_NAME))
 
-    private fun ensureDir(): File = rootDir.apply { mkdirs() }
+    private fun ensureDir(): File {
+        recoverInterruptedSwap()
+        return rootDir.apply { mkdirs() }
+    }
+
+    /** If the process died mid-swap, the only copy of the receipts sits in the `.restore-old` dir. */
+    private fun recoverInterruptedSwap() {
+        val old = siblingDir(OLD_SUFFIX)
+        if (!rootDir.exists() && old.isDirectory) old.renameTo(rootDir)
+    }
 
     fun sanitizeFileName(raw: String): String? {
         val trimmed = raw.trim()
@@ -109,23 +118,56 @@ class ReceiptFileStorage(private val rootDir: File) {
         return true
     }
 
-    /** Replaces all stored receipt files atomically during backup restore. */
+    /** Replaces all stored receipt files during backup restore (stage, then swap). */
     fun replaceAllFiles(filesByName: Map<String, ByteArray>) {
-        val dir = ensureDir()
-        val incoming = mutableMapOf<String, ByteArray>()
-        filesByName.forEach { (name, bytes) ->
-            val safe = sanitizeFileName(name)
-            if (safe != null && bytes.isNotEmpty() && bytes.size <= MAX_FILE_BYTES) {
-                incoming[safe] = bytes
-            }
-        }
-        dir.listFiles()?.forEach { existing ->
-            if (existing.isFile && existing.name !in incoming) existing.delete()
-        }
-        incoming.forEach { (safe, bytes) ->
-            File(dir, safe).writeBytes(bytes)
-        }
+        commitStagedRestore(stageRestoredFiles(filesByName))
     }
+
+    /**
+     * Writes incoming receipt files into a sibling staging dir without touching live files.
+     * Throws on any write failure (staging is cleaned up); live receipts stay intact.
+     */
+    fun stageRestoredFiles(filesByName: Map<String, ByteArray>): File {
+        val staging = siblingDir(STAGING_SUFFIX)
+        staging.deleteRecursively()
+        if (!staging.mkdirs()) throw IOException("Could not prepare receipt restore folder.")
+        try {
+            filesByName.forEach { (name, bytes) ->
+                val safe = sanitizeFileName(name)
+                if (safe != null && bytes.isNotEmpty() && bytes.size <= MAX_FILE_BYTES) {
+                    File(staging, safe).writeBytes(bytes)
+                }
+            }
+        } catch (t: Throwable) {
+            staging.deleteRecursively()
+            throw t
+        }
+        return staging
+    }
+
+    /** Swaps a staged dir into place. Old files are only deleted after the new dir is live. */
+    fun commitStagedRestore(staging: File) {
+        recoverInterruptedSwap()
+        val old = siblingDir(OLD_SUFFIX)
+        old.deleteRecursively()
+        if (rootDir.exists() && !rootDir.renameTo(old)) {
+            throw IOException("Could not swap receipt folder.")
+        }
+        if (!staging.renameTo(rootDir)) {
+            old.renameTo(rootDir) // roll back so existing receipts remain
+            throw IOException("Could not swap receipt folder.")
+        }
+        old.deleteRecursively()
+    }
+
+    fun discardStagedRestore(staging: File) {
+        staging.deleteRecursively()
+    }
+
+    fun storedFileSize(relativePath: String): Long = resolveFile(relativePath)?.length() ?: 0L
+
+    private fun siblingDir(suffix: String): File =
+        File(rootDir.absoluteFile.parentFile, rootDir.name + suffix)
 
     fun clearAllFiles() {
         rootDir.listFiles()?.forEach { if (it.isFile) it.delete() }
@@ -271,6 +313,10 @@ class ReceiptFileStorage(private val rootDir: File) {
         const val MIME_PDF = "application/pdf"
         const val MIME_JPEG = "image/jpeg"
         const val MAX_FILE_BYTES = 10L * 1024L * 1024L
+        /** Total raw receipt bytes allowed in one in-memory JSON backup (base64 + cipher copies ~4x). */
+        const val MAX_BACKUP_RECEIPT_BYTES = 40L * 1024L * 1024L
+        private const val STAGING_SUFFIX = ".restore-staging"
+        private const val OLD_SUFFIX = ".restore-old"
         private const val MAX_RAW_IMAGE_BYTES = 20L * 1024L * 1024L
         private const val MAX_IMAGE_DIMENSION_PX = 1600
         private const val JPEG_QUALITY = 82

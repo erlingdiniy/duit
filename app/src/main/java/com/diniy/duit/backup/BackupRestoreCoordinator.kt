@@ -52,6 +52,15 @@ class BackupRestoreCoordinator(
             val ledger = backupDao.exportFullSnapshot()
             val receiptFiles = buildMap<String, ByteArray> {
                 val storage = receiptFileStorage ?: return@buildMap
+                // Size check before reading any bytes: fail with a clear message instead of OOM.
+                val totalBytes = ledger.receipts.sumOf { storage.storedFileSize(it.fileRelativePath) }
+                if (totalBytes > ReceiptFileStorage.MAX_BACKUP_RECEIPT_BYTES) {
+                    throw BackupFormatException(
+                        "Receipt attachments are too large to back up " +
+                            "(${totalBytes / MB} MB, max ${ReceiptFileStorage.MAX_BACKUP_RECEIPT_BYTES / MB} MB). " +
+                            "Remove some receipt files and try again."
+                    )
+                }
                 ledger.receipts.forEach { r ->
                     if (r.fileRelativePath.isNotBlank()) {
                         storage.readFileBytes(r.fileRelativePath)?.let { put(r.fileRelativePath, it) }
@@ -117,9 +126,16 @@ class BackupRestoreCoordinator(
             )
         }
 
-        // Atomic Room replacement: throws & rolls back cleanly on any SQLite/FK failure.
-        backupDao.replaceAllLedgerDataAtomically(bundle.ledger)
-        receiptFileStorage?.replaceAllFiles(bundle.receiptFiles)
+        // Stage receipt files first: a write failure aborts before any Room or live-file change.
+        val staging = receiptFileStorage?.stageRestoredFiles(bundle.receiptFiles)
+        try {
+            // Atomic Room replacement: throws & rolls back cleanly on any SQLite/FK failure.
+            backupDao.replaceAllLedgerDataAtomically(bundle.ledger)
+        } catch (t: Throwable) {
+            staging?.let { receiptFileStorage?.discardStagedRestore(it) }
+            throw t
+        }
+        staging?.let { receiptFileStorage?.commitStagedRestore(it) }
 
         val validWalletIds = bundle.ledger.wallets.map { it.id }.toSet()
         val sanitizedAppSettings = bundle.preferences.appSettings.let { prefs ->
@@ -173,3 +189,5 @@ class BackupRestoreCoordinator(
         widgetUpdateCoordinator.refreshAllWidgetsNow()
     }
 }
+
+private const val MB = 1024L * 1024L

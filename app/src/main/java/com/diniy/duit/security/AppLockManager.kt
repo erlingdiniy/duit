@@ -268,6 +268,8 @@ class AppLockManager(
     }
 
     fun verifyPinAndUnlock(rawPin: String) {
+        // Concurrent verifies would share one failedAttempts snapshot and undercount failures.
+        if (_uiState.value.isVerifyingPin) return
         val snapshot = latestSnapshot ?: return
         val now = currentTimeMs()
         val remaining = computeRemainingSeconds(snapshot.lockoutUntilEpochMs, now)

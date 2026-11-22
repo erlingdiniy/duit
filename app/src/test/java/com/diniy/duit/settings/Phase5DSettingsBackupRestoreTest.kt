@@ -32,6 +32,8 @@ import com.diniy.duit.data.local.entity.SavingsAllocationEntity
 import com.diniy.duit.data.local.entity.SavingsGoalEntity
 import com.diniy.duit.data.local.entity.SavingsMovementEntity
 import com.diniy.duit.data.local.entity.TransactionEntity
+import com.diniy.duit.data.local.entity.ReceiptEntity
+import com.diniy.duit.data.receipt.ReceiptFileStorage
 import com.diniy.duit.data.local.entity.WalletEntity
 import com.diniy.duit.data.preferences.UserPreferencesDataStore
 import com.diniy.duit.data.repository.OfflineFirstFinanceRepository
@@ -89,8 +91,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import java.io.File
 import org.json.JSONObject
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -1107,4 +1111,102 @@ class Phase5DSettingsBackupRestoreTest {
         transactions = emptyList(),
         notificationHistory = emptyList()
     )
+    private fun receiptCoordinator(storage: ReceiptFileStorage) = BackupRestoreCoordinator(
+        backupDao = db.backupDao(),
+        userPreferencesRepository = OfflineUserPreferencesRepository(UserPreferencesDataStore(context)),
+        notificationPreferencesRepository = FakeNotificationPrefsRepo(),
+        notificationHistoryRepository = RoomNotificationHistoryRepository(db.notificationHistoryDao()),
+        securityRepository = FakeSecurityRepo(SecurityConfigSnapshot()),
+        reminderScheduler = RecordingReminderScheduler(),
+        widgetUpdateCoordinator = RecordingWidgetCoordinator(),
+        ioDispatcher = Dispatchers.Unconfined,
+        receiptFileStorage = storage
+    )
+
+    private fun insertBankWallet(id: Long) = runBlocking {
+        db.backupDao().insertWallets(
+            listOf(
+                WalletEntity(
+                    id = id, name = "Bank", type = WalletType.BANK, balanceSen = 12_345L,
+                    isExcludedFromSafeToSpend = false, accentToken = PrismaticAccentToken.AQUA,
+                    createdAtEpochMs = 1L, updatedAtEpochMs = 1L, isIncludedInTotalBalance = true, isArchived = false
+                )
+            )
+        )
+    }
+
+    @Test
+    fun restore_failedRoomReplace_keepsLiveReceiptFilesAndLedgerUntouched(): Unit = runBlocking {
+        val root = File(context.cacheDir, "f1-receipts-${System.nanoTime()}").apply { mkdirs() }
+        val storage = ReceiptFileStorage(root)
+        val liveBytes = byteArrayOf(1, 2, 3, 4)
+        File(root, "receipt_live.jpg").writeBytes(liveBytes)
+        insertBankWallet(7L)
+        val coordinator = receiptCoordinator(storage)
+        val bundle = coordinator.decryptAndPreviewBackup(
+            coordinator.createEncryptedBackup("Pw#12345".toCharArray()), "Pw#12345".toCharArray()
+        )
+        // Receipt pointing at a missing transaction -> FK failure inside the Room transaction.
+        val broken = bundle.copy(
+            ledger = bundle.ledger.copy(
+                receipts = listOf(
+                    ReceiptEntity(
+                        id = 1L, transactionId = 999L, merchant = "X", dateEpochDay = 1L,
+                        fileRelativePath = "receipt_new.jpg", createdAtEpochMs = 1L, updatedAtEpochMs = 1L
+                    )
+                )
+            ),
+            receiptFiles = mapOf("receipt_new.jpg" to byteArrayOf(9, 9))
+        )
+
+        assertTrue(runCatching { coordinator.restoreBackupAtomically(broken) }.isFailure)
+
+        assertArrayEquals(liveBytes, storage.readFileBytes("receipt_live.jpg"))
+        assertEquals(null, storage.readFileBytes("receipt_new.jpg"))
+        assertFalse(File(root.parentFile, root.name + ".restore-staging").exists())
+        assertEquals(12_345L, db.backupDao().exportFullSnapshot().wallets.single().balanceSen)
+        root.deleteRecursively()
+    }
+
+    @Test
+    fun restore_success_swapsReceiptFolderAndRecoversInterruptedSwap(): Unit = runBlocking {
+        val root = File(context.cacheDir, "f1-swap-${System.nanoTime()}").apply { mkdirs() }
+        val storage = ReceiptFileStorage(root)
+        File(root, "receipt_old.jpg").writeBytes(byteArrayOf(1))
+
+        storage.replaceAllFiles(mapOf("receipt_new.jpg" to byteArrayOf(5, 6), "../evil" to byteArrayOf(7)))
+        assertEquals(null, storage.readFileBytes("receipt_old.jpg"))
+        assertArrayEquals(byteArrayOf(5, 6), storage.readFileBytes("receipt_new.jpg"))
+        assertEquals(setOf("receipt_new.jpg"), root.listFiles()!!.map { it.name }.toSet())
+
+        // Simulate process death after live dir moved aside but before staging moved in.
+        val old = File(root.parentFile, root.name + ".restore-old")
+        assertTrue(root.renameTo(old))
+        assertArrayEquals(byteArrayOf(5, 6), storage.readFileBytes("receipt_new.jpg"))
+        assertFalse(old.exists())
+        root.deleteRecursively()
+    }
+
+    @Test
+    fun backup_receiptAttachmentsOverCap_failWithClearErrorBeforeReadingBytes(): Unit = runBlocking {
+        val root = File(context.cacheDir, "f2-cap-${System.nanoTime()}").apply { mkdirs() }
+        val storage = ReceiptFileStorage(root)
+        insertBankWallet(8L)
+        val receipts = (1..5).map { i ->
+            val name = "receipt_big$i.pdf"
+            // Sparse files: length counts toward the cap without writing 50 MB.
+            java.io.RandomAccessFile(File(root, name), "rw").use { it.setLength(9L * 1024L * 1024L) }
+            ReceiptEntity(
+                id = i.toLong(), merchant = "Big $i", dateEpochDay = 1L, fileRelativePath = name,
+                createdAtEpochMs = 1L, updatedAtEpochMs = 1L
+            )
+        }
+        db.backupDao().insertReceipts(receipts)
+
+        val err = runCatching { receiptCoordinator(storage).createEncryptedBackup("Pw#12345".toCharArray()) }
+            .exceptionOrNull()
+        assertTrue(err is BackupFormatException)
+        assertTrue(err!!.message!!.contains("too large"))
+        root.deleteRecursively()
+    }
 }

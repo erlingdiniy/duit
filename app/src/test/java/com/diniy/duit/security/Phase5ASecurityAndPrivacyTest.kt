@@ -282,6 +282,36 @@ class Phase5ASecurityAndPrivacyTest {
     }
 
     @Test
+    fun appLockManager_concurrentWrongPinSubmitsAreNotMergedIntoOneAttempt() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val manager = AppLockManager(
+            securityRepository = FakeSecurityRepository(),
+            pinHashEngine = PinHashEngine(InMemorySecretProtector(), iterations = 10_000),
+            biometricGateway = FakeBiometricGateway(BiometricAvailability.AVAILABLE),
+            scope = CoroutineScope(SupervisorJob() + dispatcher),
+            onFactoryResetFinancialData = {},
+            currentTimeMs = { 1_000_000L + testScheduler.currentTime },
+            cryptoDispatcher = dispatcher
+        )
+        advanceUntilIdle()
+        assertTrue(manager.setupPinAndEnableAppLock("135790").isSuccess)
+        advanceUntilIdle()
+        manager.lockNow()
+        advanceUntilIdle()
+        assertTrue(manager.uiState.value.isLocked)
+
+        // Second submit while the first is still verifying is ignored, not counted against the same snapshot.
+        manager.verifyPinAndUnlock("999999")
+        manager.verifyPinAndUnlock("999999")
+        advanceUntilIdle()
+        assertEquals(1, manager.uiState.value.failedAttempts)
+
+        manager.verifyPinAndUnlock("999999")
+        advanceUntilIdle()
+        assertEquals(2, manager.uiState.value.failedAttempts)
+    }
+
+    @Test
     fun processDeathRecreation_locksImmediatelyWhenProtectionWasActiveAndPreservesThrottle() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         var clockMs = 5_000_000L
