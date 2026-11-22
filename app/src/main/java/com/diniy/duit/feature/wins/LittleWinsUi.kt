@@ -341,19 +341,21 @@ fun LittleWinsClubScreen(
                                 )
                             }
                             Spacer(Modifier.height(10.dp))
+                            val isLiquidBar = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                                com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(12.dp)
+                                    .height(if (isLiquidBar) 8.dp else 12.dp)
                                     .clip(RoundedCornerShape(99.dp))
-                                    .background(colors.glassSurfaceSubtle)
+                                    .background(if (isLiquidBar) colors.baseSurface else colors.glassSurfaceSubtle)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth(animatedRatio)
-                                        .height(12.dp)
+                                        .height(if (isLiquidBar) 8.dp else 12.dp)
                                         .clip(RoundedCornerShape(99.dp))
-                                        .background(colors.coral)
+                                        .background(if (isLiquidBar) colors.primaryAction else colors.coral)
                                 )
                             }
                         }
@@ -521,19 +523,21 @@ private fun LittleWinStickerCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 } else {
+                    val isLiquidProg = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
                             .clip(RoundedCornerShape(99.dp))
-                            .background(colors.glassSurfaceSubtle)
+                            .background(if (isLiquidProg) colors.baseSurface else colors.glassSurfaceSubtle)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(animatedProgress)
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(99.dp))
-                                .background(colors.coral)
+                                .background(if (isLiquidProg) colors.primaryAction else colors.coral)
                         )
                     }
                     Spacer(Modifier.height(3.dp))

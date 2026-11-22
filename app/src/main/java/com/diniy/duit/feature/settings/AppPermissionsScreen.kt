@@ -320,11 +320,16 @@ private fun PermissionItemCard(
                         color = colors.primaryText
                     )
                     Spacer(Modifier.height(2.dp))
+                    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(colors.floatingNavSurface)
-                            .border(BorderStroke(1.dp, colors.sticker), RoundedCornerShape(8.dp))
+                            .background(if (isLiquidGlass) colors.baseSurface else colors.floatingNavSurface)
+                            .border(
+                                BorderStroke(if (isLiquidGlass) 0.75.dp else 1.dp, if (isLiquidGlass) colors.divider else colors.sticker),
+                                RoundedCornerShape(8.dp)
+                            )
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
@@ -333,7 +338,7 @@ private fun PermissionItemCard(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = colors.primaryText
+                            color = if (isLiquidGlass) colors.secondaryText else colors.primaryText
                         )
                     }
                 }
@@ -346,13 +351,18 @@ private fun PermissionItemCard(
             )
 
             if (actionLabel != null && onAction != null) {
+                val isLiquidBtn = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                    com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(colors.floatingNavSurface)
-                        .border(BorderStroke(1.5.dp, colors.sticker), RoundedCornerShape(14.dp))
+                        .background(if (isLiquidBtn) colors.elevatedSurface else colors.floatingNavSurface)
+                        .border(
+                            BorderStroke(if (isLiquidBtn) 0.75.dp else 1.5.dp, if (isLiquidBtn) colors.divider else colors.sticker),
+                            RoundedCornerShape(14.dp)
+                        )
                         .candyPressable(onClick = onAction, onClickLabel = actionLabel),
                     contentAlignment = Alignment.Center
                 ) {
@@ -364,7 +374,7 @@ private fun PermissionItemCard(
                             Icon(
                                 imageVector = actionIcon,
                                 contentDescription = null,
-                                tint = colors.primaryText,
+                                tint = if (isLiquidBtn) colors.primaryAction else colors.primaryText,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -374,7 +384,7 @@ private fun PermissionItemCard(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = colors.primaryText
+                            color = if (isLiquidBtn) colors.primaryAction else colors.primaryText
                         )
                     }
                 }

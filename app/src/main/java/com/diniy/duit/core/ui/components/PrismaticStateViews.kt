@@ -130,21 +130,27 @@ fun PrismaticEmptyStateCard(
         contentPadding = PaddingValues(18.dp)
     ) {
         Row(verticalAlignment = Alignment.Top) {
+            val spatialColors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+            val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .rotate(-8f)
-                    .clip(RoundedCornerShape(17.dp))
-                    .background(glass.lavenderAccent),
+                    .size(if (isLiquidGlass) 44.dp else 48.dp)
+                    .rotate(if (isLiquidGlass) 0f else -8f)
+                    .clip(RoundedCornerShape(if (isLiquidGlass) 14.dp else 17.dp))
+                    .background(
+                        if (isLiquidGlass) spatialColors.primaryAction.copy(alpha = if (spatialColors.isDark) 0.16f else 0.10f)
+                        else glass.lavenderAccent
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     painter = painterResource(id = iconRes),
                     contentDescription = null,
-                    tint = com.diniy.duit.core.ui.theme.SpatialTheme.colors.onCoral,
+                    tint = if (isLiquidGlass) spatialColors.primaryAction else spatialColors.onCoral,
                     modifier = Modifier
-                        .size(24.dp)
-                        .rotate(8f)
+                        .size(if (isLiquidGlass) 22.dp else 24.dp)
+                        .rotate(if (isLiquidGlass) 0f else 8f)
                 )
             }
             Spacer(Modifier.width(14.dp))

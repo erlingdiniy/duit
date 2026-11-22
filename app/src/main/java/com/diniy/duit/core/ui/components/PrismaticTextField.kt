@@ -39,6 +39,9 @@ fun PrismaticTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
     val glass = LocalPrismaticGlass.current
+    val spatialColors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
+    val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
     val isError = errorText != null
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -70,15 +73,15 @@ fun PrismaticTextField(
                     )
                 }
             },
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(if (isLiquidGlass) 14.dp else 20.dp),
             textStyle = MaterialTheme.typography.bodyLarge,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = glass.glassSurfaceElevated,
-                unfocusedContainerColor = glass.glassSurface,
-                disabledContainerColor = glass.glassSurfaceMuted,
-                errorContainerColor = glass.glassSurfaceElevated,
-                focusedBorderColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.coral,
-                unfocusedBorderColor = com.diniy.duit.core.ui.theme.SpatialTheme.colors.divider,
+                focusedContainerColor = if (isLiquidGlass) spatialColors.elevatedSurface else glass.glassSurfaceElevated,
+                unfocusedContainerColor = if (isLiquidGlass) spatialColors.elevatedSurface else glass.glassSurface,
+                disabledContainerColor = if (isLiquidGlass) spatialColors.baseSurface else glass.glassSurfaceMuted,
+                errorContainerColor = if (isLiquidGlass) spatialColors.elevatedSurface else glass.glassSurfaceElevated,
+                focusedBorderColor = if (isLiquidGlass) spatialColors.primaryAction else spatialColors.coral,
+                unfocusedBorderColor = spatialColors.divider,
                 errorBorderColor = MaterialTheme.colorScheme.error
             ),
             keyboardOptions = keyboardOptions,

@@ -140,19 +140,27 @@ fun FeatureGuideScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
+                        val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                            com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.floatingNavSurface)
-                                .border(BorderStroke(2.dp, colors.sticker), RoundedCornerShape(16.dp)),
+                                .size(if (isLiquidGlass) 44.dp else 48.dp)
+                                .clip(RoundedCornerShape(if (isLiquidGlass) 14.dp else 16.dp))
+                                .background(
+                                    if (isLiquidGlass) colors.primaryAction.copy(alpha = if (colors.isDark) 0.16f else 0.10f)
+                                    else colors.floatingNavSurface
+                                )
+                                .then(
+                                    if (isLiquidGlass) Modifier
+                                    else Modifier.border(BorderStroke(2.dp, colors.sticker), RoundedCornerShape(16.dp))
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.PlayArrow,
                                 contentDescription = null,
-                                tint = colors.coral,
-                                modifier = Modifier.size(26.dp)
+                                tint = if (isLiquidGlass) colors.primaryAction else colors.coral,
+                                modifier = Modifier.size(if (isLiquidGlass) 24.dp else 26.dp)
                             )
                         }
 
@@ -347,12 +355,14 @@ private fun FeatureGuideSectionCard(
                                 verticalAlignment = Alignment.Top,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                val isLiquidStep = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                                    com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                                 Box(
                                     modifier = Modifier
                                         .padding(top = 2.dp)
                                         .size(20.dp)
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(colors.coral),
+                                        .background(if (isLiquidStep) colors.primaryAction else colors.coral),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -361,7 +371,7 @@ private fun FeatureGuideSectionCard(
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
                                         ),
-                                        color = colors.onCoral
+                                        color = if (isLiquidStep) colors.onPrimaryAction else colors.onCoral
                                     )
                                 }
                                 Text(

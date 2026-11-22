@@ -238,6 +238,8 @@ fun ReceiptVaultScreen(
                     }
 
                     item(key = "search_bar") {
+                        val isLiquidGlass = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+                            com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
                         OutlinedTextField(
                             value = state.searchQuery,
                             onValueChange = onSearchQueryChange,
@@ -253,7 +255,11 @@ fun ReceiptVaultScreen(
                                 )
                             },
                             leadingIcon = {
-                                CandyIconBlob(Icons.Rounded.Search, CandyTone.Coral, size = 34.dp, tilt = -6f, solid = true)
+                                if (isLiquidGlass) {
+                                    Icon(Icons.Rounded.Search, contentDescription = null, tint = colors.secondaryText, modifier = Modifier.size(20.dp))
+                                } else {
+                                    CandyIconBlob(Icons.Rounded.Search, CandyTone.Coral, size = 34.dp, tilt = -6f, solid = true)
+                                }
                             },
                             trailingIcon = {
                                 if (state.searchQuery.isNotEmpty()) {
@@ -262,12 +268,12 @@ fun ReceiptVaultScreen(
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(22.dp),
+                            shape = RoundedCornerShape(if (isLiquidGlass) 16.dp else 22.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = colors.glassSurfaceElevated,
-                                unfocusedContainerColor = colors.glassSurface,
-                                focusedBorderColor = colors.coral,
-                                unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent
+                                focusedContainerColor = if (isLiquidGlass) colors.elevatedSurface else colors.glassSurfaceElevated,
+                                unfocusedContainerColor = if (isLiquidGlass) colors.elevatedSurface else colors.glassSurface,
+                                focusedBorderColor = if (isLiquidGlass) colors.primaryAction else colors.coral,
+                                unfocusedBorderColor = if (isLiquidGlass) colors.divider else androidx.compose.ui.graphics.Color.Transparent
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
