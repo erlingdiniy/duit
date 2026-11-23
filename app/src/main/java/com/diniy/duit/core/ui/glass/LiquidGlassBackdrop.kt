@@ -173,6 +173,13 @@ fun LiquidGlassSurface(
     val bezelPx = with(density) { spec.bezel.toPx() }
     val thicknessPx = with(density) { spec.thickness.toPx() }
     val blurPx = with(density) { spec.blurRadius.toPx() }
+    val frostedBlurEffect = remember(blurPx, tier) {
+        if (tier == LiquidGlassTier.FrostedRenderEffect && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            createBackdropBlurEffect(blurPx)?.asComposeRenderEffect()
+        } else {
+            null
+        }
+    }
 
     val borderBrush = remember(spec.rimColor, spec.rimAlpha, spec.borderColor, spec.isDark, tier, isSolidMode) {
         if (isSolidMode) {
@@ -249,7 +256,7 @@ fun LiquidGlassSurface(
                             drawLayer(backdropState.backdropLayer)
                         }
                     }
-                    surfaceLayer.renderEffect = shaderHandle.buildRenderEffect(
+                    val nextEffect = shaderHandle.getOrBuildComposeRenderEffect(
                         widthPx = size.width,
                         heightPx = size.height,
                         radiusPx = radiusPx,
@@ -260,7 +267,10 @@ fun LiquidGlassSurface(
                         refractFactor = animatedRefract,
                         touchPos = touchPosition,
                         touchAlpha = touchAlpha
-                    ).asComposeRenderEffect()
+                    )
+                    if (surfaceLayer.renderEffect !== nextEffect) {
+                        surfaceLayer.renderEffect = nextEffect
+                    }
                     drawLayer(surfaceLayer)
                 } else if (canSampleBackdrop && tier == LiquidGlassTier.FrostedRenderEffect &&
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -274,7 +284,9 @@ fun LiquidGlassSurface(
                             drawLayer(backdropState.backdropLayer)
                         }
                     }
-                    surfaceLayer.renderEffect = createBackdropBlurEffect(blurPx)?.asComposeRenderEffect()
+                    if (surfaceLayer.renderEffect !== frostedBlurEffect) {
+                        surfaceLayer.renderEffect = frostedBlurEffect
+                    }
                     drawLayer(surfaceLayer)
                     // Candy tint veil + top inner gloss
                     drawRect(color = spec.tintColor.copy(alpha = (spec.tintAlpha + 0.06f).coerceIn(0f, 0.92f)))

@@ -560,10 +560,13 @@ fun ReceiptEditorSheet(
         isImporting = true
         formError = null
         scope.launch {
+            val stalePath = newlyImportedPath?.takeIf { it != existing?.fileRelativePath }
             runCatching {
                 withContext(Dispatchers.IO) { fileStorage.importFromUri(context, uri) }
             }.onSuccess { stored ->
-                newlyImportedPath?.takeIf { it != existing?.fileRelativePath }?.let { fileStorage.deleteFile(it) }
+                if (stalePath != null) {
+                    withContext(Dispatchers.IO) { fileStorage.deleteFile(stalePath) }
+                }
                 newlyImportedPath = stored.relativePath
                 fileRelativePath = stored.relativePath
                 mimeType = stored.mimeType
@@ -589,10 +592,13 @@ fun ReceiptEditorSheet(
         isImporting = true
         formError = null
         scope.launch {
+            val stalePath = newlyImportedPath?.takeIf { it != existing?.fileRelativePath }
             runCatching {
                 withContext(Dispatchers.IO) { fileStorage.importCameraFile(temp) }
             }.onSuccess { stored ->
-                newlyImportedPath?.takeIf { it != existing?.fileRelativePath }?.let { fileStorage.deleteFile(it) }
+                if (stalePath != null) {
+                    withContext(Dispatchers.IO) { fileStorage.deleteFile(stalePath) }
+                }
                 newlyImportedPath = stored.relativePath
                 fileRelativePath = stored.relativePath
                 mimeType = stored.mimeType
@@ -606,8 +612,14 @@ fun ReceiptEditorSheet(
     }
 
     val cancelAndCleanup: () -> Unit = {
-        newlyImportedPath?.takeIf { it != existing?.fileRelativePath }?.let { fileStorage.deleteFile(it) }
-        pendingCameraFile?.delete()
+        val stalePath = newlyImportedPath?.takeIf { it != existing?.fileRelativePath }
+        val staleCamera = pendingCameraFile
+        if (stalePath != null || staleCamera != null) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                stalePath?.let { fileStorage.deleteFile(it) }
+                staleCamera?.delete()
+            }
+        }
         onDismiss()
     }
 
@@ -889,7 +901,6 @@ private fun ReceiptDetailSheet(
             previewMissing = false
             return@LaunchedEffect
         }
-        val old = previewBitmap
         if (receipt.isPdf) {
             val rendered = withContext(Dispatchers.IO) { fileStorage.renderPdfPage(receipt.fileRelativePath, pdfPageIndex) }
             previewBitmap = rendered?.bitmap
@@ -901,12 +912,11 @@ private fun ReceiptDetailSheet(
             pdfPageCount = 0
             previewMissing = decoded == null
         }
-        if (old != null && old !== previewBitmap) old.recycle()
     }
 
     DisposableEffect(receipt.fileRelativePath) {
         onDispose {
-            previewBitmap?.recycle()
+            // Release reference without synchronous recycle(); ART frees bitmaps after RenderThread finishes drawing.
             previewBitmap = null
         }
     }
@@ -920,9 +930,10 @@ private fun ReceiptDetailSheet(
             CandyBubbleCard(tone = CandyTone.Sky, modifier = Modifier.fillMaxWidth()) {
                 val bmp = previewBitmap
                 when {
-                    bmp != null -> {
+                    bmp != null && !bmp.isRecycled -> {
+                        val imageBitmap = remember(bmp) { bmp.asImageBitmap() }
                         Image(
-                            bitmap = bmp.asImageBitmap(),
+                            bitmap = imageBitmap,
                             contentDescription = "${receipt.merchant} receipt preview",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier

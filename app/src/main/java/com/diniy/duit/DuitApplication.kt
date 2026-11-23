@@ -193,8 +193,6 @@ class DuitContainer(private val application: Application) {
     }
 
     fun initializeNotificationsAndObservers() {
-        androidNotificationHelper.ensureChannelsCreated()
-        com.diniy.duit.notifications.DeveloperBroadcasts.initialize(application)
         val reminderTables = setOf(
             "commitments",
             "paylater_plans",
@@ -206,33 +204,38 @@ class DuitContainer(private val application: Application) {
             "transactions",
             "budgets"
         )
-        database.invalidationTracker.addObserver(
-            object : InvalidationTracker.Observer(
-                arrayOf(
-                    "wallets",
-                    "commitments",
-                    "paylater_plans",
-                    "debts",
-                    "savings_goals",
-                    "savings_wallet_allocations",
-                    "salary_cycles",
-                    "commissions",
-                    "transactions",
-                    "budgets",
-                    "categories",
-                    "money_reminders"
-                )
-            ) {
-                override fun onInvalidated(tables: Set<String>) {
-                    if (tables.any { it in reminderTables }) {
-                        reminderScheduler.enqueueImmediateSync()
+        // Defer channel setup, FCM init, Room open, and WorkManager enqueue off the main thread at cold start.
+        applicationScope.launch(Dispatchers.IO) {
+            androidNotificationHelper.ensureChannelsCreated()
+            com.diniy.duit.notifications.DeveloperBroadcasts.initialize(application)
+            database.invalidationTracker.addObserver(
+                object : InvalidationTracker.Observer(
+                    arrayOf(
+                        "wallets",
+                        "commitments",
+                        "paylater_plans",
+                        "debts",
+                        "savings_goals",
+                        "savings_wallet_allocations",
+                        "salary_cycles",
+                        "commissions",
+                        "transactions",
+                        "budgets",
+                        "categories",
+                        "money_reminders"
+                    )
+                ) {
+                    override fun onInvalidated(tables: Set<String>) {
+                        if (tables.any { it in reminderTables }) {
+                            reminderScheduler.enqueueImmediateSync()
+                        }
+                        widgetUpdateCoordinator.enqueueRefresh()
                     }
-                    widgetUpdateCoordinator.enqueueRefresh()
                 }
-            }
-        )
-        reminderScheduler.enqueueImmediateSync()
-        widgetUpdateCoordinator.enqueueRefresh()
+            )
+            reminderScheduler.enqueueImmediateSync()
+            widgetUpdateCoordinator.enqueueRefresh()
+        }
 
         // Public edition: decide the Commission Tracking default once, without touching any records.
         if (com.diniy.duit.BuildConfig.OPTIONAL_COMMISSION) {

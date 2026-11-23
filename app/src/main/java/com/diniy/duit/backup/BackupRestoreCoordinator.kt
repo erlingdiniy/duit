@@ -10,6 +10,7 @@ import com.diniy.duit.security.SecurityRepository
 import com.diniy.duit.widgets.WidgetUpdateCoordinator
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
@@ -140,32 +141,35 @@ class BackupRestoreCoordinator(
 
         // Stage receipt files first: a write failure aborts before any Room or live-file change.
         val staging = receiptFileStorage?.stageRestoredFiles(bundle.receiptFiles)
-        try {
-            // Atomic Room replacement: throws & rolls back cleanly on any SQLite/FK failure.
-            backupDao.replaceAllLedgerDataAtomically(bundle.ledger)
-        } catch (t: Throwable) {
-            staging?.let { receiptFileStorage?.discardStagedRestore(it) }
-            throw t
-        }
-        staging?.let { receiptFileStorage?.commitStagedRestore(it) }
-
-        val validWalletIds = bundle.ledger.wallets.map { it.id }.toSet()
-        val sanitizedAppSettings = bundle.preferences.appSettings.let { prefs ->
-            if (prefs.defaultWalletId != null && prefs.defaultWalletId !in validWalletIds) {
-                prefs.copy(defaultWalletId = null)
-            } else {
-                prefs
+        // Once Room commit starts, run commit/preference swap non-cancellably so navigation cannot split state.
+        withContext(NonCancellable) {
+            try {
+                // Atomic Room replacement: throws & rolls back cleanly on any SQLite/FK failure.
+                backupDao.replaceAllLedgerDataAtomically(bundle.ledger)
+            } catch (t: Throwable) {
+                staging?.let { receiptFileStorage?.discardStagedRestore(it) }
+                throw t
             }
+            staging?.let { receiptFileStorage?.commitStagedRestore(it) }
+
+            val validWalletIds = bundle.ledger.wallets.map { it.id }.toSet()
+            val sanitizedAppSettings = bundle.preferences.appSettings.let { prefs ->
+                if (prefs.defaultWalletId != null && prefs.defaultWalletId !in validWalletIds) {
+                    prefs.copy(defaultWalletId = null)
+                } else {
+                    prefs
+                }
+            }
+
+            userPreferencesRepository.applyPortableSettings(sanitizedAppSettings)
+            notificationPreferencesRepository.applyPortableSettings(bundle.preferences.notificationSettings)
+            securityRepository.setHideSensitiveBalances(bundle.preferences.privacyPreferences.hideSensitiveBalances)
+            securityRepository.setPrivacyModeEnabled(bundle.preferences.privacyPreferences.privacyModeEnabled)
+            securityRepository.setAlwaysMaskWidgetAmounts(bundle.preferences.privacyPreferences.alwaysMaskWidgetAmounts)
+
+            reminderScheduler.enqueueImmediateSync()
+            widgetUpdateCoordinator.refreshAllWidgetsNow()
         }
-
-        userPreferencesRepository.applyPortableSettings(sanitizedAppSettings)
-        notificationPreferencesRepository.applyPortableSettings(bundle.preferences.notificationSettings)
-        securityRepository.setHideSensitiveBalances(bundle.preferences.privacyPreferences.hideSensitiveBalances)
-        securityRepository.setPrivacyModeEnabled(bundle.preferences.privacyPreferences.privacyModeEnabled)
-        securityRepository.setAlwaysMaskWidgetAmounts(bundle.preferences.privacyPreferences.alwaysMaskWidgetAmounts)
-
-        reminderScheduler.enqueueImmediateSync()
-        widgetUpdateCoordinator.refreshAllWidgetsNow()
     }
 
     suspend fun exportTransactionsCsv(): String = withContext(ioDispatcher) {

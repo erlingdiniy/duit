@@ -83,6 +83,7 @@ import com.diniy.duit.security.SecurityRepository
 import com.diniy.duit.widgets.WidgetSnapshotCalculator
 import com.diniy.duit.widgets.WidgetUpdateCoordinator
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -90,6 +91,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import org.json.JSONObject
@@ -1257,5 +1259,63 @@ class Phase5DSettingsBackupRestoreTest {
         val e2 = runCatching { coordinator.decryptAndPreviewBackup(oversized, "Pw#12345".toCharArray()) }.exceptionOrNull()
         assertTrue(e1 is BackupFormatException && e1.message!!.contains("33 MB"))
         assertTrue(e2 is BackupFormatException)
+    }
+
+    @Test
+    fun restore_commitMarkerWithStaging_completesNewSwapOnRecoveryAndClearAllFilesCleansSiblings() {
+        val root = File(context.cacheDir, "r3-marker-${System.nanoTime()}").apply { mkdirs() }
+        val storage = ReceiptFileStorage(root)
+        File(root, "receipt_stale.jpg").writeBytes(byteArrayOf(1, 2))
+
+        val staging = storage.stageRestoredFiles(mapOf("receipt_restored.jpg" to byteArrayOf(7, 8, 9)))
+        val old = File(root.parentFile, root.name + ".restore-old").apply { mkdirs() }
+        File(old, "receipt_ancient.jpg").writeBytes(byteArrayOf(3))
+        val commitMarker = File(root.parentFile, root.name + ".restore-commit").apply { createNewFile() }
+
+        // Crash happened right after Room commit while staging + commitMarker were still present:
+        // reading receipts finishes moving staging into live and removes stale old/marker.
+        assertArrayEquals(byteArrayOf(7, 8, 9), storage.readFileBytes("receipt_restored.jpg"))
+        assertEquals(null, storage.readFileBytes("receipt_stale.jpg"))
+        assertFalse(commitMarker.exists())
+        assertFalse(staging.exists())
+        assertFalse(old.exists())
+
+        // Factory reset / clearAllFiles must wipe sibling recovery artifacts too.
+        File(root.parentFile, root.name + ".restore-staging").apply { mkdirs() }
+        File(root.parentFile, root.name + ".restore-old").apply { mkdirs() }
+        File(root.parentFile, root.name + ".restore-commit").createNewFile()
+        storage.clearAllFiles()
+        assertEquals(0, root.listFiles()?.size ?: 0)
+        assertFalse(File(root.parentFile, root.name + ".restore-staging").exists())
+        assertFalse(File(root.parentFile, root.name + ".restore-old").exists())
+        assertFalse(File(root.parentFile, root.name + ".restore-commit").exists())
+        root.deleteRecursively()
+    }
+
+    @Test
+    fun restore_callerCancelledMidCommit_stillCompletesReceiptsAndSyncsCleanly(): Unit = runBlocking {
+        val root = File(context.cacheDir, "r4-cancel-${System.nanoTime()}").apply { mkdirs() }
+        val storage = ReceiptFileStorage(root)
+        File(root, "receipt_old.jpg").writeBytes(byteArrayOf(1))
+        insertBankWallet(9L)
+        val coordinator = receiptCoordinator(storage)
+        val initialBytes = coordinator.createEncryptedBackup("Pw#12345".toCharArray())
+        val baseBundle = coordinator.decryptAndPreviewBackup(initialBytes, "Pw#12345".toCharArray())
+        val targetBundle = baseBundle.copy(
+            receiptFiles = mapOf("receipt_new.jpg" to byteArrayOf(4, 5, 6))
+        )
+
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            coordinator.restoreBackupAtomically(targetBundle)
+        }
+        job.cancel()
+        job.join()
+
+        // NonCancellable guard ensures once Room/restore commit begins it finishes atomically or doesn't split state.
+        assertArrayEquals(byteArrayOf(4, 5, 6), storage.readFileBytes("receipt_new.jpg"))
+        assertEquals(null, storage.readFileBytes("receipt_old.jpg"))
+        assertFalse(File(root.parentFile, root.name + ".restore-commit").exists())
+        assertEquals(12_345L, db.backupDao().exportFullSnapshot().wallets.single().balanceSen)
+        root.deleteRecursively()
     }
 }

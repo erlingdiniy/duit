@@ -42,10 +42,34 @@ class ReceiptFileStorage(private val rootDir: File) {
         return rootDir.apply { mkdirs() }
     }
 
-    /** If the process died mid-swap, the only copy of the receipts sits in the `.restore-old` dir. */
+    /**
+     * Completes or rolls back any interrupted swap:
+     * - If commit marker exists and staging dir is intact, Room already committed -> finish moving staging to live.
+     * - Else if live dir is missing and old backup exists, restore old -> live (pre-commit abort).
+     */
     private fun recoverInterruptedSwap() {
+        val commitMarker = siblingDir(COMMIT_MARKER_SUFFIX)
+        val staging = siblingDir(STAGING_SUFFIX)
         val old = siblingDir(OLD_SUFFIX)
-        if (!rootDir.exists() && old.isDirectory) old.renameTo(rootDir)
+        if (commitMarker.exists()) {
+            if (staging.isDirectory) {
+                if (rootDir.exists()) {
+                    old.deleteRecursively()
+                    if (!rootDir.renameTo(old)) return
+                }
+                if (staging.renameTo(rootDir)) {
+                    commitMarker.deleteRecursively()
+                    old.deleteRecursively()
+                }
+            } else {
+                commitMarker.deleteRecursively()
+                old.deleteRecursively()
+            }
+            return
+        }
+        if (!rootDir.exists() && old.isDirectory) {
+            old.renameTo(rootDir)
+        }
     }
 
     fun sanitizeFileName(raw: String): String? {
@@ -145,18 +169,26 @@ class ReceiptFileStorage(private val rootDir: File) {
         return staging
     }
 
-    /** Swaps a staged dir into place. Old files are only deleted after the new dir is live. */
+    /** Swaps a staged dir into place. Records commit intent first so Room+files converge after crash. */
     fun commitStagedRestore(staging: File) {
         recoverInterruptedSwap()
         val old = siblingDir(OLD_SUFFIX)
+        val commitMarker = siblingDir(COMMIT_MARKER_SUFFIX)
         old.deleteRecursively()
+        commitMarker.deleteRecursively()
+        if (!commitMarker.createNewFile()) {
+            throw IOException("Could not record receipt restore commit marker.")
+        }
         if (rootDir.exists() && !rootDir.renameTo(old)) {
+            commitMarker.delete()
             throw IOException("Could not swap receipt folder.")
         }
         if (!staging.renameTo(rootDir)) {
             old.renameTo(rootDir) // roll back so existing receipts remain
+            commitMarker.delete()
             throw IOException("Could not swap receipt folder.")
         }
+        commitMarker.delete()
         old.deleteRecursively()
     }
 
@@ -171,6 +203,9 @@ class ReceiptFileStorage(private val rootDir: File) {
 
     fun clearAllFiles() {
         rootDir.listFiles()?.forEach { if (it.isFile) it.delete() }
+        siblingDir(STAGING_SUFFIX).deleteRecursively()
+        siblingDir(OLD_SUFFIX).deleteRecursively()
+        siblingDir(COMMIT_MARKER_SUFFIX).deleteRecursively()
     }
 
     fun decodeImagePreview(relativePath: String, maxDimensionPx: Int = 1400): Bitmap? {
@@ -317,6 +352,7 @@ class ReceiptFileStorage(private val rootDir: File) {
         const val MAX_BACKUP_RECEIPT_BYTES = 12L * 1024L * 1024L
         private const val STAGING_SUFFIX = ".restore-staging"
         private const val OLD_SUFFIX = ".restore-old"
+        private const val COMMIT_MARKER_SUFFIX = ".restore-commit"
         private const val MAX_RAW_IMAGE_BYTES = 20L * 1024L * 1024L
         private const val MAX_IMAGE_DIMENSION_PX = 1600
         private const val JPEG_QUALITY = 82

@@ -2,8 +2,10 @@ package com.diniy.duit.feature.tax
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.room.Room
@@ -51,15 +53,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLooper
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class MyTaxPocketTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createEmptyComposeRule()
 
     private fun memoryDb(): DuitDatabase =
         Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), DuitDatabase::class.java)
@@ -433,7 +437,8 @@ class MyTaxPocketTest {
             onDeleteEntry = {}
         )
 
-        composeRule.setContent {
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        activity.setContent {
             val baseDensity = androidx.compose.ui.platform.LocalDensity.current
             DuitTheme(themeMode = ThemeMode.DARK) {
                 androidx.compose.runtime.CompositionLocalProvider(
@@ -447,6 +452,7 @@ class MyTaxPocketTest {
                 }
             }
         }
+        ShadowLooper.idleMainLooper()
 
         composeRule.onNodeWithText("My Tax Pocket").assertIsDisplayed()
         composeRule.onAllNodesWithText("YA 2026")[0].assertIsDisplayed()

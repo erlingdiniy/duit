@@ -199,6 +199,7 @@ class SettingsViewModel(
         password: CharArray,
         onReady: (ByteArray) -> Unit
     ) {
+        if (busyFlow.value) return
         viewModelScope.launch {
             busyFlow.value = true
             feedbackFlow.value = null to null
@@ -220,6 +221,7 @@ class SettingsViewModel(
 
     // Safe Restore Workflow
     fun inspectSelectedBackup(rawBytes: ByteArray, fileName: String) {
+        if (busyFlow.value) return
         viewModelScope.launch {
             busyFlow.value = true
             feedbackFlow.value = null to null
@@ -237,6 +239,7 @@ class SettingsViewModel(
     }
 
     fun decryptSelectedBackup(password: CharArray) {
+        if (busyFlow.value) return
         val stage = restoreStageFlow.value as? RestoreStage.AwaitingPassword ?: return
         viewModelScope.launch {
             busyFlow.value = true
@@ -255,6 +258,7 @@ class SettingsViewModel(
     }
 
     fun confirmRestoreBackup() {
+        if (busyFlow.value) return
         val stage = restoreStageFlow.value as? RestoreStage.PreviewReady ?: return
         viewModelScope.launch {
             busyFlow.value = true

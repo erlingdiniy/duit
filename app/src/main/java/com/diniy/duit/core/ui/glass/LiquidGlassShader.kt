@@ -7,6 +7,8 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RenderEffect as ComposeRenderEffect
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import org.intellij.lang.annotations.Language
 
 /**
@@ -165,6 +167,71 @@ internal object LiquidGlassShaderSource {
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 internal class LiquidGlassShaderHandle {
     private val shader = RuntimeShader(LiquidGlassShaderSource.AGSL)
+
+    private data class CacheKey(
+        val widthPx: Float,
+        val heightPx: Float,
+        val radiusPx: Float,
+        val bezelPx: Float,
+        val thicknessPx: Float,
+        val blurPx: Float,
+        val spec: LiquidGlassSurfaceSpec,
+        val refractFactor: Float,
+        val touchX: Float,
+        val touchY: Float,
+        val touchAlpha: Float
+    )
+
+    private var lastKey: CacheKey? = null
+    private var lastComposeEffect: ComposeRenderEffect? = null
+
+    fun getOrBuildComposeRenderEffect(
+        widthPx: Float,
+        heightPx: Float,
+        radiusPx: Float,
+        bezelPx: Float,
+        thicknessPx: Float,
+        blurPx: Float,
+        spec: LiquidGlassSurfaceSpec,
+        refractFactor: Float,
+        touchPos: Offset,
+        touchAlpha: Float
+    ): ComposeRenderEffect {
+        val clampedRefract = refractFactor.coerceIn(0f, 1f)
+        val clampedTouchAlpha = touchAlpha.coerceIn(0f, 1f)
+        val key = CacheKey(
+            widthPx = widthPx,
+            heightPx = heightPx,
+            radiusPx = radiusPx,
+            bezelPx = bezelPx,
+            thicknessPx = thicknessPx,
+            blurPx = blurPx,
+            spec = spec,
+            refractFactor = clampedRefract,
+            touchX = touchPos.x,
+            touchY = touchPos.y,
+            touchAlpha = clampedTouchAlpha
+        )
+        val cached = lastComposeEffect
+        if (cached != null && key == lastKey) {
+            return cached
+        }
+        return buildRenderEffect(
+            widthPx = widthPx,
+            heightPx = heightPx,
+            radiusPx = radiusPx,
+            bezelPx = bezelPx,
+            thicknessPx = thicknessPx,
+            blurPx = blurPx,
+            spec = spec,
+            refractFactor = clampedRefract,
+            touchPos = touchPos,
+            touchAlpha = clampedTouchAlpha
+        ).asComposeRenderEffect().also {
+            lastKey = key
+            lastComposeEffect = it
+        }
+    }
 
     fun buildRenderEffect(
         widthPx: Float,

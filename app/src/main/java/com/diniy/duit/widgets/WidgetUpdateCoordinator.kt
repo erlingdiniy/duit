@@ -8,6 +8,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.diniy.duit.DuitApplication
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 interface WidgetUpdateCoordinator {
     fun enqueueRefresh()
@@ -26,7 +28,7 @@ class GlanceWidgetUpdateCoordinator(
         wm.enqueueUniqueWork(UNIQUE_WIDGET_REFRESH, ExistingWorkPolicy.REPLACE, request)
     }
 
-    override suspend fun refreshAllWidgetsNow() {
+    override suspend fun refreshAllWidgetsNow() = withContext(Dispatchers.IO) {
         runCatching { DuitBalanceWidget().updateAll(appContext) }
         runCatching { DuitUpcomingPaymentsWidget().updateAll(appContext) }
         runCatching { DuitSavingsGoalsWidget().updateAll(appContext) }
@@ -39,6 +41,7 @@ class GlanceWidgetUpdateCoordinator(
         runCatching { DuitCommitmentsWidget().updateAll(appContext) }
         runCatching { DuitBuddyWidget().updateAll(appContext) }
         runCatching { DuitPrivacyWidget().updateAll(appContext) }
+        Unit
     }
 
     companion object {
