@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 
 import androidx.compose.ui.draw.drawBehind
 
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -17,22 +18,29 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
@@ -53,6 +61,8 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Calculate
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -69,13 +79,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -85,6 +102,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,11 +117,18 @@ import com.diniy.duit.core.ui.glass.LiquidGlassSprings
 import com.diniy.duit.core.ui.glass.LiquidGlassSurface
 import com.diniy.duit.core.ui.glass.LiquidGlassTier
 import com.diniy.duit.core.ui.glass.LocalLiquidGlassBackdrop
+import com.diniy.duit.core.ui.glass.QuickActionTileGlassSpec
 import com.diniy.duit.core.ui.glass.liquidGlassHiddenBackdropSource
 import com.diniy.duit.core.ui.glass.rememberLiquidGlassBackdropState
+import com.diniy.duit.core.ui.glass.LiquidGlassBackdropState
+
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.animation.core.tween
 import com.diniy.duit.core.ui.theme.LocalGlassIntensity
 import com.diniy.duit.core.ui.theme.SpatialTheme
 import com.diniy.duit.domain.model.GlassIntensity
+import com.diniy.duit.core.ui.glass.LiquidGlassQualityMode
 import com.diniy.duit.domain.model.TransactionType
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -1033,8 +1060,8 @@ fun PrismaticNavigationRail(
 }
 
 /**
- * Compact Spatial Glass quick-add sheet opened by the central `+` button in the floating bottom bar.
- * Preserves immediate access to Expense, Income, Transfer, Commission Calculator, and Category management.
+ * Compact Spatial Glass quick-add sheet opened by the central `+` button in the floating bottom bar
+ * (used directly by Candy Bubble 2.0; Pure uses [PureQuickActionSheetOverlay] in-window for true refraction).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1067,6 +1094,8 @@ fun SpatialQuickAddSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
     ) {
+        val isPure = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+            com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
         Column(verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1144,22 +1173,381 @@ fun SpatialQuickAddSheet(
                 )
             }
 
-            SpatialCompactListRow(
-                title = "Manage Categories",
-                subtitle = "Customize income and expense categories",
-                leadingBadgeColor = colors.aqua,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Rounded.Category,
-                        contentDescription = null,
-                        tint = colors.aqua,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                onClick = {
-                    closeThen { onOpenCategories() }
+            val categoriesIcon: @Composable () -> Unit = {
+                Icon(
+                    imageVector = Icons.Rounded.Category,
+                    contentDescription = null,
+                    tint = colors.aqua,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            if (isPure) {
+                PureQuickActionTile(
+                    title = "Manage Categories",
+                    subtitle = "Income & expense categories",
+                    accentColor = colors.aqua,
+                    icon = Icons.Rounded.Category,
+                    iconTint = if (colors.isDark) colors.aqua else Color(0xFF0F766E),
+                    onClick = { closeThen { onOpenCategories() } },
+                    onClickLabel = "Manage categories",
+                    modifier = Modifier.fillMaxWidth(),
+                    row = true
+                )
+            } else {
+                SpatialCompactListRow(
+                    title = "Manage Categories",
+                    subtitle = "Customize income and expense categories",
+                    leadingBadgeColor = colors.aqua,
+                    leadingIcon = categoriesIcon,
+                    onClick = {
+                        closeThen { onOpenCategories() }
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * In-window Pure theme Liquid Glass Quick Action sheet rendered inside [DuitNavHost] so the
+ * floating shell genuinely blurs and refracts live app content behind it via AGSL, while its
+ * convex optical tiles contain all internal specular highlights and pastel accents strictly within
+ * their rounded bounds.
+ */
+@Composable
+fun PureQuickActionSheetOverlay(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onSelectTransactionType: (TransactionType) -> Unit,
+    /** Null hides the Commission tile (public edition with Commission Tracking off). */
+    onOpenCommissionTools: (() -> Unit)?,
+    onOpenCategories: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = SpatialTheme.colors
+    val typography = SpatialTheme.typography
+    val intensity = LocalGlassIntensity.current
+    val reducedMotion = rememberReducedMotionEnabled()
+    val haptic = rememberDuitHaptic()
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+
+    val progress = remember { Animatable(0f) }
+    val dragOffsetPx = remember { Animatable(0f) }
+    var mounted by remember { mutableStateOf(false) }
+    var actionFired by remember { mutableStateOf(false) }
+
+    LaunchedEffect(visible, reducedMotion) {
+        if (visible) {
+            actionFired = false
+            mounted = true
+            dragOffsetPx.snapTo(0f)
+            if (reducedMotion) {
+                progress.snapTo(1f)
+            } else {
+                progress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(dampingRatio = 0.84f, stiffness = 460f)
+                )
+            }
+        } else if (mounted) {
+            if (reducedMotion) {
+                progress.snapTo(0f)
+            } else {
+                progress.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(durationMillis = 170)
+                )
+            }
+            dragOffsetPx.snapTo(0f)
+            mounted = false
+        }
+    }
+
+    if (!visible && !mounted) return
+
+    BackHandler(enabled = visible) {
+        onDismiss()
+    }
+
+    fun triggerAction(action: () -> Unit) {
+        if (actionFired) return
+        actionFired = true
+        onDismiss()
+        action()
+    }
+
+    val slideDistPx = with(density) { 420.dp.toPx() }
+    val dragFadeDistPx = with(density) { 260.dp.toPx() }
+    val dismissThresholdPx = with(density) { 96.dp.toPx() }
+    val dismissVelocityPx = with(density) { 900.dp.toPx() }
+
+    val scrimInteraction = remember { MutableInteractionSource() }
+    val scrimBaseColor = if (colors.isDark) Color(0x5C000000) else Color(0x220F172A)
+    val dragFade = 1f - (dragOffsetPx.value / dragFadeDistPx).coerceIn(0f, 0.7f)
+    val scrimFraction = (progress.value * dragFade).coerceIn(0f, 1f)
+
+    val sheetSpec = remember(colors, intensity) {
+        LiquidGlassPresets.quickActionSheet(colors, intensity)
+    }
+    val tileSpec = remember(colors, intensity) {
+        LiquidGlassPresets.quickActionTileSpec(colors, intensity)
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .semantics {
+                paneTitle = "Quick Action"
+                isTraversalGroup = true
+            }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(scrimBaseColor.copy(alpha = scrimBaseColor.alpha * scrimFraction))
+                .pointerInput(onDismiss) {
+                    detectTapGestures { onDismiss() }
                 }
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clickable(
+                        interactionSource = scrimInteraction,
+                        indication = null,
+                        role = Role.Button,
+                        onClickLabel = "Close",
+                        onClick = onDismiss
+                    )
             )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .widthIn(max = 520.dp)
+                    .fillMaxWidth()
+                    .offset {
+                        IntOffset(
+                            x = 0,
+                            y = ((1f - progress.value) * slideDistPx + dragOffsetPx.value).roundToInt()
+                        )
+                    }
+                    .graphicsLayer {
+                        alpha = progress.value.coerceIn(0f, 1f)
+                    }
+                    .draggable(
+                        orientation = Orientation.Vertical,
+                        state = rememberDraggableState { delta ->
+                            val next = (dragOffsetPx.value + delta).coerceAtLeast(0f)
+                            scope.launch { dragOffsetPx.snapTo(next) }
+                        },
+                        onDragStopped = { velocity ->
+                            if (dragOffsetPx.value > dismissThresholdPx || velocity > dismissVelocityPx) {
+                                onDismiss()
+                            } else {
+                                scope.launch {
+                                    dragOffsetPx.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = if (reducedMotion) tween(0) else LiquidGlassSprings.Release
+                                    )
+                                }
+                            }
+                        }
+                    )
+                    .pointerInput(Unit) {
+                        detectTapGestures { /* Keep taps on sheet body from falling through to scrim. */ }
+                    }
+            ) {
+                LiquidGlassSurface(
+                    backdropState = LocalLiquidGlassBackdrop.current,
+                    spec = sheetSpec,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val glazeTopColor = Color.White.copy(alpha = if (colors.isDark) 0.08f else 0.36f)
+                    val handleColor = colors.primaryText.copy(alpha = if (colors.isDark) 0.24f else 0.16f)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .drawBehind {
+                                if (intensity != GlassIntensity.SUBTLE) {
+                                    val glazeHeight = 44.dp.toPx()
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(glazeTopColor, Color.Transparent),
+                                            startY = 0f,
+                                            endY = glazeHeight
+                                        ),
+                                        size = Size(size.width, glazeHeight)
+                                    )
+                                }
+                                val pillW = 36.dp.toPx()
+                                val pillH = 4.dp.toPx()
+                                val pillTop = 10.dp.toPx()
+                                val pillRadius = pillH * 0.5f
+                                drawRoundRect(
+                                    color = handleColor,
+                                    topLeft = Offset((size.width - pillW) * 0.5f, pillTop),
+                                    size = Size(pillW, pillH),
+                                    cornerRadius = CornerRadius(pillRadius, pillRadius)
+                                )
+                            }
+                            .padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Quick Action",
+                                style = typography.sectionHeading,
+                                color = colors.primaryText,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .semantics { heading() }
+                            )
+                            PureQuickCloseOrb(
+                                onClick = {
+                                    haptic(HapticFeedbackType.TextHandleMove)
+                                    onDismiss()
+                                }
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Max),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                PureQuickActionTile(
+                                    title = "Expense",
+                                    subtitle = "Record spend",
+                                    accentColor = colors.expense,
+                                    icon = Icons.Rounded.ArrowUpward,
+                                    iconTint = colors.expense,
+                                    spec = tileSpec,
+                                    onClick = {
+                                        haptic(HapticFeedbackType.TextHandleMove)
+                                        triggerAction { onSelectTransactionType(TransactionType.EXPENSE) }
+                                    },
+                                    onClickLabel = "Record expense",
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                )
+                                PureQuickActionTile(
+                                    title = "Income",
+                                    subtitle = "Salary or credit",
+                                    accentColor = colors.income,
+                                    icon = Icons.Rounded.ArrowDownward,
+                                    iconTint = colors.income,
+                                    spec = tileSpec,
+                                    onClick = {
+                                        haptic(HapticFeedbackType.TextHandleMove)
+                                        triggerAction { onSelectTransactionType(TransactionType.INCOME) }
+                                    },
+                                    onClickLabel = "Record income",
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                )
+                            }
+
+                            if (onOpenCommissionTools != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Max),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    PureQuickActionTile(
+                                        title = "Transfer",
+                                        subtitle = "Between wallets",
+                                        accentColor = colors.skyBlue,
+                                        icon = Icons.Rounded.SwapHoriz,
+                                        iconTint = if (colors.isDark) colors.skyBlue else Color(0xFF0369A1),
+                                        spec = tileSpec,
+                                        onClick = {
+                                            haptic(HapticFeedbackType.TextHandleMove)
+                                            triggerAction { onSelectTransactionType(TransactionType.TRANSFER) }
+                                        },
+                                        onClickLabel = "Transfer between wallets",
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                    )
+                                    PureQuickActionTile(
+                                        title = "Commission",
+                                        subtitle = "Sales, profit & payout",
+                                        accentColor = colors.lavender,
+                                        icon = Icons.Rounded.Calculate,
+                                        iconTint = colors.primaryAction,
+                                        spec = tileSpec,
+                                        onClick = {
+                                            haptic(HapticFeedbackType.TextHandleMove)
+                                            triggerAction { onOpenCommissionTools() }
+                                        },
+                                        onClickLabel = "Open commission tools",
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                    )
+                                }
+                            } else {
+                                PureQuickActionTile(
+                                    title = "Transfer",
+                                    subtitle = "Between wallets",
+                                    accentColor = colors.skyBlue,
+                                    icon = Icons.Rounded.SwapHoriz,
+                                    iconTint = if (colors.isDark) colors.skyBlue else Color(0xFF0369A1),
+                                    spec = tileSpec,
+                                    onClick = {
+                                        haptic(HapticFeedbackType.TextHandleMove)
+                                        triggerAction { onSelectTransactionType(TransactionType.TRANSFER) }
+                                    },
+                                    onClickLabel = "Transfer between wallets",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    row = true
+                                )
+                            }
+
+                            PureQuickActionTile(
+                                title = "Manage Categories",
+                                subtitle = "Income & expense categories",
+                                accentColor = colors.aqua,
+                                icon = Icons.Rounded.Category,
+                                iconTint = if (colors.isDark) colors.aqua else Color(0xFF0F766E),
+                                spec = tileSpec,
+                                onClick = {
+                                    haptic(HapticFeedbackType.TextHandleMove)
+                                    triggerAction { onOpenCategories() }
+                                },
+                                onClickLabel = "Manage categories",
+                                modifier = Modifier.fillMaxWidth(),
+                                row = true
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1175,6 +1563,21 @@ private fun QuickAddTile(
 ) {
     val colors = SpatialTheme.colors
     val typography = SpatialTheme.typography
+    val isPure = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==
+        com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
+    if (isPure) {
+        PureQuickActionTile(
+            title = title,
+            subtitle = subtitle,
+            accentColor = accentColor,
+            iconTint = accentColor,
+            onClick = onClick,
+            onClickLabel = title,
+            modifier = modifier,
+            customIcon = icon
+        )
+        return
+    }
 
     SpatialGlassCard(
         modifier = modifier,
@@ -1204,5 +1607,377 @@ private fun QuickAddTile(
             style = typography.caption,
             color = colors.secondaryText
         )
+    }
+}
+
+/**
+ * Sculpted convex optical glass tile / full-width row inside the Pure Quick Action sheet.
+ * All tint washes, specular bevel strokes, and touch blooms are strictly clipped to the
+ * rounded tile shape so zero pastel glow or rectangular artifact can bleed outside.
+ */
+@Composable
+private fun PureQuickActionTile(
+    title: String,
+    subtitle: String,
+    accentColor: Color,
+    iconTint: Color,
+    onClick: () -> Unit,
+    onClickLabel: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    spec: QuickActionTileGlassSpec? = null,
+    row: Boolean = false,
+    customIcon: (@Composable () -> Unit)? = null
+) {
+    val colors = SpatialTheme.colors
+    val typography = SpatialTheme.typography
+    val intensity = LocalGlassIntensity.current
+    val tileSpec = spec ?: LiquidGlassPresets.quickActionTileSpec(colors, intensity)
+    val tileShape = RoundedCornerShape(if (row) 20.dp else 22.dp)
+
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    var pressPos by remember { mutableStateOf(Offset.Zero) }
+    LaunchedEffect(interaction) {
+        interaction.interactions.collect {
+            if (it is PressInteraction.Press) pressPos = it.pressPosition
+        }
+    }
+    val reducedMotion = rememberReducedMotionEnabled()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && !reducedMotion) tileSpec.pressScale else 1f,
+        animationSpec = if (pressed) LiquidGlassSprings.Press else LiquidGlassSprings.Release,
+        label = "pure_quick_tile_press"
+    )
+    val bloom by animateFloatAsState(
+        targetValue = if (pressed && !reducedMotion && tileSpec.touchBloomAlpha > 0f) 1f else 0f,
+        animationSpec = tween(if (reducedMotion) 0 else if (pressed) 90 else 240),
+        label = "pure_quick_tile_bloom"
+    )
+
+    val borderBrush = remember(tileSpec, accentColor) {
+        if (tileSpec.borderTopAlpha <= 0.001f && tileSpec.borderBottomAlpha <= 0.001f) {
+            SolidColor(tileSpec.borderMidColor)
+        } else {
+            val midRim = lerp(
+                tileSpec.borderMidColor,
+                accentColor.copy(alpha = if (tileSpec.isDark) 0.22f else 0.16f),
+                0.35f
+            )
+            Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = tileSpec.borderTopAlpha),
+                    midRim,
+                    Color.White.copy(alpha = tileSpec.borderBottomAlpha)
+                )
+            )
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(
+                if (tileSpec.shadowElevation > 0.dp) {
+                    Modifier.shadow(
+                        elevation = tileSpec.shadowElevation,
+                        shape = tileShape,
+                        ambientColor = tileSpec.shadowColor,
+                        spotColor = tileSpec.shadowColor,
+                        clip = false
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .clip(tileShape)
+            .drawWithCache {
+                val cornerRadiusPx = (if (row) 20.dp else 22.dp).toPx()
+                val baseFillBrush = Brush.verticalGradient(
+                    colorStops = arrayOf(
+                        0f to tileSpec.topFill,
+                        0.46f to tileSpec.midFill,
+                        1f to tileSpec.bottomFill
+                    )
+                )
+                val accentWashEndX = minOf(size.width * 0.78f, size.height * 1.45f)
+                val accentWashBrush = Brush.linearGradient(
+                    colorStops = arrayOf(
+                        0f to accentColor.copy(alpha = tileSpec.accentWashAlpha),
+                        0.42f to accentColor.copy(alpha = tileSpec.accentWashAlpha * 0.28f),
+                        0.78f to Color.Transparent
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(accentWashEndX, size.height * 0.92f)
+                )
+                val topSheenBrush = if (tileSpec.topSpecularAlpha > 0.005f) {
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.White.copy(alpha = tileSpec.topSpecularAlpha * 0.55f),
+                            0.42f to Color.Transparent
+                        )
+                    )
+                } else {
+                    null
+                }
+                val bevelInsetPx = 1.dp.toPx()
+                val bevelStrokePx = 1.25.dp.toPx()
+                val bevelRadius = (cornerRadiusPx - bevelInsetPx).coerceAtLeast(0f)
+                val bevelBrush = if (tileSpec.innerBevelHighlightAlpha > 0.005f) {
+                    val bounce = lerp(Color.White, accentColor, 0.25f)
+                        .copy(alpha = tileSpec.innerBevelBounceAlpha)
+                    Brush.linearGradient(
+                        colorStops = arrayOf(
+                            0f to Color.White.copy(alpha = tileSpec.innerBevelHighlightAlpha),
+                            0.45f to Color.Transparent,
+                            0.65f to Color.Transparent,
+                            1f to bounce
+                        ),
+                        start = Offset.Zero,
+                        end = Offset(size.width, size.height)
+                    )
+                } else {
+                    null
+                }
+
+                onDrawBehind {
+                    drawRect(brush = baseFillBrush)
+                    drawRect(brush = accentWashBrush)
+                    if (topSheenBrush != null) {
+                        drawRect(brush = topSheenBrush)
+                    }
+                    if (bevelBrush != null && size.width > bevelInsetPx * 4f && size.height > bevelInsetPx * 4f) {
+                        drawRoundRect(
+                            brush = bevelBrush,
+                            topLeft = Offset(bevelInsetPx, bevelInsetPx),
+                            size = Size(size.width - bevelInsetPx * 2f, size.height - bevelInsetPx * 2f),
+                            cornerRadius = CornerRadius(bevelRadius, bevelRadius),
+                            style = Stroke(width = bevelStrokePx)
+                        )
+                    }
+                    if (bloom > 0.01f && tileSpec.touchBloomAlpha > 0.005f) {
+                        val center = if (pressPos == Offset.Zero) {
+                            Offset(size.width * 0.5f, size.height * 0.5f)
+                        } else {
+                            pressPos
+                        }
+                        val radius = size.maxDimension * 0.55f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = tileSpec.touchBloomAlpha * bloom),
+                                    Color.Transparent
+                                ),
+                                center = center,
+                                radius = radius
+                            ),
+                            center = center,
+                            radius = radius
+                        )
+                    }
+                }
+            }
+            .border(BorderStroke(tileSpec.borderWidth, borderBrush), tileShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = onClickLabel,
+                onClick = onClick
+            )
+    ) {
+        val iconBadge: @Composable () -> Unit = {
+            PureQuickIconJewel(
+                accentColor = accentColor,
+                spec = tileSpec
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    customIcon?.invoke()
+                }
+            }
+        }
+
+        if (row) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                iconBadge()
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = typography.cardTitle,
+                        color = colors.primaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = subtitle,
+                        style = typography.caption,
+                        color = colors.secondaryText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = colors.secondaryText.copy(alpha = 0.72f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .padding(14.dp)
+            ) {
+                iconBadge()
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = title,
+                    style = typography.cardTitle,
+                    color = colors.primaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = typography.caption,
+                    color = colors.secondaryText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PureQuickIconJewel(
+    accentColor: Color,
+    spec: QuickActionTileGlassSpec,
+    content: @Composable () -> Unit
+) {
+    val mixFactor = if (spec.isDark) 0.45f else 0.20f
+    val topColor = lerp(Color.White, accentColor, mixFactor).copy(alpha = spec.iconPlateTopAlpha)
+    val bottomColor = accentColor.copy(alpha = spec.iconPlateBottomAlpha)
+    val ringBrush = remember(spec, accentColor) {
+        if (spec.iconPlateHighlightAlpha <= 0.005f) {
+            SolidColor(accentColor.copy(alpha = if (spec.isDark) 0.28f else 0.22f))
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = spec.iconPlateHighlightAlpha),
+                    accentColor.copy(alpha = if (spec.isDark) 0.28f else 0.22f)
+                )
+            )
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .drawWithCache {
+                val fillBrush = Brush.linearGradient(
+                    colors = listOf(topColor, bottomColor),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height)
+                )
+                val highlightBrush = if (spec.iconPlateHighlightAlpha > 0.005f) {
+                    Brush.linearGradient(
+                        colorStops = arrayOf(
+                            0f to Color.White.copy(alpha = spec.iconPlateHighlightAlpha * 0.45f),
+                            0.55f to Color.Transparent
+                        ),
+                        start = Offset.Zero,
+                        end = Offset(size.width * 0.7f, size.height * 0.7f)
+                    )
+                } else {
+                    null
+                }
+                onDrawBehind {
+                    drawRect(brush = fillBrush)
+                    if (highlightBrush != null) {
+                        drawRect(brush = highlightBrush)
+                    }
+                }
+            }
+            .border(0.75.dp, ringBrush, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun PureQuickCloseOrb(
+    onClick: () -> Unit
+) {
+    val colors = SpatialTheme.colors
+    val intensity = LocalGlassIntensity.current
+    val interaction = remember { MutableInteractionSource() }
+    val orbFill = when (intensity) {
+        GlassIntensity.SUBTLE -> if (colors.isDark) Color(0xFF282C38) else Color.White
+        GlassIntensity.BALANCED -> if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.72f)
+        GlassIntensity.RICH -> if (colors.isDark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.78f)
+    }
+    val orbBorder = if (intensity == GlassIntensity.SUBTLE) {
+        SolidColor(if (colors.isDark) Color(0x26FFFFFF) else Color(0x180F172A))
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = if (colors.isDark) 0.34f else 0.92f),
+                if (colors.isDark) Color(0x1CFFFFFF) else Color(0x140F172A)
+            )
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .semantics { contentDescription = "Close" }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Close",
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(orbFill)
+                .border(0.75.dp, orbBorder, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = null,
+                tint = colors.primaryText,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }

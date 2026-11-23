@@ -1870,7 +1870,7 @@ private fun SpatialRecentTransactionsPreviewSection(
                     val iconKey = CategoryIconMapper.inferIconKeyFromName(tx.category, tx.type)
                     val amountColor = when (tx.type) {
                         TransactionType.INCOME -> colors.income
-                        TransactionType.EXPENSE -> colors.primaryText
+                        TransactionType.EXPENSE -> colors.expense
                         TransactionType.TRANSFER -> colors.savings
                     }
                     val formattedAmount = if (privacy.isAnyMaskActive) {
@@ -1960,7 +1960,7 @@ private fun SpatialRecentTransactionsPreviewSection(
                 }
                 val amountColor = when (tx.type) {
                     TransactionType.INCOME -> colors.income
-                    TransactionType.EXPENSE -> colors.primaryText
+                    TransactionType.EXPENSE -> colors.expense
                     TransactionType.TRANSFER -> colors.savings
                 }
                 val formattedAmount = if (privacy.isAnyMaskActive) {

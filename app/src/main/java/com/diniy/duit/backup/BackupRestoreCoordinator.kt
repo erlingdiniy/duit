@@ -56,9 +56,10 @@ class BackupRestoreCoordinator(
                 val totalBytes = ledger.receipts.sumOf { storage.storedFileSize(it.fileRelativePath) }
                 if (totalBytes > ReceiptFileStorage.MAX_BACKUP_RECEIPT_BYTES) {
                     throw BackupFormatException(
-                        "Receipt attachments are too large to back up " +
-                            "(${totalBytes / MB} MB, max ${ReceiptFileStorage.MAX_BACKUP_RECEIPT_BYTES / MB} MB). " +
-                            "Remove some receipt files and try again."
+                        "Backup not created: receipt files total ${BackupCryptoEngine.ceilMb(totalBytes)} MB, " +
+                            "but a backup can hold up to " +
+                            "${BackupCryptoEngine.ceilMb(ReceiptFileStorage.MAX_BACKUP_RECEIPT_BYTES)} MB of receipts. " +
+                            "Remove or replace large receipt files in Receipt Vault, then try again. Nothing was changed."
                     )
                 }
                 ledger.receipts.forEach { r ->
@@ -87,17 +88,27 @@ class BackupRestoreCoordinator(
                 createdAtEpochMs = nowMs,
                 receiptFiles = receiptFiles
             )
-            BackupCryptoEngine.encrypt(
+            val encrypted = BackupCryptoEngine.encrypt(
                 plaintextJson = payloadJson,
                 password = passwordCopy,
                 createdAtEpochMs = nowMs
             )
+            // Never hand out a backup this app would refuse to restore.
+            if (encrypted.size.toLong() > BackupCryptoEngine.MAX_BACKUP_FILE_BYTES) {
+                throw BackupFormatException(
+                    "Backup not created: it would be ${BackupCryptoEngine.ceilMb(encrypted.size.toLong())} MB, " +
+                        "over the ${BackupCryptoEngine.ceilMb(BackupCryptoEngine.MAX_BACKUP_FILE_BYTES)} MB limit. " +
+                        "Remove some receipt files, then try again. Nothing was changed."
+                )
+            }
+            encrypted
         } finally {
             passwordCopy.fill('\u0000')
         }
     }
 
     suspend fun inspectBackupFile(rawBytes: ByteArray): BackupEnvelopeHeader = withContext(ioDispatcher) {
+        BackupCryptoEngine.requireBackupSizeWithinLimit(rawBytes.size.toLong())
         BackupCryptoEngine.inspectEnvelope(rawBytes)
     }
 
@@ -107,6 +118,7 @@ class BackupRestoreCoordinator(
     ): DecryptedBackupBundle = withContext(ioDispatcher) {
         val passwordCopy = password.copyOf()
         try {
+            BackupCryptoEngine.requireBackupSizeWithinLimit(rawBytes.size.toLong())
             val header = BackupCryptoEngine.inspectEnvelope(rawBytes)
             val plaintext = BackupCryptoEngine.decrypt(rawBytes, passwordCopy)
             BackupSerializer.decodePayload(header, plaintext)
@@ -190,4 +202,3 @@ class BackupRestoreCoordinator(
     }
 }
 
-private const val MB = 1024L * 1024L

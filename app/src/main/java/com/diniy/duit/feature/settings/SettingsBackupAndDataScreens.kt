@@ -638,8 +638,15 @@ private suspend fun writeBytesToUri(context: Context, uri: Uri, bytes: ByteArray
 }
 
 private suspend fun readBytesFromUri(context: Context, uri: Uri): ByteArray = withContext(Dispatchers.IO) {
+    // Declared size may be missing or wrong; readBoundedBackup enforces the limit while reading too.
+    val declaredSize = runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+            val idx = c.getColumnIndex(OpenableColumns.SIZE)
+            if (c.moveToFirst() && idx >= 0 && !c.isNull(idx)) c.getLong(idx) else null
+        }
+    }.getOrNull()
     context.contentResolver.openInputStream(uri)?.use { input ->
-        input.readBytes()
+        BackupCryptoEngine.readBoundedBackup(input, declaredSize)
     } ?: error("Unable to read selected file.")
 }
 

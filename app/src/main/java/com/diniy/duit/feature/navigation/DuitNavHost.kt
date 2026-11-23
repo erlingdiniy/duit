@@ -704,6 +704,19 @@ fun DuitAppShell(
         detailDeleteError = null
         inspectedTransactionId = tx.id
     }
+    val visualTheme = com.diniy.duit.core.ui.theme.LocalVisualTheme.current
+    val quickAddCommissionCallback: (() -> Unit)? = if (homeState.appSettings.commissionFeatureEnabled) {
+        {
+            requestCommissionSection = true
+            navigateToRoute(DuitRoute.PLANNING)
+        }
+    } else {
+        null
+    }
+    val quickAddCategoriesCallback: () -> Unit = {
+        categoryInitialType = TransactionType.EXPENSE
+        showCategorySheet = true
+    }
 
     PrismaticBackground(
         modifier = modifier.semantics { testTagsAsResourceId = true }
@@ -711,7 +724,6 @@ fun DuitAppShell(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val useNavigationRail = maxWidth >= 600.dp
             val layoutDirection = LocalLayoutDirection.current
-            val visualTheme = com.diniy.duit.core.ui.theme.LocalVisualTheme.current
             val enableLiquidChrome = !useNavigationRail &&
                 visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS
 
@@ -1069,26 +1081,25 @@ fun DuitAppShell(
                     }
                 }
             }
+            if (visualTheme == com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS) {
+                com.diniy.duit.core.ui.components.PureQuickActionSheetOverlay(
+                    visible = showQuickAddSheet,
+                    onDismiss = { showQuickAddSheet = false },
+                    onSelectTransactionType = openNewTransaction,
+                    onOpenCommissionTools = quickAddCommissionCallback,
+                    onOpenCategories = quickAddCategoriesCallback
+                )
+            }
             }
         }
     }
 
-    if (showQuickAddSheet) {
+    if (showQuickAddSheet && visualTheme != com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS) {
         com.diniy.duit.core.ui.components.SpatialQuickAddSheet(
             onDismiss = { showQuickAddSheet = false },
             onSelectTransactionType = openNewTransaction,
-            onOpenCommissionTools = if (homeState.appSettings.commissionFeatureEnabled) {
-                {
-                    requestCommissionSection = true
-                    navigateToRoute(DuitRoute.PLANNING)
-                }
-            } else {
-                null
-            },
-            onOpenCategories = {
-                categoryInitialType = TransactionType.EXPENSE
-                showCategorySheet = true
-            }
+            onOpenCommissionTools = quickAddCommissionCallback,
+            onOpenCategories = quickAddCategoriesCallback
         )
     }
 

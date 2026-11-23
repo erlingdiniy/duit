@@ -305,12 +305,10 @@ fun FinancialOverviewHeroCard(
                     modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    InsightMetric(label = "Savings rate", modifier = Modifier.weight(1f)) {
                         CandyProgressRing(fraction = savingsFraction, tone = CandyTone.Sunny, size = 44.dp, stroke = 5.dp) {
                             Text(if (masked) "••" else overview.savingsRateDisplay, style = type.caption.copy(fontSize = 11.sp), color = colors.primaryText, maxLines = 1)
                         }
-                        Spacer(Modifier.height(6.dp))
-                        Text("Savings rate", style = type.caption, color = colors.secondaryText, maxLines = 1)
                     }
                     InsightMiniStat(
                         label = "Avg / day",
@@ -458,12 +456,10 @@ fun FinancialOverviewHeroCard(
                 .height(IntrinsicSize.Max),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            InsightMetric(label = "Savings rate", modifier = Modifier.weight(1f)) {
                 CandyProgressRing(fraction = savingsFraction, tone = CandyTone.Sunny, size = 46.dp, stroke = 6.dp) {
                     Text(if (masked) "••" else overview.savingsRateDisplay, style = type.caption.copy(fontSize = 12.sp), color = colors.primaryText, maxLines = 1)
                 }
-                Spacer(Modifier.height(6.dp))
-                Text("Savings rate", style = type.caption, color = colors.secondaryText, maxLines = 1)
             }
             InsightMiniStat(
                 label = "Avg / day",
@@ -546,10 +542,36 @@ private fun MetricTile(
 @Composable
 private fun InsightMiniStat(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
     val type = SpatialTheme.typography
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        CandyMoneyText(value, type.transactionAmount.copy(fontSize = 16.sp), color, minorScale = 0.7f)
-        Spacer(Modifier.height(4.dp))
-        Text(label, style = type.caption, color = SpatialTheme.colors.secondaryText, maxLines = 1)
+    // Long amounts step down in size instead of being ellipsized in a narrow column.
+    val fontSize = when {
+        value.length > 14 -> 12.sp
+        value.length > 11 -> 14.sp
+        else -> 16.sp
+    }
+    InsightMetric(label = label, modifier = modifier) {
+        CandyMoneyText(
+            value,
+            type.transactionAmount.copy(fontSize = fontSize),
+            color,
+            modifier = Modifier.padding(horizontal = 4.dp),
+            minorScale = 0.7f
+        )
+    }
+}
+
+/** One of three equal-width metrics: fixed-height value slot so every label sits on the same line. */
+@Composable
+private fun InsightMetric(label: String, modifier: Modifier = Modifier, value: @Composable () -> Unit) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) { value() }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            label,
+            style = SpatialTheme.typography.caption,
+            color = SpatialTheme.colors.secondaryText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -934,20 +956,14 @@ fun SpendingBreakdownDonutCard(
                     drawCircle(bubble, radius = radius - stroke / 2f - 6.dp.toPx())
                     drawArc(track, 0f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
 
-                    val gapDeg = if (categories.size > 1) 4f else 0f
-                    val capDeg = Math.toDegrees((stroke / 2f / radius).toDouble()).toFloat()
+                    // Continuous donut: butt caps, no gaps. Each slice except the last overlaps the next
+                    // by 0.6° so anti-aliased seams don't show the track through; proportions are unchanged.
                     var start = -90f
-                    categories.forEach { item ->
+                    categories.forEachIndexed { index, item ->
                         val raw = (item.amountSen.toFloat() / totalExpenseSen.toFloat()) * 360f * sweepFactor
                         val color = palette[item.colorSlot % palette.size]
-                        if (categories.size == 1) {
-                            drawArc(color, start, raw, false, topLeft, arcSize, style = Stroke(stroke))
-                        } else {
-                            // Round caps extend past the arc; trim them so gaps stay visible.
-                            // Tiny slices collapse to a round dot so they stay identifiable.
-                            val sweep = (raw - gapDeg - 2f * capDeg).coerceAtLeast(0.01f)
-                            drawArc(color, start + gapDeg / 2f + capDeg, sweep, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-                        }
+                        val seam = if (index < categories.lastIndex && raw > 0f) 0.6f else 0f
+                        drawArc(color, start, raw + seam, false, topLeft, arcSize, style = Stroke(stroke))
                         start += raw
                     }
                 }

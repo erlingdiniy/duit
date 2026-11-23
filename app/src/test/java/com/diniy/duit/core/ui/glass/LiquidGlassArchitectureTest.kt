@@ -352,6 +352,94 @@ class LiquidGlassArchitectureTest {
         assertEquals(false, empty.isVisible)
     }
 
+    @Test
+    fun quickActionSheetAndTilePresets_scaleLowMidHighWithoutDarkeningLightModeAndMeetWcagAa() {
+        val palettes = listOf(LiquidGlassLightSpatialColors, LiquidGlassDarkSpatialColors)
+        palettes.forEach { palette ->
+            val lowSheet = LiquidGlassPresets.quickActionSheet(palette, GlassIntensity.SUBTLE)
+            val midSheet = LiquidGlassPresets.quickActionSheet(palette, GlassIntensity.BALANCED)
+            val highSheet = LiquidGlassPresets.quickActionSheet(palette, GlassIntensity.RICH)
+
+            assertEquals(1.0f, lowSheet.tintAlpha, 0.001f)
+            assertEquals(0.dp, lowSheet.blurRadius)
+            assertEquals(0.dp, lowSheet.bezel)
+            assertEquals(0f, lowSheet.rimAlpha, 0.001f)
+            assertEquals(0f, lowSheet.dispersion, 0.001f)
+
+            assertTrue(midSheet.blurRadius > 0.dp)
+            assertTrue(midSheet.bezel > 0.dp)
+            assertTrue(midSheet.rimAlpha > 0f)
+            assertEquals(0f, midSheet.dispersion, 0.001f)
+
+            assertTrue(highSheet.bezel > midSheet.bezel)
+            assertTrue(highSheet.thickness > midSheet.thickness)
+            assertTrue(highSheet.ior > midSheet.ior)
+            assertTrue(highSheet.rimAlpha > midSheet.rimAlpha)
+            assertEquals(0f, highSheet.dispersion, 0.001f)
+
+            val lowTile = LiquidGlassPresets.quickActionTileSpec(palette, GlassIntensity.SUBTLE)
+            val midTile = LiquidGlassPresets.quickActionTileSpec(palette, GlassIntensity.BALANCED)
+            val highTile = LiquidGlassPresets.quickActionTileSpec(palette, GlassIntensity.RICH)
+
+            assertEquals(0f, lowTile.topSpecularAlpha, 0.001f)
+            assertEquals(0f, lowTile.innerBevelHighlightAlpha, 0.001f)
+            assertTrue(midTile.topSpecularAlpha > 0f)
+            assertTrue(midTile.innerBevelHighlightAlpha > 0f)
+            assertEquals(0.dp, midTile.shadowElevation)
+
+            assertTrue(highTile.topSpecularAlpha > midTile.topSpecularAlpha)
+            assertTrue(highTile.innerBevelHighlightAlpha > midTile.innerBevelHighlightAlpha)
+            assertTrue(highTile.accentWashAlpha > midTile.accentWashAlpha)
+            assertEquals(0.dp, highTile.shadowElevation)
+
+            val iconInks = listOf(
+                palette.expense,
+                palette.income,
+                if (palette.isDark) palette.skyBlue else Color(0xFF0369A1),
+                palette.primaryAction,
+                if (palette.isDark) palette.aqua else Color(0xFF0F766E)
+            )
+
+            listOf(GlassIntensity.SUBTLE, GlassIntensity.BALANCED, GlassIntensity.RICH).forEach { level ->
+                val sheet = LiquidGlassPresets.quickActionSheet(palette, level)
+                val tile = LiquidGlassPresets.quickActionTileSpec(palette, level)
+                val sheetBg = sheet.tintColor.copy(alpha = sheet.tintAlpha)
+                    .compositeOver(palette.appBackground)
+                val tileBg = tile.midFill.compositeOver(sheetBg)
+
+                if (!palette.isDark) {
+                    assertTrue(
+                        "Light Quick Action sheet must remain bright/luminous ($level)",
+                        sheetBg.luminance() >= 0.88f
+                    )
+                    assertTrue(
+                        "Light Quick Action tile must remain bright/luminous ($level)",
+                        tileBg.luminance() >= 0.90f
+                    )
+                }
+
+                assertTrue(
+                    "Sheet primaryText contrast >= 4.5 ($level, dark=${palette.isDark})",
+                    contrastRatio(palette.primaryText, sheetBg) >= 4.5
+                )
+                assertTrue(
+                    "Tile primaryText contrast >= 4.5 ($level, dark=${palette.isDark})",
+                    contrastRatio(palette.primaryText, tileBg) >= 4.5
+                )
+                assertTrue(
+                    "Tile secondaryText contrast >= 4.5 ($level, dark=${palette.isDark})",
+                    contrastRatio(palette.secondaryText, tileBg) >= 4.5
+                )
+                iconInks.forEachIndexed { idx, ink ->
+                    assertTrue(
+                        "Tile icon[$idx] contrast >= 4.5 ($level, dark=${palette.isDark})",
+                        contrastRatio(ink, tileBg) >= 4.5
+                    )
+                }
+            }
+        }
+    }
+
     private fun contrastRatio(fg: Color, bg: Color): Double {
         val l1 = maxOf(fg.luminance(), bg.luminance()).toDouble()
         val l2 = minOf(fg.luminance(), bg.luminance()).toDouble()

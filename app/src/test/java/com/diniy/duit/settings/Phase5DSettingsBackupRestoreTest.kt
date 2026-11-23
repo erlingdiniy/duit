@@ -1188,25 +1188,74 @@ class Phase5DSettingsBackupRestoreTest {
     }
 
     @Test
-    fun backup_receiptAttachmentsOverCap_failWithClearErrorBeforeReadingBytes(): Unit = runBlocking {
-        val root = File(context.cacheDir, "f2-cap-${System.nanoTime()}").apply { mkdirs() }
+    fun backup_receiptCapBoundary_exactLimitBacksUpAllReceiptsAndOneByteOverFailsClearly(): Unit = runBlocking {
+        val root = File(context.cacheDir, "r1-cap-${System.nanoTime()}").apply { mkdirs() }
         val storage = ReceiptFileStorage(root)
         insertBankWallet(8L)
-        val receipts = (1..5).map { i ->
-            val name = "receipt_big$i.pdf"
-            // Sparse files: length counts toward the cap without writing 50 MB.
-            java.io.RandomAccessFile(File(root, name), "rw").use { it.setLength(9L * 1024L * 1024L) }
-            ReceiptEntity(
-                id = i.toLong(), merchant = "Big $i", dateEpochDay = 1L, fileRelativePath = name,
-                createdAtEpochMs = 1L, updatedAtEpochMs = 1L
-            )
-        }
-        db.backupDao().insertReceipts(receipts)
+        val half = ReceiptFileStorage.MAX_BACKUP_RECEIPT_BYTES / 2
+        val names = listOf("receipt_a.pdf", "receipt_b.pdf")
+        // Sparse files: real lengths without writing the bytes to disk.
+        names.forEach { n -> java.io.RandomAccessFile(File(root, n), "rw").use { it.setLength(half) } }
+        db.backupDao().insertReceipts(
+            names.mapIndexed { i, n ->
+                ReceiptEntity(
+                    id = i + 1L, merchant = "R$i", dateEpochDay = 1L, fileRelativePath = n,
+                    createdAtEpochMs = 1L, updatedAtEpochMs = 1L
+                )
+            }
+        )
+        val coordinator = receiptCoordinator(storage)
 
-        val err = runCatching { receiptCoordinator(storage).createEncryptedBackup("Pw#12345".toCharArray()) }
-            .exceptionOrNull()
+        // Exactly at the limit: backup succeeds, stays restorable, and carries every receipt file.
+        val bytes = coordinator.createEncryptedBackup("Pw#12345".toCharArray())
+        assertTrue(bytes.size <= BackupCryptoEngine.MAX_BACKUP_FILE_BYTES)
+        val bundle = coordinator.decryptAndPreviewBackup(bytes, "Pw#12345".toCharArray())
+        assertEquals(names.toSet(), bundle.receiptFiles.keys)
+        assertEquals(half.toInt(), bundle.receiptFiles.getValue("receipt_a.pdf").size)
+
+        // One byte over: clear, actionable error; receipts on disk are untouched.
+        java.io.RandomAccessFile(File(root, "receipt_b.pdf"), "rw").use { it.setLength(half + 1) }
+        val err = runCatching { coordinator.createEncryptedBackup("Pw#12345".toCharArray()) }.exceptionOrNull()
         assertTrue(err is BackupFormatException)
-        assertTrue(err!!.message!!.contains("too large"))
+        assertTrue(err!!.message!!.contains("up to 12 MB of receipts"))
+        assertTrue(err.message!!.contains("Receipt Vault"))
+        assertEquals(half, File(root, "receipt_a.pdf").length())
+        assertEquals(half + 1, File(root, "receipt_b.pdf").length())
+        assertEquals(2, db.backupDao().exportFullSnapshot().receipts.size)
         root.deleteRecursively()
+    }
+
+    @Test
+    fun boundedBackupRead_enforcesLimitForKnownUnknownAndWrongDeclaredSizes() {
+        val max = 1_000L
+        fun read(size: Int, declared: Long?) =
+            BackupCryptoEngine.readBoundedBackup(java.io.ByteArrayInputStream(ByteArray(size)), declared, max)
+
+        assertEquals(1_000, read(1_000, 1_000L).size) // exact limit
+        assertEquals(1_000, read(1_000, null).size) // unknown size
+        assertEquals(500, read(500, 0L).size) // provider reports 0
+        assertEquals(500, read(500, -1L).size) // provider reports garbage
+        assertEquals(0, read(0, null).size)
+        assertTrue(runCatching { read(1_001, null) }.exceptionOrNull() is BackupFormatException)
+        // Declared size lies (too small): still stopped while reading.
+        assertTrue(runCatching { read(5_000, 10L) }.exceptionOrNull() is BackupFormatException)
+        // Declared oversized: rejected before any byte is read.
+        val neverRead = object : java.io.InputStream() {
+            override fun read(): Int = throw AssertionError("must not read")
+            override fun read(b: ByteArray, off: Int, len: Int): Int = throw AssertionError("must not read")
+        }
+        val early = runCatching { BackupCryptoEngine.readBoundedBackup(neverRead, 1_001L, max) }.exceptionOrNull()
+        assertTrue(early is BackupFormatException)
+        assertTrue(early!!.message!!.contains("Nothing was changed"))
+    }
+
+    @Test
+    fun restoreEntryPoints_rejectOversizedBackupBytesBeforeParsing(): Unit = runBlocking {
+        val coordinator = receiptCoordinator(ReceiptFileStorage(File(context.cacheDir, "r2-${System.nanoTime()}")))
+        val oversized = ByteArray((BackupCryptoEngine.MAX_BACKUP_FILE_BYTES + 1).toInt())
+        val e1 = runCatching { coordinator.inspectBackupFile(oversized) }.exceptionOrNull()
+        val e2 = runCatching { coordinator.decryptAndPreviewBackup(oversized, "Pw#12345".toCharArray()) }.exceptionOrNull()
+        assertTrue(e1 is BackupFormatException && e1.message!!.contains("33 MB"))
+        assertTrue(e2 is BackupFormatException)
     }
 }

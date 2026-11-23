@@ -6,10 +6,14 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,13 +56,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.diniy.duit.R
 import com.diniy.duit.core.ui.components.CandyBubbleCard
 import com.diniy.duit.core.ui.components.CandyMintIconButton
 import com.diniy.duit.core.ui.components.CandyTone
 import com.diniy.duit.core.ui.components.PrismaticBackground
 import com.diniy.duit.core.ui.components.PrismaticEmptyStateCard
-import com.diniy.duit.core.ui.components.SpatialGlassPill
 import com.diniy.duit.core.ui.components.prismaticTween
 import com.diniy.duit.core.ui.components.rememberDuitHaptic
 import com.diniy.duit.core.ui.components.rememberReducedMotionEnabled
@@ -148,29 +154,30 @@ fun CalendarScreen(
             }
 
             item(key = "month_bar") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CandyMintIconButton(icon = Icons.Rounded.ChevronLeft, contentDescription = "Previous month", onClick = tick(onPreviousMonth))
+                // Month title leads; prev/next sit together with Today so navigation reads as one control group.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     AnimatedContent(
                         targetState = uiState.month,
                         transitionSpec = { fadeIn(prismaticTween(reducedMotion, 180)) togetherWith fadeOut(prismaticTween(reducedMotion, 120)) },
                         label = "calendar_month",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).padding(start = 4.dp)
                     ) { month ->
-                        Text(month.format(MONTH_TITLE), style = type.sectionHeading, color = colors.primaryText, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Text(month.format(MONTH_TITLE), style = type.sectionHeading, color = colors.primaryText, maxLines = 1)
                     }
+                    CandyMintIconButton(icon = Icons.Rounded.ChevronLeft, contentDescription = "Previous month", onClick = tick(onPreviousMonth))
                     CandyMintIconButton(icon = Icons.Rounded.ChevronRight, contentDescription = "Next month", onClick = tick(onNextMonth))
-                    SpatialGlassPill(label = "Today", onClick = tick(onToday))
+                    CalendarChip(label = "Today", selected = false, dotColor = null, onClick = tick(onToday))
                 }
             }
 
             item(key = "filters") {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     CalendarLayer.entries.forEach { layer ->
                         val on = layer in visible
-                        SpatialGlassPill(
+                        CalendarChip(
                             label = layer.label,
                             selected = on,
-                            accentColor = layer.type?.dotColor() ?: colors.sunny,
+                            dotColor = layer.type?.dotColor() ?: colors.sunny,
                             onClick = tick { hidden = if (on) hidden + layer.name else hidden - layer.name }
                         )
                     }
@@ -243,16 +250,18 @@ private fun MonthGrid(uiState: CalendarUiState, visibleTypes: Set<CalendarEventT
     val today = LocalDate.now()
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(bottom = 2.dp)) {
             DayOfWeek.entries.forEach {
-                Text(it.getDisplayName(TextStyle.SHORT, Locale.ENGLISH), style = type.caption, color = colors.secondaryText,
-                    textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                Text(it.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).uppercase(Locale.ENGLISH),
+                    style = type.caption.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
+                    color = colors.secondaryText, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.weight(1f))
             }
         }
         cells.chunked(7).forEach { week ->
-            Row {
+            // Fixed 7 columns with equal square-ish cells, padded weeks keep the grid rectangular.
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 (week + List(7 - week.size) { null }).forEach { date ->
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Box(Modifier.weight(1f).aspectRatio(0.86f), contentAlignment = Alignment.Center) {
                         if (date != null) {
                             val epochDay = date.toEpochDay()
                             val types = uiState.calendar?.eventsByDay?.get(epochDay).orEmpty()
@@ -283,27 +292,32 @@ private fun DayCell(date: LocalDate, types: List<CalendarEventType>, isSelected:
         if (isToday) append(", today")
         if (types.isNotEmpty()) append(", ").append(types.size).append(if (types.size == 1) " kind of event" else " kinds of events")
     }
+    // Selected = solid accent; today = soft accent tint + accent number; other days stay quiet.
+    val todayTint = selectedFill.copy(alpha = if (colors.isDark) 0.22f else 0.13f)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
         modifier = Modifier
-            .heightIn(min = 48.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(fill)
-            .then(if (isToday && !isSelected) Modifier.border(1.5.dp, selectedFill, RoundedCornerShape(14.dp)) else Modifier)
+            .fillMaxSize()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isToday && !isSelected) todayTint else fill)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label; selected = isSelected }
-            .padding(vertical = 6.dp)
     ) {
         Text(
             date.dayOfMonth.toString(),
-            style = SpatialTheme.typography.supportingInfo.copy(fontWeight = if (isSelected || isToday) FontWeight.ExtraBold else FontWeight.SemiBold),
-            color = if (isSelected) selectedInk else colors.primaryText
+            style = SpatialTheme.typography.supportingInfo.copy(fontWeight = if (isSelected || isToday) FontWeight.ExtraBold else FontWeight.Medium),
+            color = when {
+                isSelected -> selectedInk
+                isToday -> selectedFill
+                else -> colors.primaryText
+            }
         )
         Spacer(Modifier.height(3.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.height(6.dp)) {
-            types.forEach { t ->
-                Box(Modifier.size(6.dp).clip(CircleShape).background(if (isSelected) selectedInk else t.dotColor()))
+        // Up to 3 event dots keep every cell the same visual weight; the label carries the full count.
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.height(5.dp)) {
+            types.take(3).forEach { t ->
+                Box(Modifier.size(5.dp).clip(CircleShape).background(if (isSelected) selectedInk else t.dotColor()))
             }
         }
     }
@@ -402,6 +416,50 @@ private fun EventRow(event: CalendarEvent, onClick: (() -> Unit)? = null) {
         }
         event.amountSen?.let {
             Text(PrivacyMask.formatAmount(it, privacy), style = type.transactionAmount, color = colors.primaryText)
+        }
+    }
+}
+
+/** Compact filter/action chip for the calendar: 32dp visual pill inside a 48dp accessible target. */
+@Composable
+private fun CalendarChip(label: String, selected: Boolean, dotColor: Color?, onClick: () -> Unit) {
+    val colors = SpatialTheme.colors
+    val accent = dotColor ?: colors.primaryText
+    val shape = RoundedCornerShape(50)
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .widthIn(min = 48.dp)
+            .semantics(mergeDescendants = true) { this.selected = selected }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick
+            )
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .heightIn(min = 32.dp)
+                .clip(shape)
+                .background(if (selected) accent.copy(alpha = if (colors.isDark) 0.24f else 0.14f) else colors.baseSurface)
+                .border(1.dp, if (selected) accent.copy(alpha = 0.55f) else colors.divider, shape)
+                .indication(interactionSource, LocalIndication.current)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            if (dotColor != null) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(if (selected) dotColor else dotColor.copy(alpha = 0.45f)))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                label,
+                style = SpatialTheme.typography.caption.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium),
+                color = if (selected) colors.primaryText else colors.secondaryText,
+                maxLines = 1
+            )
         }
     }
 }

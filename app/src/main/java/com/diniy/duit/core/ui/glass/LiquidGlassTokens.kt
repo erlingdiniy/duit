@@ -74,6 +74,32 @@ data class LiquidGlassSurfaceSpec(
     val isDark: Boolean = false
 )
 
+/**
+ * Optical token spec for sculpted convex Quick Action glass tiles and icon jewels across LOW/MID/HIGH.
+ */
+@Immutable
+data class QuickActionTileGlassSpec(
+    val topFill: Color,
+    val midFill: Color,
+    val bottomFill: Color,
+    val accentWashAlpha: Float,
+    val topSpecularAlpha: Float,
+    val innerBevelHighlightAlpha: Float,
+    val innerBevelBounceAlpha: Float,
+    val borderTopAlpha: Float,
+    val borderMidColor: Color,
+    val borderBottomAlpha: Float,
+    val borderWidth: Dp,
+    val iconPlateTopAlpha: Float,
+    val iconPlateBottomAlpha: Float,
+    val iconPlateHighlightAlpha: Float,
+    val shadowElevation: Dp,
+    val shadowColor: Color,
+    val pressScale: Float,
+    val touchBloomAlpha: Float,
+    val isDark: Boolean
+)
+
 object LiquidGlassCapabilities {
 
     /**
@@ -234,6 +260,234 @@ object LiquidGlassPresets {
                 shadowElevation = if (rich) 11.dp else 9.dp,
                 isDark = false
             )
+        }
+    }
+
+    /**
+     * In-window Pure Quick Action floating glass dock sampling the live screen backdrop:
+     * - LOW ([GlassIntensity.SUBTLE]): opaque crisp surface, zero blur/refraction/rim.
+     * - MID ([GlassIntensity.BALANCED]): luminous frosted glass with subtle bevel refraction.
+     * - HIGH ([GlassIntensity.RICH]): deeper convex Snell bevel, higher clarity, stronger specular rim.
+     */
+    fun quickActionSheet(
+        colors: SpatialColorTokens,
+        intensity: GlassIntensity = GlassIntensity.BALANCED
+    ): LiquidGlassSurfaceSpec {
+        val dark = colors.isDark
+        if (intensity == GlassIntensity.SUBTLE) {
+            return LiquidGlassSurfaceSpec(
+                kind = LiquidGlassKind.Surface,
+                cornerRadius = 32.dp,
+                bezel = 0.dp,
+                thickness = 0.dp,
+                blurRadius = 0.dp,
+                ior = 1.0f,
+                zoom = 1.0f,
+                dispersion = 0f,
+                saturation = 1.0f,
+                tintColor = if (dark) Color(0xFF161820) else Color(0xFFF1F4FA),
+                tintAlpha = 1.0f,
+                rimColor = Color.Transparent,
+                rimAlpha = 0f,
+                borderColor = if (dark) Color(0x26FFFFFF) else Color(0x180F172A),
+                shadowColor = if (dark) Color.Black.copy(alpha = 0.44f) else Color(0x180F172A),
+                shadowElevation = 10.dp,
+                isDark = dark
+            )
+        }
+        val rich = intensity == GlassIntensity.RICH
+        return LiquidGlassSurfaceSpec(
+            kind = LiquidGlassKind.Surface,
+            cornerRadius = 32.dp,
+            bezel = if (rich) (if (dark) 22.dp else 26.dp) else 15.dp,
+            thickness = if (rich) (if (dark) 34.dp else 40.dp) else 20.dp,
+            blurRadius = if (rich) (if (dark) 14.dp else 11.dp) else 16.dp,
+            ior = if (rich) (if (dark) 1.52f else 1.54f) else 1.40f,
+            zoom = 1.0f,
+            dispersion = 0f,
+            saturation = if (rich) (if (dark) 1.50f else 1.65f) else 1.28f,
+            tintColor = if (dark) {
+                if (rich) Color(0xFF151924) else Color(0xFF171B26)
+            } else {
+                if (rich) Color(0xFFF0F5FC) else Color(0xFFF3F7FD)
+            },
+            tintAlpha = if (dark) {
+                if (rich) 0.50f else 0.68f
+            } else {
+                if (rich) 0.36f else 0.66f
+            },
+            rimColor = Color.White,
+            rimAlpha = if (dark) {
+                if (rich) 0.60f else 0.40f
+            } else {
+                if (rich) 1.0f else 0.76f
+            },
+            borderColor = if (dark) {
+                if (rich) Color(0x2AFFFFFF) else Color(0x22FFFFFF)
+            } else {
+                if (rich) Color(0x1C0F172A) else Color(0x160F172A)
+            },
+            shadowColor = if (dark) {
+                Color.Black.copy(alpha = if (rich) 0.56f else 0.48f)
+            } else {
+                if (rich) Color(0x1E0F172A) else Color(0x180F172A)
+            },
+            shadowElevation = if (dark) {
+                if (rich) 22.dp else 16.dp
+            } else {
+                if (rich) 20.dp else 14.dp
+            },
+            isDark = dark
+        )
+    }
+
+    /**
+     * Sculpted convex optical glass tile & icon jewel tokens for the Pure Quick Action sheet.
+     * Uses zero shadowElevation on translucent MID/HIGH tiles to prevent dark mud bleed-through.
+     */
+    fun quickActionTileSpec(
+        colors: SpatialColorTokens,
+        intensity: GlassIntensity = GlassIntensity.BALANCED
+    ): QuickActionTileGlassSpec {
+        val dark = colors.isDark
+        return when (intensity) {
+            GlassIntensity.SUBTLE -> if (dark) {
+                QuickActionTileGlassSpec(
+                    topFill = Color(0xFF232631),
+                    midFill = Color(0xFF232631),
+                    bottomFill = Color(0xFF232631),
+                    accentWashAlpha = 0.07f,
+                    topSpecularAlpha = 0f,
+                    innerBevelHighlightAlpha = 0f,
+                    innerBevelBounceAlpha = 0f,
+                    borderTopAlpha = 0f,
+                    borderMidColor = Color(0x22FFFFFF),
+                    borderBottomAlpha = 0f,
+                    borderWidth = 1.dp,
+                    iconPlateTopAlpha = 0.18f,
+                    iconPlateBottomAlpha = 0.18f,
+                    iconPlateHighlightAlpha = 0f,
+                    shadowElevation = 0.dp,
+                    shadowColor = Color.Transparent,
+                    pressScale = 0.985f,
+                    touchBloomAlpha = 0f,
+                    isDark = true
+                )
+            } else {
+                QuickActionTileGlassSpec(
+                    topFill = Color.White,
+                    midFill = Color.White,
+                    bottomFill = Color.White,
+                    accentWashAlpha = 0.045f,
+                    topSpecularAlpha = 0f,
+                    innerBevelHighlightAlpha = 0f,
+                    innerBevelBounceAlpha = 0f,
+                    borderTopAlpha = 0f,
+                    borderMidColor = Color(0x160F172A),
+                    borderBottomAlpha = 0f,
+                    borderWidth = 1.dp,
+                    iconPlateTopAlpha = 0.12f,
+                    iconPlateBottomAlpha = 0.12f,
+                    iconPlateHighlightAlpha = 0f,
+                    shadowElevation = 1.5.dp,
+                    shadowColor = Color(0x100F172A),
+                    pressScale = 0.985f,
+                    touchBloomAlpha = 0f,
+                    isDark = false
+                )
+            }
+
+            GlassIntensity.BALANCED -> if (dark) {
+                QuickActionTileGlassSpec(
+                    topFill = Color(0xFF2A3040).copy(alpha = 0.70f),
+                    midFill = Color(0xFF1E222F).copy(alpha = 0.56f),
+                    bottomFill = Color(0xFF252A38).copy(alpha = 0.64f),
+                    accentWashAlpha = 0.11f,
+                    topSpecularAlpha = 0.12f,
+                    innerBevelHighlightAlpha = 0.26f,
+                    innerBevelBounceAlpha = 0.12f,
+                    borderTopAlpha = 0.26f,
+                    borderMidColor = Color(0x16FFFFFF),
+                    borderBottomAlpha = 0.14f,
+                    borderWidth = 0.85.dp,
+                    iconPlateTopAlpha = 0.20f,
+                    iconPlateBottomAlpha = 0.30f,
+                    iconPlateHighlightAlpha = 0.24f,
+                    shadowElevation = 0.dp,
+                    shadowColor = Color.Transparent,
+                    pressScale = 0.975f,
+                    touchBloomAlpha = 0.18f,
+                    isDark = true
+                )
+            } else {
+                QuickActionTileGlassSpec(
+                    topFill = Color.White.copy(alpha = 0.86f),
+                    midFill = Color(0xFFF8FBFF).copy(alpha = 0.72f),
+                    bottomFill = Color.White.copy(alpha = 0.80f),
+                    accentWashAlpha = 0.075f,
+                    topSpecularAlpha = 0.42f,
+                    innerBevelHighlightAlpha = 0.76f,
+                    innerBevelBounceAlpha = 0.28f,
+                    borderTopAlpha = 0.92f,
+                    borderMidColor = Color(0x180F172A),
+                    borderBottomAlpha = 0.56f,
+                    borderWidth = 0.9.dp,
+                    iconPlateTopAlpha = 0.12f,
+                    iconPlateBottomAlpha = 0.17f,
+                    iconPlateHighlightAlpha = 0.65f,
+                    shadowElevation = 0.dp,
+                    shadowColor = Color.Transparent,
+                    pressScale = 0.975f,
+                    touchBloomAlpha = 0.22f,
+                    isDark = false
+                )
+            }
+
+            GlassIntensity.RICH -> if (dark) {
+                QuickActionTileGlassSpec(
+                    topFill = Color(0xFF31384C).copy(alpha = 0.58f),
+                    midFill = Color(0xFF1F2433).copy(alpha = 0.42f),
+                    bottomFill = Color(0xFF293042).copy(alpha = 0.50f),
+                    accentWashAlpha = 0.15f,
+                    topSpecularAlpha = 0.20f,
+                    innerBevelHighlightAlpha = 0.42f,
+                    innerBevelBounceAlpha = 0.20f,
+                    borderTopAlpha = 0.38f,
+                    borderMidColor = Color(0x1CFFFFFF),
+                    borderBottomAlpha = 0.20f,
+                    borderWidth = 0.95.dp,
+                    iconPlateTopAlpha = 0.24f,
+                    iconPlateBottomAlpha = 0.34f,
+                    iconPlateHighlightAlpha = 0.38f,
+                    shadowElevation = 0.dp,
+                    shadowColor = Color.Transparent,
+                    pressScale = 0.968f,
+                    touchBloomAlpha = 0.28f,
+                    isDark = true
+                )
+            } else {
+                QuickActionTileGlassSpec(
+                    topFill = Color.White.copy(alpha = 0.82f),
+                    midFill = Color(0xFFF7FAFF).copy(alpha = 0.56f),
+                    bottomFill = Color.White.copy(alpha = 0.72f),
+                    accentWashAlpha = 0.105f,
+                    topSpecularAlpha = 0.78f,
+                    innerBevelHighlightAlpha = 1.0f,
+                    innerBevelBounceAlpha = 0.52f,
+                    borderTopAlpha = 1.0f,
+                    borderMidColor = Color(0x220F172A),
+                    borderBottomAlpha = 0.70f,
+                    borderWidth = 1.dp,
+                    iconPlateTopAlpha = 0.12f,
+                    iconPlateBottomAlpha = 0.18f,
+                    iconPlateHighlightAlpha = 0.90f,
+                    shadowElevation = 0.dp,
+                    shadowColor = Color.Transparent,
+                    pressScale = 0.968f,
+                    touchBloomAlpha = 0.34f,
+                    isDark = false
+                )
+            }
         }
     }
 

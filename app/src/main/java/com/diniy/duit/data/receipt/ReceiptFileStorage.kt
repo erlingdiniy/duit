@@ -313,8 +313,8 @@ class ReceiptFileStorage(private val rootDir: File) {
         const val MIME_PDF = "application/pdf"
         const val MIME_JPEG = "image/jpeg"
         const val MAX_FILE_BYTES = 10L * 1024L * 1024L
-        /** Total raw receipt bytes allowed in one in-memory JSON backup (base64 + cipher copies ~4x). */
-        const val MAX_BACKUP_RECEIPT_BYTES = 40L * 1024L * 1024L
+        /** Total raw receipt bytes allowed in one in-memory JSON backup; encrypt copies the payload several times. */
+        const val MAX_BACKUP_RECEIPT_BYTES = 12L * 1024L * 1024L
         private const val STAGING_SUFFIX = ".restore-staging"
         private const val OLD_SUFFIX = ".restore-old"
         private const val MAX_RAW_IMAGE_BYTES = 20L * 1024L * 1024L

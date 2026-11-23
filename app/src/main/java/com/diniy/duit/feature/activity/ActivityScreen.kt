@@ -485,7 +485,7 @@ private fun SpatialCompactTransactionRow(
 
     val amountColor = when (transaction.type) {
         TransactionType.INCOME -> colors.income
-        TransactionType.EXPENSE -> colors.primaryText
+        TransactionType.EXPENSE -> colors.expense
         TransactionType.TRANSFER -> colors.savings
     }
 

@@ -1,6 +1,8 @@
 package com.diniy.duit.backup
 
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.security.GeneralSecurityException
 import java.security.MessageDigest
@@ -48,12 +50,57 @@ object BackupCryptoEngine {
     const val DEFAULT_ITERATIONS = 150_000
     const val MIN_PASSWORD_LENGTH = 6
 
+    /**
+     * Largest backup file read into memory. 12 MB of receipts is ~21 MB after base64 in the envelope,
+     * leaving room for a large ledger; export refuses anything bigger so every new backup stays restorable.
+     */
+    const val MAX_BACKUP_FILE_BYTES = 32L * 1024L * 1024L
+
     private const val SALT_BYTES = 16
     private const val IV_BYTES = 12
     private const val KEY_BITS = 256
     private const val GCM_TAG_BITS = 128
     private const val MAX_ALLOWED_ITERATIONS = 1_000_000
     private const val MIN_ALLOWED_ITERATIONS = 10_000
+
+    /** Rejects a backup that is too big to decrypt safely in memory. */
+    fun requireBackupSizeWithinLimit(sizeBytes: Long, maxBytes: Long = MAX_BACKUP_FILE_BYTES) {
+        if (sizeBytes > maxBytes) {
+            throw BackupFormatException(
+                "This backup file is ${ceilMb(sizeBytes)} MB, larger than the ${ceilMb(maxBytes)} MB this app " +
+                    "can restore safely. Nothing was changed."
+            )
+        }
+    }
+
+    /**
+     * Reads a backup stream with a hard byte limit. [declaredSizeBytes] (may be null or wrong)
+     * only allows an early reject; the limit is always enforced while reading.
+     */
+    fun readBoundedBackup(
+        input: InputStream,
+        declaredSizeBytes: Long?,
+        maxBytes: Long = MAX_BACKUP_FILE_BYTES
+    ): ByteArray {
+        if (declaredSizeBytes != null && declaredSizeBytes > 0L) requireBackupSizeWithinLimit(declaredSizeBytes, maxBytes)
+        val initial = declaredSizeBytes?.takeIf { it in 1L..maxBytes }?.toInt() ?: READ_BUFFER_BYTES
+        val out = ByteArrayOutputStream(initial)
+        val buf = ByteArray(READ_BUFFER_BYTES)
+        var total = 0L
+        while (true) {
+            val read = input.read(buf)
+            if (read < 0) break
+            total += read
+            requireBackupSizeWithinLimit(total, maxBytes)
+            out.write(buf, 0, read)
+        }
+        return out.toByteArray()
+    }
+
+    fun ceilMb(bytes: Long): Long = (bytes + MB - 1L) / MB
+
+    private const val MB = 1024L * 1024L
+    private const val READ_BUFFER_BYTES = 64 * 1024
 
     fun encrypt(
         plaintextJson: String,
