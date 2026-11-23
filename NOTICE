@@ -1,0 +1,49 @@
+duit.
+Copyright 2026 erlingdiniy
+
+This product includes software developed for the duit. Android application
+(https://github.com/erlingdiniy/duit), licensed under the Apache License,
+Version 2.0 (see LICENSE).
+
+================================================================================
+Third-Party Software and Assets Included in This Repository / Binary Releases
+================================================================================
+
+1. Fredoka (Font)
+   Copyright 2016 The Fredoka Project Authors (https://github.com/hafontia/Fredoka-One)
+   Licensed under the SIL Open Font License, Version 1.1.
+   Full license text: app/src/main/assets/licenses/Fredoka-OFL.txt
+   Available at: http://scripts.sil.org/OFL
+
+2. Nunito (Font)
+   Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)
+   Licensed under the SIL Open Font License, Version 1.1.
+   Full license text: app/src/main/assets/licenses/Nunito-OFL.txt
+   Available at: http://scripts.sil.org/OFL
+
+3. AndroidX & Jetpack Compose
+   Copyright The Android Open Source Project
+   Includes Core KTX, Lifecycle, Activity Compose, Fragment KTX, Biometric,
+   WorkManager, Glance AppWidget, Compose UI, Material 3, Material Icons,
+   Navigation Compose, Room, and DataStore Preferences.
+   Licensed under the Apache License, Version 2.0.
+
+4. Kotlin & kotlinx.coroutines
+   Copyright JetBrains s.r.o. and Kotlin Programming Language contributors
+   Licensed under the Apache License, Version 2.0.
+
+5. Firebase Android SDK (firebase-bom / firebase-messaging — public beta build only)
+   Copyright Google LLC
+   Licensed under the Apache License, Version 2.0.
+
+6. Gradle Wrapper (gradle/wrapper/*, gradlew, gradlew.bat)
+   Copyright Gradle Inc.
+   Licensed under the Apache License, Version 2.0.
+
+--------------------------------------------------------------------------------
+Test-Only Dependencies (Used in Automated Unit Tests; Not Shipped in APK)
+--------------------------------------------------------------------------------
+
+- JUnit 4 (Eclipse Public License 1.0)
+- Robolectric (MIT License)
+- AndroidX Test & Espresso (Apache License, Version 2.0)

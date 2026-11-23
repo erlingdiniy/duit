@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private Feedback (In-App Help & Feedback)
+    url: https://github.com/erlingdiniy/duit/blob/main/docs/PRIVACY.md
+    about: Never post personal financial records, PINs, or backups in public GitHub issues. Use Settings -> Help & Feedback inside the app for private feedback.

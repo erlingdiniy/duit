@@ -428,7 +428,7 @@ private fun SettingsHubOverviewScreen(
                                 icon = Icons.Rounded.LocalCafe,
                                 accent = colors.sunny,
                                 title = "Support duit. ☕",
-                                subtitle = "Buy the developer a coffee. 100% optional",
+                                subtitle = "Donations temporarily unavailable · 100% optional",
                                 onClick = { showSupport = true }
                             )
                         }
@@ -521,7 +521,7 @@ private fun SettingsHubOverviewScreen(
                                 icon = Icons.Rounded.LocalCafe,
                                 accent = colors.sunny,
                                 title = "Support duit. ☕",
-                                subtitle = "Buy the developer a coffee. 100% optional",
+                                subtitle = "Donations temporarily unavailable · 100% optional",
                                 onClick = { showSupport = true }
                             )
                         }
@@ -1558,8 +1558,8 @@ internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRout
         item(key = "support") {
             AboutInfoCard(
                 Icons.Rounded.LocalCafe, colors.sunny, "Supporting duit.",
-                "Support duit. only shows the developer's DuitNow QR code. Any payment happens in your own banking or eWallet app; " +
-                    "duit. never sees, processes or records it, and doesn't know whether you paid. Saving the QR adds an image to Pictures/duit."
+                "Donations in Support duit. are temporarily unavailable. No payment code or payment details are included, " +
+                    "and duit. stays completely free with zero payment tracking."
             )
         }
         item(key = "delete") {

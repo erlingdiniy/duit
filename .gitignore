@@ -58,3 +58,13 @@ google-services.json
 
 # Keep the Gradle wrapper and database schema source
 !gradle/wrapper/gradle-wrapper.jar
+
+# Local AI agent skills and signing helpers
+.agents/
+Sign-duit-Beta.cmd
+*.apk.idsig
+
+# Maintainer-only assets and internal developer notes (excluded from public repo)
+app/src/beta/res/raw/support_duitnow_qr.png
+CLAUDE.md
+HANDOVER.md
