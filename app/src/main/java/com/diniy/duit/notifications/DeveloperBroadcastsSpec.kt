@@ -52,6 +52,9 @@ object DeveloperBroadcastSpec {
     fun defaultTopicForVersion(versionName: String): String =
         if (versionName.contains("-beta.", ignoreCase = true)) TOPIC_BETA else TOPIC_PUBLIC
 
+    fun inactiveTopicForVersion(versionName: String): String =
+        if (versionName.contains("-beta.", ignoreCase = true)) TOPIC_PUBLIC else TOPIC_BETA
+
     fun isValidTopic(topic: String): Boolean = VALID_TOPIC_REGEX.matches(topic)
 
     /**

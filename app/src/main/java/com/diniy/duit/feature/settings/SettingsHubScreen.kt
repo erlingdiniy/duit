@@ -1142,9 +1142,9 @@ private fun AboutPrivacyPage(onBack: () -> Unit) {
             AboutInfoCard(
                 Icons.Rounded.Storage, colors.aqua, "Stays on your device",
                 if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
-                    "Your wallets, transactions and plans are saved only on this phone. duit. goes online only to check for app updates and to send feedback you choose to submit. Your financial records are never sent."
+                    "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. goes online only to check for app updates, receive developer broadcast announcements, and send feedback you choose to submit. Analytics remain disabled and your financial records are never sent."
                 } else {
-                    "Your wallets, transactions and plans are saved only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
+                    "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
                 }
             )
         }
@@ -1169,10 +1169,10 @@ private fun AboutPrivacyPage(onBack: () -> Unit) {
     }
 }
 
-private data class LicenseNotice(val name: String, val copyright: String, val license: String)
+internal data class LicenseNotice(val name: String, val copyright: String, val license: String)
 
 // Only components shipped in the app. Font notices are copied from the font files' own metadata.
-private val LicenseNotices = listOf(
+private val BaseLicenseNotices = listOf(
     LicenseNotice(
         "Fredoka (font)",
         "Copyright 2016 The Fredoka Project Authors (https://github.com/hafontia/Fredoka-One)",
@@ -1195,8 +1195,21 @@ private val LicenseNotices = listOf(
     )
 )
 
+internal fun activeLicenseNotices(
+    publicEdition: Boolean = com.diniy.duit.BuildConfig.PUBLIC_EDITION
+): List<LicenseNotice> =
+    if (publicEdition) {
+        BaseLicenseNotices + LicenseNotice(
+            "Firebase Cloud Messaging SDK",
+            "Copyright Google LLC. Bundled only in public builds to deliver optional Developer Broadcast announcements.",
+            "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+        )
+    } else {
+        BaseLicenseNotices
+    }
+
 @Composable
-private fun AboutLicensesPage(onBack: () -> Unit) {
+internal fun AboutLicensesPage(onBack: () -> Unit) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     SettingsPageScaffold(
@@ -1204,7 +1217,7 @@ private fun AboutLicensesPage(onBack: () -> Unit) {
         subtitle = "Third-party acknowledgements",
         onBack = onBack
     ) {
-        LicenseNotices.forEach { notice ->
+        activeLicenseNotices().forEach { notice ->
             item(key = "license_${notice.name}") {
                 com.diniy.duit.core.ui.components.SpatialGlassCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -1496,9 +1509,10 @@ internal fun SettingsSwitchRow(
 
 /**
  * Settings > Privacy & Your Data (public edition). Every statement here matches the code:
- * Room/DataStore on device with Android backup off; AES-256-GCM password backups via the system file
- * picker; PIN kept as a salted PBKDF2 value sealed by Android Keystore; FLAG_SECURE and masked
- * widgets/notifications while App Lock is on; feedback fields as sent by FeedbackClient; QR-only support.
+ * Room/DataStore and Receipt Vault private files on device with Android backup off; AES-256-GCM
+ * password backups via the system file picker; PIN kept as a salted PBKDF2 value sealed by Android
+ * Keystore; FLAG_SECURE and masked widgets/notifications while App Lock is on; feedback fields as
+ * sent by FeedbackClient; FCM topic broadcasts without analytics; Support donations unavailable.
  */
 @Composable
 internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRoute) -> Unit) {
@@ -1519,7 +1533,7 @@ internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRout
         item(key = "where") {
             AboutInfoCard(
                 Icons.Rounded.Storage, colors.aqua, "Where your data lives",
-                "Wallets, transactions, budgets, goals and settings are saved in duit.'s private storage on this phone. " +
+                "Wallets, transactions, budgets, goals, settings and Receipt Vault files are saved in duit.'s private storage on this phone. " +
                     "There's no account and no cloud sync. On a standard phone, Android keeps this storage private from other apps. " +
                     "Android's automatic cloud backup is turned off for duit., so your records don't leave your phone that way."
             )
@@ -1527,8 +1541,9 @@ internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRout
         item(key = "backup") {
             AboutInfoCard(
                 Icons.Rounded.Backup, colors.skyBlue, "Backup & restore",
-                "Backups are files you create and save wherever you choose. Each one is encrypted (AES-256) with a password you set. " +
-                    "duit. can't recover a lost password. Restoring checks the password and the file first, and if anything fails your current data stays as it was. " +
+                "Backups are files you create and save wherever you choose. Each one is encrypted (AES-256-GCM) with a password you set " +
+                    "and can include saved Receipt Vault attachments (up to 10 MB per file, 12 MB total per backup). " +
+                    "duit. can't recover a lost password. Restoring validates the password and staged data first, so if anything fails your current records stay untouched. " +
                     "Restoring doesn't change your PIN. CSV exports are plain spreadsheets and are not encrypted."
             )
         }
@@ -1555,6 +1570,13 @@ internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRout
                     "but duit. sends no personal or financial information."
             )
         }
+        item(key = "broadcasts") {
+            AboutInfoCard(
+                Icons.Rounded.Notifications, colors.skyBlue, "Developer broadcasts",
+                "Optional release and maintenance announcements use Firebase Cloud Messaging topic subscriptions with analytics disabled. " +
+                    "Public builds listen only to duit.'s active announcement channel without sending personal or financial records."
+            )
+        }
         item(key = "support") {
             AboutInfoCard(
                 Icons.Rounded.LocalCafe, colors.sunny, "Supporting duit.",
@@ -1565,7 +1587,7 @@ internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRout
         item(key = "delete") {
             AboutInfoCard(
                 Icons.Rounded.DeleteSweep, colors.lavender, "Managing & deleting your data",
-                "Export or delete your records in Data Management. Deleting all financial data asks you to confirm and can't be undone; " +
+                "Export or delete your records in Data Management. Deleting all financial data clears your records and private Receipt Vault files after you confirm and can't be undone; " +
                     "your PIN and app settings are kept. Uninstalling duit. removes everything it stored on this phone. Backups and CSV files you saved elsewhere " +
                     "stay until you delete them. To remove feedback you've sent, ask through Help & Feedback."
             )

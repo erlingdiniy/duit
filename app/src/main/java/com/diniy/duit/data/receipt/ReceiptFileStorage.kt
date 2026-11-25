@@ -92,8 +92,20 @@ class ReceiptFileStorage(private val rootDir: File) {
 
     fun importFromUri(context: Context, uri: Uri): StoredReceiptAttachment {
         val resolver = context.contentResolver
-        val displayName = queryDisplayName(context, uri) ?: "receipt"
-        val detectedMime = (resolver.getType(uri) ?: guessMimeFromName(displayName)).lowercase()
+        val displayName = queryDisplayName(context, uri)
+            ?: uri.lastPathSegment
+                ?.substringAfterLast('/')
+                ?.substringAfterLast('\\')
+                ?.takeIf { it.isNotBlank() }
+            ?: "receipt"
+        val providerMime = resolver.getType(uri)
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf { it.isNotEmpty() && it != "application/octet-stream" }
+        val detectedMime = providerMime
+            ?: guessMimeFromName(displayName)
+            ?: sniffMimeFromHeader(context, uri)
+            ?: ""
 
         return when {
             detectedMime == MIME_PDF -> importPdf(context, uri, displayName)
@@ -318,12 +330,57 @@ class ReceiptFileStorage(private val rootDir: File) {
         }
     }.getOrNull()
 
-    private fun guessMimeFromName(name: String): String = when {
+    private fun guessMimeFromName(name: String): String? = when {
         name.endsWith(".pdf", ignoreCase = true) -> MIME_PDF
+        name.endsWith(".jpg", ignoreCase = true) || name.endsWith(".jpeg", ignoreCase = true) -> MIME_JPEG
         name.endsWith(".png", ignoreCase = true) -> "image/png"
         name.endsWith(".webp", ignoreCase = true) -> "image/webp"
-        else -> MIME_JPEG
+        name.endsWith(".heic", ignoreCase = true) -> "image/heic"
+        name.endsWith(".heif", ignoreCase = true) -> "image/heif"
+        name.endsWith(".gif", ignoreCase = true) -> "image/gif"
+        name.endsWith(".bmp", ignoreCase = true) -> "image/bmp"
+        else -> null
     }
+
+    private fun sniffMimeFromHeader(context: Context, uri: Uri): String? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            val header = ByteArray(16)
+            var len = 0
+            while (len < header.size) {
+                val read = stream.read(header, len, header.size - len)
+                if (read <= 0) break
+                len += read
+            }
+            when {
+                len >= 5 && header.copyOfRange(0, 5).contentEquals(PDF_MAGIC) -> MIME_PDF
+                len >= 3 &&
+                    (header[0].toInt() and 0xFF) == 0xFF &&
+                    (header[1].toInt() and 0xFF) == 0xD8 &&
+                    (header[2].toInt() and 0xFF) == 0xFF -> MIME_JPEG
+                len >= 8 &&
+                    (header[0].toInt() and 0xFF) == 0x89 &&
+                    header[1] == 0x50.toByte() &&
+                    header[2] == 0x4E.toByte() &&
+                    header[3] == 0x47.toByte() &&
+                    header[4] == 0x0D.toByte() &&
+                    header[5] == 0x0A.toByte() &&
+                    header[6] == 0x1A.toByte() &&
+                    header[7] == 0x0A.toByte() -> "image/png"
+                len >= 6 &&
+                    header.copyOfRange(0, 6).toString(Charsets.US_ASCII).let {
+                        it == "GIF87a" || it == "GIF89a"
+                    } -> "image/gif"
+                len >= 12 &&
+                    header.copyOfRange(0, 4).toString(Charsets.US_ASCII) == "RIFF" &&
+                    header.copyOfRange(8, 12).toString(Charsets.US_ASCII) == "WEBP" -> "image/webp"
+                len >= 2 && header[0] == 0x42.toByte() && header[1] == 0x4D.toByte() -> "image/bmp"
+                len >= 12 &&
+                    header.copyOfRange(4, 8).toString(Charsets.US_ASCII) == "ftyp" &&
+                    header.copyOfRange(8, 12).toString(Charsets.US_ASCII) in HEIF_BRANDS -> "image/heic"
+                else -> null
+            }
+        }
+    }.getOrNull()
 
     private fun computeInSampleSize(width: Int, height: Int, maxDim: Int): Int {
         var sample = 1
@@ -361,5 +418,6 @@ class ReceiptFileStorage(private val rootDir: File) {
         private const val FILE_PROVIDER_SUFFIX = ".supportqr"
         private val SAFE_NAME_REGEX = Regex("^[A-Za-z0-9._-]+$")
         private val PDF_MAGIC = "%PDF-".encodeToByteArray()
+        private val HEIF_BRANDS = setOf("heic", "heix", "hevc", "hevx", "mif1", "msf1")
     }
 }

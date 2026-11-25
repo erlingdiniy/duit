@@ -586,7 +586,9 @@ fun ReceiptEditorSheet(
         val temp = pendingCameraFile
         pendingCameraFile = null
         if (!ok || temp == null) {
-            temp?.delete()
+            if (temp != null) {
+                scope.launch(Dispatchers.IO) { temp.delete() }
+            }
             return@rememberLauncherForActivityResult
         }
         isImporting = true
@@ -641,12 +643,23 @@ fun ReceiptEditorSheet(
                 enabled = !isImporting,
                 variant = SpatialButtonVariant.SecondaryGlass,
                 onClick = {
-                    runCatching {
-                        val (file, uri) = fileStorage.createTempCameraTarget(context)
-                        pendingCameraFile = file
-                        cameraLauncher.launch(uri)
-                    }.onFailure {
-                        formError = "Camera capture is unavailable in this build."
+                    isImporting = true
+                    formError = null
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) { fileStorage.createTempCameraTarget(context) }
+                        }.onSuccess { (file, uri) ->
+                            pendingCameraFile = file
+                            isImporting = false
+                            runCatching { cameraLauncher.launch(uri) }.onFailure {
+                                pendingCameraFile = null
+                                scope.launch(Dispatchers.IO) { file.delete() }
+                                formError = "Camera capture is unavailable in this build."
+                            }
+                        }.onFailure {
+                            isImporting = false
+                            formError = "Camera capture is unavailable in this build."
+                        }
                     }
                 },
                 modifier = Modifier.weight(1f)
@@ -685,7 +698,10 @@ fun ReceiptEditorSheet(
                         )
                     }
                     IconButton(onClick = {
-                        newlyImportedPath?.takeIf { it != existing?.fileRelativePath }?.let { fileStorage.deleteFile(it) }
+                        val pathToDelete = newlyImportedPath?.takeIf { it != existing?.fileRelativePath }
+                        if (pathToDelete != null) {
+                            scope.launch(Dispatchers.IO) { fileStorage.deleteFile(pathToDelete) }
+                        }
                         newlyImportedPath = null
                         fileRelativePath = ""
                         mimeType = ""
@@ -873,7 +889,7 @@ fun ReceiptEditorSheet(
 }
 
 @Composable
-private fun ReceiptDetailSheet(
+internal fun ReceiptDetailSheet(
     receipt: ReceiptRecord,
     linkedTransaction: FinanceTransaction?,
     linkableTransactions: List<FinanceTransaction>,

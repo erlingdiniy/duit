@@ -17,6 +17,8 @@ object DeveloperBroadcasts {
 
     fun defaultTopic(): String = DeveloperBroadcastSpec.defaultTopicForVersion(BuildConfig.VERSION_NAME)
 
+    fun inactiveTopic(): String = DeveloperBroadcastSpec.inactiveTopicForVersion(BuildConfig.VERSION_NAME)
+
     fun initialize(context: Context) {
         val appContext = context.applicationContext
         DeveloperBroadcastNotifier.ensureChannel(appContext)
@@ -31,7 +33,12 @@ object DeveloperBroadcasts {
             if (FirebaseApp.getApps(appContext).isEmpty()) {
                 FirebaseApp.initializeApp(appContext) ?: return
             }
-            FirebaseMessaging.getInstance().subscribeToTopic(topic)
+            val messaging = FirebaseMessaging.getInstance()
+            val inactive = inactiveTopic()
+            if (DeveloperBroadcastSpec.isValidTopic(inactive) && inactive != topic) {
+                messaging.unsubscribeFromTopic(inactive)
+            }
+            messaging.subscribeToTopic(topic)
         }
     }
 }

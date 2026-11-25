@@ -1,6 +1,16 @@
 package com.diniy.duit.data.local
 
+import android.content.ContentProvider
+import android.content.ContentValues
 import android.content.Context
+import android.content.pm.ProviderInfo
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.net.Uri
+import android.os.ParcelFileDescriptor
+import android.provider.OpenableColumns
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -25,18 +35,22 @@ import com.diniy.duit.domain.receipt.ReceiptRecord
 import com.diniy.duit.domain.receipt.ReceiptTaxTag
 import com.diniy.duit.notifications.NotificationSettingsSnapshot
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowBitmapFactory
+import org.robolectric.shadows.ShadowContentResolver
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -325,5 +339,238 @@ class ReceiptVaultDataTest {
         } finally {
             dir.deleteRecursively()
         }
+    }
+
+    @Test
+    fun receiptFileStorage_importsCameraJpeg_andDecodesPreview() {
+        val (dir, storage) = tempStorage()
+        try {
+            val camTemp = File(dir, "capture_temp.jpg")
+            val srcBitmap = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(Color.BLUE)
+            }
+            try {
+                camTemp.outputStream().use { out ->
+                    assertTrue(srcBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out))
+                }
+            } finally {
+                srcBitmap.recycle()
+            }
+
+            val stored = storage.importCameraFile(camTemp)
+            assertFalse(camTemp.exists())
+            assertEquals("image/jpeg", stored.mimeType)
+            assertEquals("camera-receipt.jpg", stored.originalFileName)
+            assertTrue(stored.fileSizeBytes > 0L)
+
+            val preview = storage.decodeImagePreview(stored.relativePath)
+            try {
+                assertNotNull(preview)
+                assertTrue(preview!!.width > 0 && preview.height > 0)
+            } finally {
+                preview?.recycle()
+            }
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun receiptFileStorage_validatesPdfMimeAndSizeLimits() {
+        val (dir, storage) = tempStorage()
+        try {
+            val docAuthority = "com.diniy.duit.testdocs"
+            val provider = StubDocumentProvider(dir)
+            provider.attachInfo(
+                context,
+                ProviderInfo().apply {
+                    authority = docAuthority
+                    exported = true
+                }
+            )
+            ShadowContentResolver.registerProviderInternal(docAuthority, provider)
+
+            fun docUri(name: String): Uri = Uri.parse("content://$docAuthority/$name")
+
+            val validPdf = File(dir, "clinic_bill.pdf")
+            val pdfBytes = "%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n".toByteArray()
+            validPdf.writeBytes(pdfBytes)
+            val storedPdf = storage.importFromUri(context, docUri("clinic_bill.pdf"))
+            assertEquals("application/pdf", storedPdf.mimeType)
+            assertEquals("clinic_bill.pdf", storedPdf.originalFileName)
+            assertArrayEquals(pdfBytes, storage.readFileBytes(storedPdf.relativePath))
+
+            val invalidPdf = File(dir, "fake.pdf")
+            invalidPdf.writeText("NOT_A_PDF_HEADER")
+            val badPdfErr = runCatching { storage.importFromUri(context, docUri("fake.pdf")) }.exceptionOrNull()
+            assertTrue(badPdfErr is IOException)
+            assertTrue(badPdfErr?.message?.contains("valid PDF", ignoreCase = true) == true)
+
+            val unsupportedTxt = File(dir, "notes.txt")
+            unsupportedTxt.writeText("plain receipt")
+            val badTypeErr = runCatching { storage.importFromUri(context, docUri("notes.txt")) }.exceptionOrNull()
+            assertTrue(badTypeErr is IOException)
+            assertTrue(badTypeErr?.message?.contains("Unsupported file type", ignoreCase = true) == true)
+
+            val oversizedPdf = File(dir, "oversized.pdf")
+            oversizedPdf.outputStream().use { out ->
+                val header = "%PDF-1.4\n".toByteArray()
+                out.write(header)
+                val chunk = ByteArray(64 * 1024) { '0'.code.toByte() }
+                var remaining = ReceiptFileStorage.MAX_FILE_BYTES + 1L - header.size
+                while (remaining > 0L) {
+                    val toWrite = minOf(chunk.size.toLong(), remaining).toInt()
+                    out.write(chunk, 0, toWrite)
+                    remaining -= toWrite
+                }
+            }
+            val limitErr = runCatching { storage.importFromUri(context, docUri("oversized.pdf")) }.exceptionOrNull()
+            assertTrue(limitErr is IOException)
+            assertTrue(limitErr?.message?.contains("10 MB limit", ignoreCase = true) == true)
+
+            val oversizedRestore = ByteArray(ReceiptFileStorage.MAX_FILE_BYTES.toInt() + 1)
+            assertFalse(storage.writeRestoredFile("oversized_restore.pdf", oversizedRestore))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun receiptFileStorage_missingOrCorruptedFiles_returnNullSafely() {
+        val (dir, storage) = tempStorage()
+        ShadowBitmapFactory.setAllowInvalidImageData(false)
+        try {
+            assertNull(storage.decodeImagePreview("missing.jpg"))
+            assertNull(storage.renderPdfPage("missing.pdf"))
+
+            assertTrue(storage.writeRestoredFile("corrupt.jpg", "not-a-jpeg".toByteArray()))
+            assertNull(storage.decodeImagePreview("corrupt.jpg"))
+
+            assertTrue(storage.writeRestoredFile("corrupt.pdf", "not-a-pdf".toByteArray()))
+            assertNull(storage.renderPdfPage("corrupt.pdf"))
+
+            val corruptCam = File(dir, "corrupt_cam.jpg").apply { writeText("not-a-jpeg") }
+            val importErr = runCatching { storage.importCameraFile(corruptCam) }.exceptionOrNull()
+            assertTrue(importErr is IOException)
+            assertTrue(importErr?.message?.contains("Could not read selected image", ignoreCase = true) == true)
+            assertFalse(corruptCam.exists())
+        } finally {
+            ShadowBitmapFactory.setAllowInvalidImageData(true)
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun receiptFileStorage_handlesNullAndOctetStreamMime_viaFileNameAndMagicBytes() {
+        val (dir, storage) = tempStorage()
+        try {
+            val pdfBytes = "%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n".toByteArray()
+            val directPdf = File(dir, "direct_file.pdf").apply { writeBytes(pdfBytes) }
+            val storedDirectPdf = storage.importFromUri(context, Uri.fromFile(directPdf))
+            assertEquals("application/pdf", storedDirectPdf.mimeType)
+            assertEquals("direct_file.pdf", storedDirectPdf.originalFileName)
+            assertArrayEquals(pdfBytes, storage.readFileBytes(storedDirectPdf.relativePath))
+
+            val directTxt = File(dir, "notes.txt").apply { writeText("plain receipt") }
+            val txtErr = runCatching { storage.importFromUri(context, Uri.fromFile(directTxt)) }.exceptionOrNull()
+            assertTrue(txtErr is IOException)
+            assertTrue(txtErr?.message?.contains("Unsupported file type", ignoreCase = true) == true)
+
+            val docNoExt = File(dir, "doc_no_ext").apply { writeBytes(pdfBytes) }
+            assertTrue(docNoExt.exists())
+
+            val imgNoExt = File(dir, "img_no_ext")
+            val bmp = Bitmap.createBitmap(32, 24, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) }
+            try {
+                imgNoExt.outputStream().use { out -> assertTrue(bmp.compress(Bitmap.CompressFormat.JPEG, 90, out)) }
+            } finally {
+                bmp.recycle()
+            }
+
+            val binNoExt = File(dir, "bin_no_ext").apply { writeText("just plain bytes") }
+            assertTrue(binNoExt.exists())
+
+            val mimeAuthority = "com.diniy.duit.testdocs.mime"
+            val provider = StubDocumentProvider(
+                rootDir = dir,
+                mimeOverrides = mapOf(
+                    "doc_no_ext" to null,
+                    "img_no_ext" to "application/octet-stream",
+                    "bin_no_ext" to "application/octet-stream"
+                )
+            )
+            provider.attachInfo(
+                context,
+                ProviderInfo().apply {
+                    authority = mimeAuthority
+                    exported = true
+                }
+            )
+            ShadowContentResolver.registerProviderInternal(mimeAuthority, provider)
+
+            fun contentUri(name: String): Uri = Uri.parse("content://$mimeAuthority/$name")
+
+            val storedMagicPdf = storage.importFromUri(context, contentUri("doc_no_ext"))
+            assertEquals("application/pdf", storedMagicPdf.mimeType)
+            assertArrayEquals(pdfBytes, storage.readFileBytes(storedMagicPdf.relativePath))
+
+            val storedMagicJpg = storage.importFromUri(context, contentUri("img_no_ext"))
+            assertEquals("image/jpeg", storedMagicJpg.mimeType)
+            val preview = storage.decodeImagePreview(storedMagicJpg.relativePath)
+            try {
+                assertNotNull(preview)
+                assertTrue(preview!!.width > 0 && preview.height > 0)
+            } finally {
+                preview?.recycle()
+            }
+
+            val binErr = runCatching { storage.importFromUri(context, contentUri("bin_no_ext")) }.exceptionOrNull()
+            assertTrue(binErr is IOException)
+            assertTrue(binErr?.message?.contains("Unsupported file type", ignoreCase = true) == true)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    private class StubDocumentProvider(
+        private val rootDir: File,
+        private val mimeOverrides: Map<String, String?> = emptyMap()
+    ) : ContentProvider() {
+        override fun onCreate(): Boolean = true
+
+        override fun getType(uri: Uri): String? {
+            val name = uri.lastPathSegment
+            if (name != null && mimeOverrides.containsKey(name)) return mimeOverrides[name]
+            return when (name?.substringAfterLast('.', "")?.lowercase()) {
+                "pdf" -> "application/pdf"
+                "txt" -> "text/plain"
+                "jpg", "jpeg" -> "image/jpeg"
+                else -> null
+            }
+        }
+
+        override fun query(
+            uri: Uri,
+            projection: Array<out String>?,
+            selection: String?,
+            selectionArgs: Array<out String>?,
+            sortOrder: String?
+        ): Cursor? {
+            val file = uri.lastPathSegment?.let { File(rootDir, it) }?.takeIf { it.exists() } ?: return null
+            return MatrixCursor(arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)).apply {
+                addRow(arrayOf<Any>(file.name, file.length()))
+            }
+        }
+
+        override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
+            val file = uri.lastPathSegment?.let { File(rootDir, it) }?.takeIf { it.exists() } ?: return null
+            return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        }
+
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
+
+        override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
     }
 }

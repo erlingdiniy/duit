@@ -62,4 +62,20 @@ class StableChannelTest {
         assertEquals("stable notes", findReleaseNotes(feed, 1_000_000L))
         assertEquals("bridge notes", findReleaseNotes(feed, 5))
     }
+
+    @Test
+    fun stable120_excludesFutureBetas_andAcceptsNewerStable() {
+        assertEquals(1_002_000L, stableVersionCode(1, 2, 0))
+
+        val futureBetaFeed = JSONArray()
+            .put(release("v1.3.0-beta.1", "duit-1.3.0-beta.1.apk", prerelease = true))
+        assertNull(selectBetaRelease(futureBetaFeed, repo, installedCode = 1_002_000L, includePrereleases = false))
+
+        val mixedFeed = JSONArray()
+            .put(release("v1.3.0-beta.1", "duit-1.3.0-beta.1.apk", prerelease = true))
+            .put(release("v1.2.1", "duit-1.2.1.apk", prerelease = false, body = "patch notes"))
+        val found = selectBetaRelease(mixedFeed, repo, installedCode = 1_002_000L, includePrereleases = false)!!
+        assertEquals(1_002_001L, found.versionCode)
+        assertEquals("1.2.1", found.versionName)
+    }
 }

@@ -35,10 +35,16 @@ class DeveloperBroadcastsTest {
     @Test
     fun topicSelectionAndSenderValidationAreStrict() {
         val betaTopic = DeveloperBroadcastSpec.defaultTopicForVersion("1.2.0-beta.1")
+        val betaInactive = DeveloperBroadcastSpec.inactiveTopicForVersion("1.2.0-beta.1")
         val stableTopic = DeveloperBroadcastSpec.defaultTopicForVersion("1.2.0")
+        val stableInactive = DeveloperBroadcastSpec.inactiveTopicForVersion("1.2.0")
 
         assertEquals(DeveloperBroadcastSpec.TOPIC_BETA, betaTopic)
+        assertEquals(DeveloperBroadcastSpec.TOPIC_PUBLIC, betaInactive)
         assertEquals(DeveloperBroadcastSpec.TOPIC_PUBLIC, stableTopic)
+        assertEquals(DeveloperBroadcastSpec.TOPIC_BETA, stableInactive)
+        assertTrue(betaTopic != betaInactive)
+        assertTrue(stableTopic != stableInactive)
         assertTrue(DeveloperBroadcastSpec.isValidTopic(betaTopic))
         assertTrue(DeveloperBroadcastSpec.isValidTopic(stableTopic))
 

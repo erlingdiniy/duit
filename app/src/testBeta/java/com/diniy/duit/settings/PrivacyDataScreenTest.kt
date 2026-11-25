@@ -15,9 +15,12 @@ import androidx.compose.ui.semantics.SemanticsActions
 import com.diniy.duit.BuildConfig
 import com.diniy.duit.core.ui.theme.DuitTheme
 import com.diniy.duit.domain.model.ThemeMode
+import com.diniy.duit.feature.settings.AboutLicensesPage
 import com.diniy.duit.feature.settings.PrivacyDataScreen
 import com.diniy.duit.feature.settings.SettingsHubRoute
+import com.diniy.duit.feature.settings.activeLicenseNotices
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -34,7 +37,7 @@ class PrivacyDataScreenTest {
 
     private val headings = listOf(
         "Where your data lives", "Backup & restore", "PIN & fingerprint", "When you send feedback",
-        "Update checks", "Supporting duit.", "Managing & deleting your data"
+        "Update checks", "Developer broadcasts", "Supporting duit.", "Managing & deleting your data"
     )
 
     @Test
@@ -67,6 +70,21 @@ class PrivacyDataScreenTest {
         compose.onNodeWithText("Privacy & Security summary").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("goes online only to check for app updates", substring = true))
         compose.onNodeWithText("goes online only to check for app updates", substring = true).assertExists()
+        compose.onNodeWithText("developer broadcast", substring = true, ignoreCase = true).assertExists()
+        compose.onNodeWithText("saved receipts", substring = true, ignoreCase = true).assertExists()
         compose.onAllNodesWithText("doesn't ask for internet access", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun licensesPage_includesFirebaseOnlyInPublicBuilds() {
+        val publicNotices = activeLicenseNotices(publicEdition = true)
+        val personalNotices = activeLicenseNotices(publicEdition = false)
+        assertTrue(publicNotices.any { it.name == "Firebase Cloud Messaging SDK" })
+        assertFalse(personalNotices.any { it.name.contains("Firebase", ignoreCase = true) })
+
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        activity.setContent { DuitTheme { AboutLicensesPage(onBack = {}) } }
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Firebase Cloud Messaging SDK"))
+        compose.onNodeWithText("Firebase Cloud Messaging SDK").assertExists()
     }
 }
