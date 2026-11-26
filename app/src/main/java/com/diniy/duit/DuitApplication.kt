@@ -305,6 +305,7 @@ class DuitApplication : Application() {
 
                 override fun onStop(owner: LifecycleOwner) {
                     container.appLockManager.onAppBackgrounded()
+                    com.diniy.duit.devcenter.DeveloperCenterEntryPoint.onAppBackgrounded()
                 }
             }
         )

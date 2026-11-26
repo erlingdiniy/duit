@@ -140,8 +140,8 @@ if ($signExit -ne 0 -or -not (Test-Path $stagedSigned)) {
     Fail "Interactive signing did not produce $stagedSigned."
 }
 
-# 4. Verify package, versionCode, and certificate against installed beta
-Write-Host "[3/5] Verifying APK package, versionCode, and certificate..." -ForegroundColor Cyan
+# 4. Verify package, versionCode, Developer Center isolation, and certificate against installed beta
+Write-Host "[3/5] Verifying APK package, versionCode, release isolation, and certificate..." -ForegroundColor Cyan
 $badging = & $aapt2 dump badging $stagedSigned 2>&1 | Select-String "^package:" | Select-Object -First 1
 if (-not $badging -or $badging.Line -notmatch "name='([^']+)'\s+versionCode='(\d+)'\s+versionName='([^']+)'") {
     Fail "Could not parse package badging from $stagedSigned"
@@ -150,6 +150,46 @@ $newPkg = $Matches[1]
 $newVersionCode = [int]$Matches[2]
 $newVersionName = $Matches[3]
 if ($newPkg -ne $packageId) { Fail "Unexpected package '$newPkg' (expected '$packageId')." }
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$forbiddenBetaMarkers = @(
+    "com/diniy/duit/devcenter",
+    "DevCenter",
+    "devcenter",
+    "DeveloperCenter",
+    "Developer Center",
+    "duit_dev_center_prefs",
+    "duit_dev_center_pat_v1",
+    "duit_dev_center_pin_v1",
+    "duit_dev_center_sheets_v1",
+    "custom-broadcast.yml",
+    "ENABLE_CUSTOM_FCM_DISPATCH",
+    "QA_FCM_TOKEN_COPY"
+)
+$zipArchive = [System.IO.Compression.ZipFile]::OpenRead($stagedSigned)
+try {
+    foreach ($entry in $zipArchive.Entries) {
+        if ($entry.FullName -eq "AndroidManifest.xml" -or $entry.FullName -match '^res/' -or $entry.FullName -match '^classes\d*\.dex$') {
+            if ($entry.Length -le 0) { continue }
+            $stream = $entry.Open()
+            $ms = New-Object System.IO.MemoryStream
+            try {
+                $stream.CopyTo($ms)
+                $rawText = [System.Text.Encoding]::GetEncoding("ISO-8859-1").GetString($ms.ToArray())
+                foreach ($marker in $forbiddenBetaMarkers) {
+                    if ($rawText.Contains($marker)) {
+                        Fail "Public beta APK leaked forbidden Developer Center marker '$marker' in $($entry.FullName)."
+                    }
+                }
+            } finally {
+                $ms.Dispose()
+                $stream.Dispose()
+            }
+        }
+    }
+} finally {
+    $zipArchive.Dispose()
+}
 
 $newSha = Get-CertSha256 $apksigner $stagedSigned
 $pmPath = (& $adb -s $device shell pm path $packageId 2>&1 | Select-String "^package:" | Select-Object -First 1)

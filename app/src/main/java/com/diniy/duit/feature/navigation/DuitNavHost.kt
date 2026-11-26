@@ -154,6 +154,7 @@ fun DuitAppShell(
     val coroutineScope = rememberCoroutineScope()
     var showSettingsHub by rememberSaveable { mutableStateOf(false) }
     var settingsHubRoute by rememberSaveable { mutableStateOf(SettingsHubRoute.HUB) }
+    var showDeveloperCenter by rememberSaveable { mutableStateOf(false) }
     var showSecuritySettings by rememberSaveable { mutableStateOf(false) }
     var showNotificationCentre by rememberSaveable { mutableStateOf(false) }
     var showCalendar by rememberSaveable { mutableStateOf(false) }
@@ -198,6 +199,7 @@ fun DuitAppShell(
 
     LaunchedEffect(pendingDeepLink, pendingWidgetDeepLink) {
         if (pendingDeepLink != null || pendingWidgetDeepLink != null) {
+            showDeveloperCenter = false
             showSettingsHub = false
             showSecuritySettings = false
             showNotificationCentre = false
@@ -406,6 +408,15 @@ fun DuitAppShell(
 
     var pendingOpenCategoriesFromSettings by rememberSaveable { mutableStateOf(false) }
 
+    if (com.diniy.duit.devcenter.DeveloperCenterEntryPoint.isAvailable && showDeveloperCenter) {
+        com.diniy.duit.devcenter.DeveloperCenterEntryPoint.DeveloperCenterHost(
+            container = container,
+            isAppLockEnabled = appLockState.isAppLockEnabled,
+            onBack = { showDeveloperCenter = false }
+        )
+        return
+    }
+
     if (showSettingsHub) {
         SettingsHubContainerScreen(
             uiState = settingsState,
@@ -432,7 +443,8 @@ fun DuitAppShell(
             viewModel = settingsViewModel,
             onReplayTour = { showReplayTour = true },
             hasOsNotificationPermission = notificationState.hasOsPermission,
-            onPermissionUpdated = notificationViewModel::refreshPermissionAndSync
+            onPermissionUpdated = notificationViewModel::refreshPermissionAndSync,
+            onOpenDeveloperCenter = { showDeveloperCenter = true }
         )
         return
     }

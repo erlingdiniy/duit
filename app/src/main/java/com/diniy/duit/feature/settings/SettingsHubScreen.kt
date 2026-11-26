@@ -122,7 +122,8 @@ fun SettingsHubContainerScreen(
     viewModel: SettingsViewModel,
     onReplayTour: () -> Unit = {},
     hasOsNotificationPermission: Boolean = false,
-    onPermissionUpdated: () -> Unit = {}
+    onPermissionUpdated: () -> Unit = {},
+    onOpenDeveloperCenter: () -> Unit = {}
 ) {
     var financialOpenedFromHub by rememberSaveable { mutableStateOf(false) }
 
@@ -140,7 +141,8 @@ fun SettingsHubContainerScreen(
             onSelectTheme = viewModel::setThemeMode,
             onSelectGlassIntensity = viewModel::setGlassIntensity,
             onSetHaptics = viewModel::setHapticFeedbackEnabled,
-            onSetCommissionFeature = viewModel::setCommissionFeatureEnabled
+            onSetCommissionFeature = viewModel::setCommissionFeatureEnabled,
+            onOpenDeveloperCenter = onOpenDeveloperCenter
         )
         SettingsHubRoute.APPEARANCE -> AppearanceSettingsScreen(
             uiState = uiState,
@@ -236,7 +238,8 @@ private fun SettingsHubOverviewScreen(
     onSelectTheme: (ThemeMode) -> Unit,
     onSelectGlassIntensity: (GlassIntensity) -> Unit,
     onSetHaptics: (Boolean) -> Unit,
-    onSetCommissionFeature: (Boolean) -> Unit = {}
+    onSetCommissionFeature: (Boolean) -> Unit = {},
+    onOpenDeveloperCenter: () -> Unit = {}
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
@@ -547,6 +550,13 @@ private fun SettingsHubOverviewScreen(
                             onClick = { onSelectRoute(SettingsHubRoute.ABOUT) }
                         )
                     }
+                }
+            }
+            if (com.diniy.duit.devcenter.DeveloperCenterEntryPoint.isAvailable) {
+                item(key = "group_developer") {
+                    com.diniy.duit.devcenter.DeveloperCenterEntryPoint.SettingsDeveloperSection(
+                        onOpenDeveloperCenter = onOpenDeveloperCenter
+                    )
                 }
             }
         }

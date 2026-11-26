@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -40,6 +42,24 @@ if (betaVersionName.contains("-beta.")) {
 }
 val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
 
+// Personal Edition versioning follows duit's X*1_000_000 + Y*1_000 + Z monotonic rule so upgrades
+// over earlier personal installs (e.g. versionCode 1) always succeed without colliding with beta (-beta.).
+val personalVersionName = providers.gradleProperty("duitPersonalVersionName").orElse("1.2.0-personal").get()
+val personalVersionCode = providers.gradleProperty("duitPersonalVersionCode").orElse("1002000").get().toInt()
+require(!personalVersionName.contains("-beta.")) {
+    "Personal versionName must not use a -beta. suffix, got $personalVersionName"
+}
+val personalVersionMatch = requireNotNull(
+    Regex("""(\d+)\.(\d+)\.(\d+)(?:-personal(?:\.([1-9]\d?))?)?""").matchEntire(personalVersionName)
+) {
+    "Personal versionName must match X.Y.Z or X.Y.Z-personal[.N], got $personalVersionName"
+}
+val (pMajor, pMinor, pPatch, _) = personalVersionMatch.destructured
+val expectedPersonalCode = pMajor.toInt() * 1_000_000 + pMinor.toInt() * 1_000 + pPatch.toInt()
+require(personalVersionCode == expectedPersonalCode && personalVersionCode >= 1_002_000) {
+    "Personal $personalVersionName needs duitPersonalVersionCode=$expectedPersonalCode (>= 1002000)"
+}
+
 android {
     namespace = "com.diniy.duit"
     compileSdk = 35
@@ -48,8 +68,8 @@ android {
         applicationId = "com.diniy.duit"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-phase1"
+        versionCode = personalVersionCode
+        versionName = personalVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Public edition (beta build type) makes Commission Tracking optional; personal builds keep it always on.
@@ -57,6 +77,7 @@ android {
         buildConfigField("String", "FEEDBACK_URL", "\"\"")
         buildConfigField("boolean", "SUPPORT_PREVIEW", "false")
         buildConfigField("boolean", "PUBLIC_EDITION", "false")
+        buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
     }
 
     signingConfigs {
@@ -71,10 +92,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
+        }
         release {
             // R8 compiles Compose to fast, optimised code; debug builds feel noticeably slower (Phase 11P).
             isMinifyEnabled = true
             isShrinkResources = true
+            buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -90,6 +115,7 @@ android {
             buildConfigField("boolean", "OPTIONAL_COMMISSION", "true")
             buildConfigField("String", "FEEDBACK_URL", "\"$feedbackUrl\"")
             buildConfigField("boolean", "PUBLIC_EDITION", "true")
+            buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
             // QA only: shows Support duit. with the placeholder before the real QR exists. Never set for releases.
             buildConfigField("boolean", "SUPPORT_PREVIEW", providers.gradleProperty("duitSupportPreview").orElse("false").get())
         }
@@ -100,6 +126,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".bench"
             matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
         }
         // Everyday sideload build: release speed (R8), same app ID and debug key as the debug build,
         // so it installs over the existing app and keeps its data.
@@ -107,12 +134,34 @@ android {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
         }
     }
 
+    val personalBuildTypes = setOf("debug", "fluid", "release")
     buildTypes.configureEach {
         if (name != "beta") {
             sourceSets.getByName(name).java.srcDir("src/noUpdater/java")
+        }
+        if (name in personalBuildTypes) {
+            sourceSets.getByName(name).java.srcDir("src/personal/java")
+            if (name != "debug") {
+                sourceSets.getByName(name).manifest.srcFile("src/personal/AndroidManifest.xml")
+            }
+        } else {
+            sourceSets.getByName(name).java.srcDir("src/noDevCenter/java")
+        }
+    }
+
+    // Fail configuration immediately if public/benchmark source sets ever pick up Personal Developer Center code.
+    listOf("beta", "benchmark").forEach { publicType ->
+        val srcSet = sourceSets.getByName(publicType)
+        require(srcSet.java.srcDirs.none { it.invariantSeparatorsPath.endsWith("src/personal/java") }) {
+            "Public build type '$publicType' must never include src/personal/java"
+        }
+        val manifestPath = srcSet.manifest.srcFile.invariantSeparatorsPath
+        require(!manifestPath.endsWith("src/personal/AndroidManifest.xml")) {
+            "Public build type '$publicType' must never include src/personal/AndroidManifest.xml"
         }
     }
 
@@ -161,6 +210,101 @@ tasks.matching {
         !it.name.contains("Beta", ignoreCase = true)
 }.configureEach {
     enabled = false
+}
+
+val verifyBetaReleaseIsolation by tasks.registering {
+    group = "verification"
+    description = "Verifies public beta/stable APKs and merged manifest exclude all Personal Developer Center artifacts and extra permissions."
+    val betaApkDir = layout.buildDirectory.dir("outputs/apk/beta")
+    val mergedManifestDir = layout.buildDirectory.dir("intermediates/merged_manifests/beta")
+    doLast {
+        val forbiddenMarkers = listOf(
+            "com/diniy/duit/devcenter",
+            "DevCenter",
+            "devcenter",
+            "DeveloperCenter",
+            "Developer Center",
+            "duit_dev_center_prefs",
+            "duit_dev_center_pat_v1",
+            "duit_dev_center_pin_v1",
+            "duit_dev_center_sheets_v1",
+            "custom-broadcast.yml",
+            "ENABLE_CUSTOM_FCM_DISPATCH",
+            "QA_FCM_TOKEN_COPY"
+        )
+        val allowedBetaPermissions = setOf(
+            "android.permission.INTERNET",
+            "android.permission.REQUEST_INSTALL_PACKAGES",
+            "android.permission.USE_BIOMETRIC",
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            "android.permission.USE_FINGERPRINT",
+            "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.WAKE_LOCK",
+            "com.google.android.c2dm.permission.RECEIVE",
+            "android.permission.FOREGROUND_SERVICE",
+            "com.diniy.duit.beta.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        )
+
+        val manifestFiles = mergedManifestDir.get().asFile.walkTopDown()
+            .filter { it.isFile && it.name == "AndroidManifest.xml" }
+            .toList()
+        if (manifestFiles.isEmpty()) {
+            throw GradleException("verifyBetaReleaseIsolation: no merged beta AndroidManifest.xml found under ${mergedManifestDir.get().asFile}")
+        }
+        manifestFiles.forEach { manifest ->
+            val xml = manifest.readText(Charsets.UTF_8)
+            forbiddenMarkers.forEach { marker ->
+                if (xml.contains(marker)) {
+                    throw GradleException("verifyBetaReleaseIsolation: forbidden marker '$marker' found in ${manifest.absolutePath}")
+                }
+            }
+            if (!xml.contains("android:allowBackup=\"false\"")) {
+                throw GradleException("verifyBetaReleaseIsolation: android:allowBackup=\"false\" missing in ${manifest.absolutePath}")
+            }
+            if (!xml.contains("android:usesCleartextTraffic=\"false\"")) {
+                throw GradleException("verifyBetaReleaseIsolation: android:usesCleartextTraffic=\"false\" missing in ${manifest.absolutePath}")
+            }
+            val declaredPerms = Regex("""<uses-permission\b[^>]*android:name="([^"]+)"""")
+                .findAll(xml)
+                .map { it.groupValues[1] }
+                .toSet()
+            val unexpectedPerms = declaredPerms - allowedBetaPermissions
+            if (unexpectedPerms.isNotEmpty()) {
+                throw GradleException("verifyBetaReleaseIsolation: unexpected permissions in ${manifest.absolutePath}: $unexpectedPerms")
+            }
+        }
+
+        val apkFiles = betaApkDir.get().asFile.listFiles { f -> f.isFile && f.extension == "apk" }?.toList().orEmpty()
+        if (apkFiles.isEmpty()) {
+            throw GradleException("verifyBetaReleaseIsolation: no beta APK found under ${betaApkDir.get().asFile}")
+        }
+        apkFiles.forEach { apk ->
+            ZipFile(apk).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    val entryName = entry.name
+                    val isAudited = entryName == "AndroidManifest.xml" ||
+                        entryName.startsWith("res/") ||
+                        Regex("""classes\d*\.dex""").matches(entryName)
+                    if (!isAudited || entry.isDirectory) continue
+                    val raw = zip.getInputStream(entry).readBytes()
+                    val text = String(raw, Charsets.ISO_8859_1)
+                    forbiddenMarkers.forEach { marker ->
+                        if (text.contains(marker)) {
+                            throw GradleException("verifyBetaReleaseIsolation: forbidden marker '$marker' in ${apk.name}!$entryName")
+                        }
+                    }
+                }
+            }
+            logger.lifecycle("verifyBetaReleaseIsolation PASS: ${apk.name} (${manifestFiles.size} manifest, clean DEX/resources/permissions)")
+        }
+    }
+}
+
+tasks.matching { it.name == "assembleBeta" }.configureEach {
+    finalizedBy(verifyBetaReleaseIsolation)
 }
 
 ksp {
