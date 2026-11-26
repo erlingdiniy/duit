@@ -9,6 +9,14 @@ object DevCenterRedactor {
         """\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{8,}\b|\bgithub_pat_[A-Za-z0-9_]{12,}\b|\bya29\.[A-Za-z0-9._-]{12,}\b"""
     )
     private val BEARER_PATTERN = Regex("""(?i)Bearer\s+[A-Za-z0-9._~+/=-]{6,}""")
+    private val PRESIGNED_URL_PATTERN = Regex(
+        """https://(?:objects|release-assets|github-releases)\.githubusercontent\.com/\S+""",
+        RegexOption.IGNORE_CASE
+    )
+    private val SENSITIVE_QUERY_PARAM_PATTERN = Regex(
+        """([?&])(?:token|sig|signature|x-amz-[^=&]+|auth|key)=[^&\s]+""",
+        RegexOption.IGNORE_CASE
+    )
 
     fun redact(text: String?, extraSecrets: Collection<String> = emptyList()): String {
         if (text.isNullOrBlank()) return ""
@@ -19,6 +27,8 @@ object DevCenterRedactor {
                 scrubbed = scrubbed.replace(trimmed, "[REDACTED]")
             }
         }
+        scrubbed = PRESIGNED_URL_PATTERN.replace(scrubbed, "[REDACTED_URL]")
+        scrubbed = SENSITIVE_QUERY_PARAM_PATTERN.replace(scrubbed) { "${it.groupValues[1]}[REDACTED_PARAM]" }
         scrubbed = KNOWN_TOKEN_PATTERN.replace(scrubbed, "[REDACTED]")
         scrubbed = BEARER_PATTERN.replace(scrubbed, "Bearer [REDACTED]")
         return scrubbed

@@ -29,6 +29,7 @@ object DevCenterValidators {
     private val WHITESPACE = Regex("""\s+""")
     val CUSTOM_BROADCAST_ID_REGEX = Regex("""^duit-custom-[a-z0-9._-]{4,50}$""")
     private val GITHUB_SLUG_REGEX = Regex("""^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$""")
+    val FORBIDDEN_PUBLIC_UPDATE_REPOS = setOf("erlingdiniy/duit-beta", "erlingdiniy/duit")
     private val random = SecureRandom()
 
     fun cleanInputText(raw: String?, maxLen: Int): String {
@@ -42,6 +43,9 @@ object DevCenterValidators {
 
     fun isValidRepoSlug(slug: String?): Boolean =
         !slug.isNullOrBlank() && GITHUB_SLUG_REGEX.matches(slug.trim())
+
+    fun isValidPrivateUpdateRepo(slug: String?): Boolean =
+        isValidRepoSlug(slug) && slug!!.trim().lowercase(Locale.US) !in FORBIDDEN_PUBLIC_UPDATE_REPOS
 
     fun generateBroadcastId(nowMs: Long = System.currentTimeMillis()): String {
         val sdf = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).apply {

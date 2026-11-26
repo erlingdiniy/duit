@@ -44,13 +44,24 @@ if (betaVersionName.contains("-beta.")) {
 val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
 
 // Private developer-enabled build (`betaDev`) shares the com.diniy.duit.beta package and signing key
-// and defaults to the active beta/stable versionCode so upgrades stay in-place without data loss.
+// and uses major*10_000_000 + minor*10_000 + patch*100 + devN (e.g. 1.2.0-dev.1 = 10020001) so private
+// updates stay strictly monotonic above public stable/beta codes (1_002_000) and cannot be downgraded.
 val betaDevVersionName = providers.gradleProperty("duitBetaDevVersionName")
     .orElse("${betaVersionName.substringBefore("-beta.")}-dev").get()
+val betaDevMatch = requireNotNull(
+    Regex("""(\d+)\.(\d+)\.(\d+)-dev(?:\.([1-9]\d?))?""").matchEntire(betaDevVersionName)
+) {
+    "betaDev versionName must match X.Y.Z-dev or X.Y.Z-dev.N (N 1..99), got $betaDevVersionName"
+}
+val (bdMajor, bdMinor, bdPatch, bdDevPatch) = betaDevMatch.destructured
+val expectedBetaDevCode = bdMajor.toInt() * 10_000_000 +
+    bdMinor.toInt() * 10_000 +
+    bdPatch.toInt() * 100 +
+    bdDevPatch.ifEmpty { "0" }.toInt()
 val betaDevVersionCode = providers.gradleProperty("duitBetaDevVersionCode")
-    .orElse(betaVersionCode.toString()).get().toInt()
-require(betaDevVersionCode in 1..2100000000 && betaDevVersionName.contains("-dev") && !betaDevVersionName.contains("-beta.")) {
-    "betaDev ($betaDevVersionName / $betaDevVersionCode) must use a valid versionCode and contain '-dev' without '-beta.'"
+    .orElse(expectedBetaDevCode.toString()).get().toInt()
+require(betaDevVersionCode == expectedBetaDevCode && betaDevVersionCode >= 10_020_000) {
+    "betaDev $betaDevVersionName needs duitBetaDevVersionCode=$expectedBetaDevCode (>= 10020000)"
 }
 
 // Personal Edition versioning follows duit's X*1_000_000 + Y*1_000 + Z monotonic rule so upgrades
@@ -328,7 +339,15 @@ val verifyBetaReleaseIsolation by tasks.registering {
             "ENABLE_CUSTOM_FCM_DISPATCH",
             "QA_FCM_TOKEN_COPY",
             "Private developer build",
-            "Public in-app updates are disabled"
+            "Public in-app updates are disabled",
+            "PRIVATE_DEV_EDITION",
+            "PrivateDevUpdates",
+            "PrivateDevUpdateModel",
+            "PrivateDevInstallStatusReceiver",
+            "duit_private_dev_updates",
+            "duit-dev-install",
+            "dev_private_update_repo",
+            "Private updates"
         )
         val allowedBetaPermissions = setOf(
             "android.permission.INTERNET",

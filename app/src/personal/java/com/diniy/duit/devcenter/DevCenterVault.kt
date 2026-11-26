@@ -33,6 +33,7 @@ data class DevCenterVaultState(
     val githubPatHint: String = "Not configured",
     val distributionRepo: String = DEFAULT_DISTRIBUTION_REPO,
     val consoleRepo: String = DEFAULT_CONSOLE_REPO,
+    val privateUpdateRepo: String = DEFAULT_PRIVATE_UPDATE_REPO,
     val feedbackSheetId: String = "",
     val feedbackSheetRange: String = DEFAULT_FEEDBACK_RANGE,
     val encryptedSheetsToken: String? = null,
@@ -93,6 +94,7 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
             githubPatHint = prefs[KEY_GITHUB_PAT_HINT] ?: if (patEnv.isNullOrBlank()) "Not configured" else "Configured",
             distributionRepo = prefs[KEY_DIST_REPO] ?: DEFAULT_DISTRIBUTION_REPO,
             consoleRepo = prefs[KEY_CONSOLE_REPO] ?: DEFAULT_CONSOLE_REPO,
+            privateUpdateRepo = prefs[KEY_PRIVATE_UPDATE_REPO] ?: DEFAULT_PRIVATE_UPDATE_REPO,
             feedbackSheetId = prefs[KEY_FEEDBACK_SHEET_ID] ?: "",
             feedbackSheetRange = prefs[KEY_FEEDBACK_RANGE] ?: DEFAULT_FEEDBACK_RANGE,
             encryptedSheetsToken = sheetsEnv,
@@ -121,6 +123,7 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         }
         prefs[KEY_DIST_REPO] = next.distributionRepo
         prefs[KEY_CONSOLE_REPO] = next.consoleRepo
+        prefs[KEY_PRIVATE_UPDATE_REPO] = next.privateUpdateRepo
         prefs[KEY_FEEDBACK_SHEET_ID] = next.feedbackSheetId
         prefs[KEY_FEEDBACK_RANGE] = next.feedbackSheetRange
         if (next.encryptedSheetsToken.isNullOrBlank()) {
@@ -248,6 +251,7 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         private val KEY_GITHUB_PAT_HINT = stringPreferencesKey("dev_github_pat_hint")
         private val KEY_DIST_REPO = stringPreferencesKey("dev_dist_repo")
         private val KEY_CONSOLE_REPO = stringPreferencesKey("dev_console_repo")
+        private val KEY_PRIVATE_UPDATE_REPO = stringPreferencesKey("dev_private_update_repo")
         private val KEY_FEEDBACK_SHEET_ID = stringPreferencesKey("dev_feedback_sheet_id")
         private val KEY_FEEDBACK_RANGE = stringPreferencesKey("dev_feedback_range")
         private val KEY_SHEETS_TOKEN = stringPreferencesKey("dev_sheets_token_env")
@@ -334,12 +338,18 @@ class DevCenterVault(
         storage.update { it.copy(encryptedGithubPat = null, githubPatHint = "Not configured") }
     }
 
-    suspend fun saveRepositories(distributionRepo: String, consoleRepo: String) {
+    suspend fun saveRepositories(
+        distributionRepo: String,
+        consoleRepo: String,
+        privateUpdateRepo: String = DEFAULT_PRIVATE_UPDATE_REPO
+    ) {
         val dist = distributionRepo.trim()
         val console = consoleRepo.trim()
+        val priv = privateUpdateRepo.trim()
         require(DevCenterValidators.isValidRepoSlug(dist)) { "Invalid distribution repo slug." }
         require(DevCenterValidators.isValidRepoSlug(console)) { "Invalid console repo slug." }
-        storage.update { it.copy(distributionRepo = dist, consoleRepo = console) }
+        require(DevCenterValidators.isValidPrivateUpdateRepo(priv)) { "Invalid private updates repo slug." }
+        storage.update { it.copy(distributionRepo = dist, consoleRepo = console, privateUpdateRepo = priv) }
     }
 
     suspend fun saveFeedbackConfig(sheetId: String, range: String, rawSheetsToken: String?) {

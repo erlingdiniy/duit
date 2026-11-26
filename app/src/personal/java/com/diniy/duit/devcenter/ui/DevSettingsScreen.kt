@@ -68,6 +68,7 @@ fun DevSettingsScreen(
     var patInput by remember { mutableStateOf("") }
     var distRepoInput by remember(vault.distributionRepo) { mutableStateOf(vault.distributionRepo) }
     var consoleRepoInput by remember(vault.consoleRepo) { mutableStateOf(vault.consoleRepo) }
+    var privateUpdateRepoInput by remember(vault.privateUpdateRepo) { mutableStateOf(vault.privateUpdateRepo) }
     var sheetIdInput by remember(vault.feedbackSheetId) { mutableStateOf(vault.feedbackSheetId) }
     var sheetRangeInput by remember(vault.feedbackSheetRange) { mutableStateOf(vault.feedbackSheetRange) }
     var sheetsTokenInput by remember { mutableStateOf("") }
@@ -225,12 +226,24 @@ fun DevSettingsScreen(
                             label = "Console Relay Repo",
                             placeholder = "erlingdiniy/duit-developer-console"
                         )
+                        Spacer(Modifier.height(8.dp))
+                        PrismaticTextField(
+                            value = privateUpdateRepoInput,
+                            onValueChange = { privateUpdateRepoInput = it },
+                            label = "Private Updates Repo",
+                            placeholder = "erlingdiniy/duit-developer-console"
+                        )
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PrismaticButton(
                                 text = "Save PAT",
                                 onClick = {
-                                    viewModel.saveGithubCredentials(patInput, distRepoInput, consoleRepoInput)
+                                    viewModel.saveGithubCredentials(
+                                        patInput,
+                                        distRepoInput,
+                                        consoleRepoInput,
+                                        privateUpdateRepoInput
+                                    )
                                     patInput = ""
                                 },
                                 variant = PrismaticButtonVariant.Primary,

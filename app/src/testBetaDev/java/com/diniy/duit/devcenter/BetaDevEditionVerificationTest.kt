@@ -31,9 +31,9 @@ class BetaDevEditionVerificationTest {
         val context = ApplicationProvider.getApplicationContext<Application>()
 
         assertEquals("com.diniy.duit.beta", BuildConfig.APPLICATION_ID)
-        assertTrue(BuildConfig.VERSION_NAME.endsWith("-dev"))
+        assertTrue(BuildConfig.VERSION_NAME.contains("-dev"))
         assertFalse(BuildConfig.VERSION_NAME.contains("-beta."))
-        assertTrue(BuildConfig.VERSION_CODE >= 1_002_000)
+        assertTrue(BuildConfig.VERSION_CODE >= 10_020_000)
 
         assertTrue(BuildConfig.PUBLIC_EDITION)
         assertTrue(BuildConfig.OPTIONAL_COMMISSION)
@@ -68,6 +68,8 @@ class BetaDevEditionVerificationTest {
         for (className in excludedUpdaterClasses) {
             assertTrue("betaDev must exclude $className", runCatching { Class.forName(className) }.isFailure)
         }
+        assertTrue(runCatching { Class.forName("com.diniy.duit.update.PrivateDevUpdates") }.isSuccess)
+        assertTrue(runCatching { Class.forName("com.diniy.duit.update.PrivateDevInstallStatusReceiver") }.isSuccess)
 
         // Firebase Developer Broadcasts & Money Reminders preserved
         assertTrue(

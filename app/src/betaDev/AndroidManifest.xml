@@ -1,11 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Launcher name comes from duitBetaAppName ("duit." for v1.2.0-dev on top of stable). -->
     <application
         android:label="${appLabel}"
         android:usesCleartextTraffic="false"
         tools:replace="android:label">
+        <meta-data
+            android:name="com.diniy.duit.PRIVATE_DEV_EDITION"
+            android:value="true" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.supportqr"
@@ -15,6 +19,9 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/support_share_paths" />
         </provider>
+        <receiver
+            android:name=".update.PrivateDevInstallStatusReceiver"
+            android:exported="false" />
 
         <!-- Phase 8: Developer Broadcasts (FCM) preserved in private developer build; zero analytics collection. -->
         <meta-data

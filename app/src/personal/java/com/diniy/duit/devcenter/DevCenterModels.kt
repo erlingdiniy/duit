@@ -204,5 +204,6 @@ data class DashboardSnapshot(
 
 const val DEFAULT_DISTRIBUTION_REPO = "erlingdiniy/duit-beta"
 const val DEFAULT_CONSOLE_REPO = "erlingdiniy/duit-developer-console"
+const val DEFAULT_PRIVATE_UPDATE_REPO = "erlingdiniy/duit-developer-console"
 const val DEFAULT_FEEDBACK_RANGE = "Feedback!A1:F200"
 const val ANDROID_BROADCAST_CHANNEL_ID = "duit_developer_broadcasts"

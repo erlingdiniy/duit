@@ -152,7 +152,12 @@ class DevCenterViewModel(
         }
     }
 
-    fun saveGithubCredentials(rawPat: String, distributionRepo: String, consoleRepo: String) {
+    fun saveGithubCredentials(
+        rawPat: String,
+        distributionRepo: String,
+        consoleRepo: String,
+        privateUpdateRepo: String = _uiState.value.vault.privateUpdateRepo
+    ) {
         authManager.recordUserActivity()
         val cleanPat = rawPat.trim()
         if (cleanPat.isEmpty() && vault.getStateSyncOrNull()?.encryptedGithubPat == null) {
@@ -163,11 +168,15 @@ class DevCenterViewModel(
             _uiState.update { it.copy(errorBanner = "Repository slugs must use owner/repo format.") }
             return
         }
+        if (!DevCenterValidators.isValidPrivateUpdateRepo(privateUpdateRepo)) {
+            _uiState.update { it.copy(errorBanner = "Private updates repo cannot be a public duit repository.") }
+            return
+        }
 
         scope.launch {
             val currentSecrets = buildList { if (cleanPat.isNotEmpty()) add(cleanPat) }
             runCatching {
-                vault.saveRepositories(distributionRepo, consoleRepo)
+                vault.saveRepositories(distributionRepo, consoleRepo, privateUpdateRepo)
                 if (cleanPat.isNotEmpty()) vault.saveGithubPat(cleanPat)
                 vault.appendAuditEvent(
                     AuditLogEntry(
