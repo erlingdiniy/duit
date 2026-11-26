@@ -1,4 +1,5 @@
 import java.util.zip.ZipFile
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.android.application)
@@ -42,6 +43,16 @@ if (betaVersionName.contains("-beta.")) {
 }
 val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
 
+// Private developer-enabled build (`betaDev`) shares the com.diniy.duit.beta package and signing key
+// and defaults to the active beta/stable versionCode so upgrades stay in-place without data loss.
+val betaDevVersionName = providers.gradleProperty("duitBetaDevVersionName")
+    .orElse("${betaVersionName.substringBefore("-beta.")}-dev").get()
+val betaDevVersionCode = providers.gradleProperty("duitBetaDevVersionCode")
+    .orElse(betaVersionCode.toString()).get().toInt()
+require(betaDevVersionCode in 1..2100000000 && betaDevVersionName.contains("-dev") && !betaDevVersionName.contains("-beta.")) {
+    "betaDev ($betaDevVersionName / $betaDevVersionCode) must use a valid versionCode and contain '-dev' without '-beta.'"
+}
+
 // Personal Edition versioning follows duit's X*1_000_000 + Y*1_000 + Z monotonic rule so upgrades
 // over earlier personal installs (e.g. versionCode 1) always succeed without colliding with beta (-beta.).
 val personalVersionName = providers.gradleProperty("duitPersonalVersionName").orElse("1.2.0-personal").get()
@@ -79,6 +90,8 @@ android {
         buildConfigField("boolean", "SUPPORT_PREVIEW", "false")
         buildConfigField("boolean", "PUBLIC_EDITION", "true")
         buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
+        buildConfigField("boolean", "FCM_ENABLED", "false")
+        buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
     }
 
     signingConfigs {
@@ -117,8 +130,20 @@ android {
             buildConfigField("String", "FEEDBACK_URL", "\"$feedbackUrl\"")
             buildConfigField("boolean", "PUBLIC_EDITION", "true")
             buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
+            buildConfigField("boolean", "FCM_ENABLED", "true")
+            buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
             // QA only: shows Support duit. with the placeholder before the real QR exists. Never set for releases.
             buildConfigField("boolean", "SUPPORT_PREVIEW", providers.gradleProperty("duitSupportPreview").orElse("false").get())
+        }
+        // Private developer-enabled build over com.diniy.duit.beta: exact public v1.2.0 experience + FCM + Developer Center,
+        // with public in-app GitHub auto-updates disabled at compile time so public APKs cannot overwrite it.
+        create("betaDev") {
+            initWith(getByName("beta"))
+            matchingFallbacks += listOf("beta", "release")
+            buildConfigField("String", "BETA_REPOSITORY", "\"\"")
+            buildConfigField("boolean", "FCM_ENABLED", "true")
+            buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
+            buildConfigField("boolean", "PRIVATE_DEV_EDITION", "true")
         }
         // Release-like build for on-device performance checks. Separate app ID, so it never touches
         // the installed app or its data; signed with the debug key so it can be sideloaded.
@@ -139,30 +164,47 @@ android {
         }
     }
 
-    val personalBuildTypes = setOf("debug", "fluid", "release")
+    val personalBuildTypes = setOf("debug", "betaDev", "fluid", "release")
     buildTypes.configureEach {
-        if (name != "beta") {
-            sourceSets.getByName(name).java.srcDir("src/noUpdater/java")
-        }
-        if (name in personalBuildTypes) {
-            sourceSets.getByName(name).java.srcDir("src/personal/java")
-            if (name != "debug") {
-                sourceSets.getByName(name).manifest.srcFile("src/personal/AndroidManifest.xml")
+        when (name) {
+            "betaDev" -> {
+                sourceSets.getByName(name).res.srcDir("src/beta/res")
+                sourceSets.getByName(name).java.srcDir("src/personal/java")
             }
-        } else {
-            sourceSets.getByName(name).java.srcDir("src/noDevCenter/java")
+            "beta" -> {
+                sourceSets.getByName(name).java.srcDir("src/noDevCenter/java")
+            }
+            else -> {
+                sourceSets.getByName(name).java.srcDir("src/noUpdater/java")
+                if (name in personalBuildTypes) {
+                    sourceSets.getByName(name).java.srcDir("src/personal/java")
+                    if (name != "debug") {
+                        sourceSets.getByName(name).manifest.srcFile("src/personal/AndroidManifest.xml")
+                    }
+                } else {
+                    sourceSets.getByName(name).java.srcDir("src/noDevCenter/java")
+                }
+            }
         }
     }
 
-    // Fail configuration immediately if public/benchmark source sets ever pick up Personal Developer Center code.
+    // Fail configuration immediately if public/benchmark source sets ever pick up Private Developer Center artifacts.
     listOf("beta", "benchmark").forEach { publicType ->
         val srcSet = sourceSets.getByName(publicType)
-        require(srcSet.java.srcDirs.none { it.invariantSeparatorsPath.endsWith("src/personal/java") }) {
-            "Public build type '$publicType' must never include src/personal/java"
+        require(
+            srcSet.java.srcDirs.none {
+                it.invariantSeparatorsPath.endsWith("src/personal/java") ||
+                    it.invariantSeparatorsPath.endsWith("src/betaDev/java")
+            }
+        ) {
+            "Public build type '$publicType' must never include src/personal/java or src/betaDev/java"
         }
         val manifestPath = srcSet.manifest.srcFile.invariantSeparatorsPath
-        require(!manifestPath.endsWith("src/personal/AndroidManifest.xml")) {
-            "Public build type '$publicType' must never include src/personal/AndroidManifest.xml"
+        require(
+            !manifestPath.endsWith("src/personal/AndroidManifest.xml") &&
+                !manifestPath.endsWith("src/betaDev/AndroidManifest.xml")
+        ) {
+            "Public build type '$publicType' must never include private developer manifests"
         }
     }
 
@@ -195,6 +237,32 @@ android {
     }
 }
 
+abstract class SyncBetaDevSharedSourcesTask : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val inputDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @get:Inject
+    abstract val fs: FileSystemOperations
+
+    @TaskAction
+    fun sync() {
+        fs.sync {
+            from(inputDir) {
+                exclude("com/diniy/duit/update/**")
+            }
+            into(outputDir)
+        }
+    }
+}
+
+val syncBetaDevSharedSources by tasks.registering(SyncBetaDevSharedSourcesTask::class) {
+    inputDir.set(layout.projectDirectory.dir("src/beta/java"))
+}
+
 androidComponents {
     onVariants(selector().withBuildType("beta")) { variant ->
         variant.outputs.forEach { output ->
@@ -202,15 +270,42 @@ androidComponents {
             output.versionName.set(betaVersionName)
         }
     }
+    onVariants(selector().withBuildType("betaDev")) { variant ->
+        variant.outputs.forEach { output ->
+            output.versionCode.set(betaDevVersionCode)
+            output.versionName.set(betaDevVersionName)
+        }
+        variant.sources.java?.addGeneratedSourceDirectory(
+            syncBetaDevSharedSources,
+            SyncBetaDevSharedSourcesTask::outputDir
+        )
+    }
 }
 
-// Keep Google Services strictly scoped to beta so personal/debug/release builds remain FCM-free.
+val syncBetaDevGoogleServices by tasks.registering {
+    val srcFile = file("src/beta/google-services.json")
+    val dstFile = file("src/betaDev/google-services.json")
+    onlyIf { srcFile.exists() }
+    if (srcFile.exists()) {
+        inputs.file(srcFile)
+    }
+    outputs.file(dstFile)
+    doLast {
+        dstFile.parentFile.mkdirs()
+        srcFile.copyTo(dstFile, overwrite = true)
+    }
+}
+
+// Keep Google Services strictly scoped to beta and betaDev so debug/fluid/release remain FCM-free.
 tasks.matching {
-    it.name.startsWith("process") &&
-        it.name.endsWith("GoogleServices") &&
-        !it.name.contains("Beta", ignoreCase = true)
+    it.name.startsWith("process") && it.name.endsWith("GoogleServices")
 }.configureEach {
-    enabled = false
+    if (name == "processBetaDevGoogleServices") {
+        dependsOn(syncBetaDevGoogleServices)
+    }
+    if (!name.contains("Beta", ignoreCase = true)) {
+        enabled = false
+    }
 }
 
 val verifyBetaReleaseIsolation by tasks.registering {
@@ -231,7 +326,9 @@ val verifyBetaReleaseIsolation by tasks.registering {
             "duit_dev_center_sheets_v1",
             "custom-broadcast.yml",
             "ENABLE_CUSTOM_FCM_DISPATCH",
-            "QA_FCM_TOKEN_COPY"
+            "QA_FCM_TOKEN_COPY",
+            "Private developer build",
+            "Public in-app updates are disabled"
         )
         val allowedBetaPermissions = setOf(
             "android.permission.INTERNET",
@@ -342,9 +439,11 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Phase 8: FCM Developer Broadcasts strictly for beta (public edition). Personal builds include zero Firebase SDK.
+    // Phase 8: FCM Developer Broadcasts strictly for beta and private betaDev. Offline personal/debug/release exclude Firebase SDK.
     "betaImplementation"(platform(libs.firebase.bom))
     "betaImplementation"(libs.firebase.messaging)
+    "betaDevImplementation"(platform(libs.firebase.bom))
+    "betaDevImplementation"(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

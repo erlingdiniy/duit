@@ -10,6 +10,8 @@ import com.diniy.duit.DuitContainer
 object DeveloperCenterEntryPoint {
     const val isAvailable: Boolean = false
 
+    fun privacySummaryOrNull(fcmEnabled: Boolean): String? = null
+
     fun onAppBackgrounded() = Unit
 
     @Composable

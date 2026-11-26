@@ -16,7 +16,13 @@ class DeveloperCenterIsolationBetaTest {
     fun publicEdition_excludesDeveloperCenterEntryPointAndClasses() {
         assertTrue(BuildConfig.PUBLIC_EDITION)
         assertFalse(BuildConfig.DEVELOPER_CENTER_ENABLED)
+        assertTrue(BuildConfig.FCM_ENABLED)
+        assertFalse(BuildConfig.PRIVATE_DEV_EDITION)
         assertFalse(DeveloperCenterEntryPoint.isAvailable)
+        assertTrue(
+            "Public beta build must retain BetaUpdates updater",
+            runCatching { Class.forName("com.diniy.duit.update.BetaUpdates") }.isSuccess
+        )
 
         val excludedClasses = listOf(
             "com.diniy.duit.devcenter.DevCenterVault",

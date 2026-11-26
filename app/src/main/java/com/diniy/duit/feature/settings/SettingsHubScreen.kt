@@ -1151,13 +1151,12 @@ private fun AboutPrivacyPage(onBack: () -> Unit) {
         item(key = "on_device") {
             AboutInfoCard(
                 Icons.Rounded.Storage, colors.aqua, "Stays on your device",
-                if (com.diniy.duit.BuildConfig.DEVELOPER_CENTER_ENABLED) {
-                    "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. Firebase Analytics and public telemetry remain excluded; internet access is used only inside your PIN-locked Developer Center."
-                } else if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
-                    "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. goes online only to check for app updates, receive developer broadcast announcements, and send feedback you choose to submit. Analytics remain disabled and your financial records are never sent."
-                } else {
-                    "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
-                }
+                com.diniy.duit.devcenter.DeveloperCenterEntryPoint.privacySummaryOrNull(com.diniy.duit.BuildConfig.FCM_ENABLED)
+                    ?: if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
+                        "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. goes online only to check for app updates, receive developer broadcast announcements, and send feedback you choose to submit. Analytics remain disabled and your financial records are never sent."
+                    } else {
+                        "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
+                    }
             )
         }
         item(key = "lock") {
@@ -1208,7 +1207,7 @@ private val BaseLicenseNotices = listOf(
 )
 
 internal fun activeLicenseNotices(
-    publicEdition: Boolean = com.diniy.duit.BuildConfig.PUBLIC_EDITION && !com.diniy.duit.BuildConfig.DEVELOPER_CENTER_ENABLED
+    publicEdition: Boolean = com.diniy.duit.BuildConfig.FCM_ENABLED
 ): List<LicenseNotice> =
     if (publicEdition) {
         BaseLicenseNotices + LicenseNotice(

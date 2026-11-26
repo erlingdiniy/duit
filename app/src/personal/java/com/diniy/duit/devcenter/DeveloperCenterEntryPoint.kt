@@ -84,6 +84,12 @@ internal class DevCenterRuntime(
 object DeveloperCenterEntryPoint {
     const val isAvailable: Boolean = true
 
+    fun privacySummaryOrNull(fcmEnabled: Boolean): String = if (fcmEnabled) {
+        "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. duit. goes online for Firebase developer broadcasts (analytics disabled), feedback you submit, and inside your PIN-locked Developer Center."
+    } else {
+        "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. Firebase Analytics and public telemetry remain excluded; internet access is used only inside your PIN-locked Developer Center."
+    }
+
     @Volatile
     private var runtime: DevCenterRuntime? = null
 
