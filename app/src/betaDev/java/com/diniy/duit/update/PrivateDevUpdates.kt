@@ -315,6 +315,9 @@ internal class PrivateDevUpdates(
         apk: File,
         onProgress: (Float) -> Unit = {}
     ) {
+        if (!HEX_SHA256_REGEX.matches(release.sha256)) {
+            throw IOException("Missing or invalid release SHA-256 digest")
+        }
         val job = coroutineContext
         val digest = MessageDigest.getInstance("SHA-256")
         var total = 0L
@@ -609,6 +612,7 @@ private val MD_EMPHASIS = Regex("""\*\*|__|~~|`""")
 
 private val PRIVATE_DEV_TAG = Regex("""v(\d{1,3})\.(\d{1,3})\.(\d{1,3})-dev(?:\.([1-9]\d?))?""")
 private val DIGEST_REGEX = Regex("""sha256:([0-9a-fA-F]{64})""")
+private val HEX_SHA256_REGEX = Regex("""[0-9a-fA-F]{64}""")
 private val DATE_REGEX = Regex("""\d{4}-\d{2}-\d{2}""")
 private val PRIVATE_CDN_HOSTS = setOf(
     "objects.githubusercontent.com",

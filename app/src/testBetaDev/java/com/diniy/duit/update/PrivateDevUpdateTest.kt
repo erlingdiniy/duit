@@ -52,19 +52,41 @@ class PrivateDevUpdateTest {
 
     @Test
     fun privateDevVersionCode_isMonotonicAndAbovePublicRange() {
+        fun betaCode(major: Int, minor: Int, betaNum: Int): Long =
+            major * 1_000_000L + minor * 1_000L - 100L + betaNum
+
+        fun stableCode(major: Int, minor: Int, patch: Int): Long =
+            major * 1_000_000L + minor * 1_000L + patch
+
         val base = privateDevVersionCode(1, 2, 0, 0)!!
         val patch1 = privateDevVersionCode(1, 2, 0, 1)!!
         val patch2 = privateDevVersionCode(1, 2, 0, 2)!!
-        val minor1 = privateDevVersionCode(1, 2, 1, 0)!!
-        val v2 = privateDevVersionCode(2, 0, 0, 0)!!
+        val bugfixDev = privateDevVersionCode(1, 2, 1, 1)!!
+        val minor1 = privateDevVersionCode(1, 3, 0, 1)!!
+        val v2 = privateDevVersionCode(2, 0, 0, 1)!!
 
+        val ordered = listOf(
+            betaCode(1, 2, 1),     // 1.2.0-beta.1 = 1_001_901
+            stableCode(1, 2, 0),   // 1.2.0        = 1_002_000
+            stableCode(1, 2, 1),   // 1.2.1        = 1_002_001
+            betaCode(1, 3, 1),     // 1.3.0-beta.1 = 1_002_901
+            stableCode(1, 3, 0),   // 1.3.0        = 1_003_000
+            stableCode(2, 0, 0),   // 2.0.0        = 2_000_000
+            stableCode(9, 9, 9),   // 9.9.9        = 9_009_009
+            base,                  // 1.2.0-dev    = 10_020_000
+            patch1,                // 1.2.0-dev.1  = 10_020_001
+            patch2,                // 1.2.0-dev.2  = 10_020_002
+            bugfixDev,             // 1.2.1-dev.1  = 10_020_101
+            minor1,                // 1.3.0-dev.1  = 10_030_001
+            v2                     // 2.0.0-dev.1  = 20_000_001
+        )
+        assertEquals(1_002_000L, stableCode(1, 2, 0))
         assertEquals(10_020_000L, base)
         assertEquals(10_020_001L, patch1)
-        assertTrue(patch1 > base)
-        assertTrue(patch2 > patch1)
-        assertTrue(minor1 > patch2)
-        assertTrue(v2 > minor1)
-        assertTrue(base > 9_099_099L)
+        assertEquals(10_020_002L, patch2)
+        for (i in 1 until ordered.size) {
+            assertTrue("Expected ${ordered[i]} > ${ordered[i - 1]}", ordered[i] > ordered[i - 1])
+        }
     }
 
     @Test
@@ -105,6 +127,30 @@ class PrivateDevUpdateTest {
                     put("state", "uploaded")
                     put("url", "https://api.github.com/repos/$repo/releases/assets/102")
                     put("digest", "sha256:$validSha")
+                    put("size", 8_000_000)
+                }))
+            })
+            // Missing digest must be rejected
+            put(JSONObject().apply {
+                put("tag_name", "v1.2.0-dev.3")
+                put("draft", false)
+                put("assets", JSONArray().put(JSONObject().apply {
+                    put("name", "duit-1.2.0-dev.3.apk")
+                    put("state", "uploaded")
+                    put("url", "https://api.github.com/repos/$repo/releases/assets/103")
+                    put("digest", "")
+                    put("size", 8_000_000)
+                }))
+            })
+            // Malformed digest must be rejected
+            put(JSONObject().apply {
+                put("tag_name", "v1.2.0-dev.4")
+                put("draft", false)
+                put("assets", JSONArray().put(JSONObject().apply {
+                    put("name", "duit-1.2.0-dev.4.apk")
+                    put("state", "uploaded")
+                    put("url", "https://api.github.com/repos/$repo/releases/assets/104")
+                    put("digest", "sha256:1234")
                     put("size", 8_000_000)
                 }))
             })
@@ -247,6 +293,19 @@ class PrivateDevUpdateTest {
             tmpOk.delete()
         }
 
+        for (invalidDigest in listOf("", "not-a-valid-sha")) {
+            val missingHashRelease = goodRelease.copy(sha256 = invalidDigest)
+            val tmpMissing = File.createTempFile("test-missing-", ".apk", context.cacheDir)
+            try {
+                updater.downloadAndVerifyFile(missingHashRelease, fakePat, tmpMissing)
+                fail("Expected missing/invalid SHA-256 failure for '$invalidDigest'")
+            } catch (err: IOException) {
+                assertTrue(err.message.orEmpty().contains("SHA-256"))
+            } finally {
+                tmpMissing.delete()
+            }
+        }
+
         val badHashRelease = goodRelease.copy(sha256 = "f".repeat(64))
         val tmpBad = File.createTempFile("test-bad-", ".apk", context.cacheDir)
         try {
@@ -296,6 +355,8 @@ class PrivateDevUpdateTest {
         val badCases = listOf(
             CandidateArchiveMetadata("com.diniy.duit", 10_020_001L, "1.2.0-dev.1", true, setOf(signerA)),
             CandidateArchiveMetadata("com.diniy.duit.beta", 10_020_000L, "1.2.0-dev.1", true, setOf(signerA)),
+            CandidateArchiveMetadata("com.diniy.duit.beta", 1_002_000L, "1.2.0", false, setOf(signerA)),
+            CandidateArchiveMetadata("com.diniy.duit.beta", 1_002_901L, "1.3.0-beta.1", false, setOf(signerA)),
             CandidateArchiveMetadata("com.diniy.duit.beta", 10_020_001L, "1.2.0", true, setOf(signerA)),
             CandidateArchiveMetadata("com.diniy.duit.beta", 10_020_001L, "1.2.0-beta.3-dev.1", true, setOf(signerA)),
             CandidateArchiveMetadata("com.diniy.duit.beta", 10_020_001L, "1.2.0-dev.1", false, setOf(signerA)),
