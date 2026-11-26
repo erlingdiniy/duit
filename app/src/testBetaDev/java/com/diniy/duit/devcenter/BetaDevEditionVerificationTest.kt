@@ -40,7 +40,11 @@ class BetaDevEditionVerificationTest {
         assertTrue(BuildConfig.FCM_ENABLED)
         assertTrue(BuildConfig.DEVELOPER_CENTER_ENABLED)
         assertTrue(BuildConfig.PRIVATE_DEV_EDITION)
+        assertTrue(BuildConfig.CRASHLYTICS_ENABLED)
+        assertEquals("private_dev", BuildConfig.RELEASE_CHANNEL)
+        assertFalse(BuildConfig.CRASHLYTICS_QA_TEST)
         assertEquals("", BuildConfig.BETA_REPOSITORY)
+        assertTrue(com.diniy.duit.diagnostics.CrashReporting.isSupported)
 
         assertTrue(DeveloperCenterEntryPoint.isAvailable)
         assertNotNull(DeveloperCenterEntryPoint.privacySummaryOrNull(fcmEnabled = true))

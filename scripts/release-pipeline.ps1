@@ -13,7 +13,8 @@ param(
     [string]$Target = "PrivateDev",
     [string]$VersionName = "1.2.0-dev.1",
     [int]$VersionCode = 0,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$UploadCrashlyticsMapping
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,6 +92,8 @@ function Assert-PrivateDevApk([string]$ApkPath, [string]$ExpectedVerName, [int]$
 
 Assert-NoPublicPrivateLeak
 
+$mappingProp = if ($UploadCrashlyticsMapping -and -not $DryRun) { "true" } else { "false" }
+
 if ($Target -eq "Stable" -or $Target -eq "All") {
     if ($Target -eq "Stable" -and $PSBoundParameters.ContainsKey("VersionName") -and $VersionName -notmatch "^(\d+)\.(\d+)\.(\d+)$") {
         throw "SAFETY BLOCK: Stable target requires X.Y.Z versionName (no -dev or -beta suffix), refusing: $VersionName"
@@ -98,7 +101,7 @@ if ($Target -eq "Stable" -or $Target -eq "All") {
     $stableVer = if ($Target -eq "Stable" -and $PSBoundParameters.ContainsKey("VersionName")) { $VersionName } else { "1.2.0" }
     $parts = $stableVer.Split(".")
     $stableCode = [int]$parts[0] * 1000000 + [int]$parts[1] * 1000 + [int]$parts[2]
-    Invoke-GradleTarget @("testBetaUnitTest", "assembleBeta", "-PduitBetaVersionName=$stableVer", "-PduitBetaVersionCode=$stableCode", "-PduitBetaAppName=duit.")
+    Invoke-GradleTarget @("testBetaUnitTest", "assembleBeta", "-PduitBetaVersionName=$stableVer", "-PduitBetaVersionCode=$stableCode", "-PduitBetaAppName=duit.", "-PduitUploadCrashlyticsMapping=$mappingProp")
     Write-Host "[PASS] Public Stable $stableVer ($stableCode) verified + verifyBetaReleaseIsolation PASS" -ForegroundColor Green
 }
 
@@ -109,7 +112,7 @@ if ($Target -eq "Beta" -or $Target -eq "All") {
     $betaVer = if ($Target -eq "Beta" -and $PSBoundParameters.ContainsKey("VersionName")) { $VersionName } else { "1.2.0-beta.2" }
     if ($betaVer -notmatch "^(\d+)\.(\d+)\.0-beta\.([1-9]\d?)$") { throw "Invalid beta versionName: $betaVer" }
     $betaCode = [int]$Matches[1] * 1000000 + [int]$Matches[2] * 1000 - 100 + [int]$Matches[3]
-    Invoke-GradleTarget @("testBetaUnitTest", "assembleBeta", "-PduitBetaVersionName=$betaVer", "-PduitBetaVersionCode=$betaCode", "-PduitBetaAppName=duit. Beta")
+    Invoke-GradleTarget @("testBetaUnitTest", "assembleBeta", "-PduitBetaVersionName=$betaVer", "-PduitBetaVersionCode=$betaCode", "-PduitBetaAppName=duit. Beta", "-PduitUploadCrashlyticsMapping=$mappingProp")
     Write-Host "[PASS] Public Beta $betaVer ($betaCode) verified + verifyBetaReleaseIsolation PASS" -ForegroundColor Green
 }
 
@@ -131,7 +134,8 @@ if ($Target -eq "PrivateDev" -or $Target -eq "All") {
         "-PduitBetaVersionCode=1002000",
         "-PduitBetaAppName=duit.",
         "-PduitBetaDevVersionName=$devVer",
-        "-PduitBetaDevVersionCode=$expectedDevCode"
+        "-PduitBetaDevVersionCode=$expectedDevCode",
+        "-PduitUploadCrashlyticsMapping=$mappingProp"
     )
 
     $unsignedApk = Join-Path $repoRoot "app\build\outputs\apk\betaDev\app-betaDev-unsigned.apk"

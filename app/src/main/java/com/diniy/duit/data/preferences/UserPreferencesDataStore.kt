@@ -50,6 +50,7 @@ class UserPreferencesDataStore(context: Context) {
         val COMMISSION_THRESHOLD_SEN = longPreferencesKey("commission_threshold_sen")
         val COMMISSION_RATE_BPS = intPreferencesKey("commission_rate_bps")
         val COMMISSION_FLAT_BONUS_SEN = longPreferencesKey("commission_flat_bonus_sen")
+        val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
@@ -105,6 +106,7 @@ class UserPreferencesDataStore(context: Context) {
                     rateBps = prefs[Keys.COMMISSION_RATE_BPS] ?: 0,
                     flatBonusSen = prefs[Keys.COMMISSION_FLAT_BONUS_SEN] ?: 0L
                 ),
+                crashReportingEnabled = prefs[Keys.CRASH_REPORTING_ENABLED] ?: false,
                 hasCompletedOnboarding = prefs[Keys.ONBOARDING_COMPLETED] ?: false
             )
         }
@@ -200,6 +202,10 @@ class UserPreferencesDataStore(context: Context) {
 
     suspend fun setCommissionFeatureEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.COMMISSION_FEATURE_ENABLED] = enabled }
+    }
+
+    suspend fun setCrashReportingEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.CRASH_REPORTING_ENABLED] = enabled }
     }
 
     /** True once the public-edition commission choice was stored (by the user, startup or a restore). */

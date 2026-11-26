@@ -10,6 +10,7 @@ plugins {
 
 if (file("src/beta/google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 val betaRepository = providers.gradleProperty("duitBetaRepository").orElse("").get()
@@ -42,6 +43,8 @@ if (betaVersionName.contains("-beta.")) {
     require(betaVersionCode == expected) { "Beta $betaVersionName needs duitBetaVersionCode=$expected" }
 }
 val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
+val uploadCrashlyticsMapping = providers.gradleProperty("duitUploadCrashlyticsMapping").orElse("false").get().toBoolean()
+val crashlyticsQaTest = providers.gradleProperty("duitCrashlyticsQaTest").orElse("false").get().toBoolean()
 
 // Private developer-enabled build (`betaDev`) shares the com.diniy.duit.beta package and signing key
 // and uses major*10_000_000 + minor*10_000 + patch*100 + devN (e.g. 1.2.0-dev.1 = 10020001) so private
@@ -103,6 +106,9 @@ android {
         buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
         buildConfigField("boolean", "FCM_ENABLED", "false")
         buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
+        buildConfigField("boolean", "CRASHLYTICS_ENABLED", "false")
+        buildConfigField("String", "RELEASE_CHANNEL", "\"personal\"")
+        buildConfigField("boolean", "CRASHLYTICS_QA_TEST", "false")
     }
 
     signingConfigs {
@@ -143,6 +149,9 @@ android {
             buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
             buildConfigField("boolean", "FCM_ENABLED", "true")
             buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
+            buildConfigField("boolean", "CRASHLYTICS_ENABLED", "true")
+            buildConfigField("String", "RELEASE_CHANNEL", if (betaVersionName.contains("-beta.")) "\"beta\"" else "\"stable\"")
+            buildConfigField("boolean", "CRASHLYTICS_QA_TEST", crashlyticsQaTest.toString())
             // QA only: shows Support duit. with the placeholder before the real QR exists. Never set for releases.
             buildConfigField("boolean", "SUPPORT_PREVIEW", providers.gradleProperty("duitSupportPreview").orElse("false").get())
         }
@@ -155,6 +164,9 @@ android {
             buildConfigField("boolean", "FCM_ENABLED", "true")
             buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
             buildConfigField("boolean", "PRIVATE_DEV_EDITION", "true")
+            buildConfigField("boolean", "CRASHLYTICS_ENABLED", "true")
+            buildConfigField("String", "RELEASE_CHANNEL", "\"private_dev\"")
+            buildConfigField("boolean", "CRASHLYTICS_QA_TEST", crashlyticsQaTest.toString())
         }
         // Release-like build for on-device performance checks. Separate app ID, so it never touches
         // the installed app or its data; signed with the debug key so it can be sideloaded.
@@ -177,6 +189,10 @@ android {
 
     val personalBuildTypes = setOf("debug", "betaDev", "fluid", "release")
     buildTypes.configureEach {
+        val isCrashlyticsType = name == "beta" || name == "betaDev"
+        (this as org.gradle.api.plugins.ExtensionAware).extensions
+            .findByType(com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension::class.java)
+            ?.mappingFileUploadEnabled = isCrashlyticsType && uploadCrashlyticsMapping
         when (name) {
             "betaDev" -> {
                 sourceSets.getByName(name).res.srcDir("src/beta/res")
@@ -307,7 +323,7 @@ val syncBetaDevGoogleServices by tasks.registering {
     }
 }
 
-// Keep Google Services strictly scoped to beta and betaDev so debug/fluid/release remain FCM-free.
+// Keep Google Services and Crashlytics strictly scoped to beta and betaDev so debug/fluid/release remain Firebase-free.
 tasks.matching {
     it.name.startsWith("process") && it.name.endsWith("GoogleServices")
 }.configureEach {
@@ -317,6 +333,12 @@ tasks.matching {
     if (!name.contains("Beta", ignoreCase = true)) {
         enabled = false
     }
+}
+
+tasks.matching {
+    it.name.contains("Crashlytics", ignoreCase = true) && !it.name.contains("Beta", ignoreCase = true)
+}.configureEach {
+    enabled = false
 }
 
 val verifyBetaReleaseIsolation by tasks.registering {
@@ -347,7 +369,11 @@ val verifyBetaReleaseIsolation by tasks.registering {
             "duit_private_dev_updates",
             "duit-dev-install",
             "dev_private_update_repo",
-            "Private updates"
+            "Private updates",
+            "Crash Monitoring",
+            "console.firebase.google.com/project/duit-beta/crashlytics",
+            "duit_qa_crash",
+            "Phase 20C isolated QA verification crash"
         )
         val allowedBetaPermissions = setOf(
             "android.permission.INTERNET",
@@ -458,11 +484,13 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Phase 8: FCM Developer Broadcasts strictly for beta and private betaDev. Offline personal/debug/release exclude Firebase SDK.
+    // Phase 8 & 20C: FCM & Crashlytics strictly for beta and private betaDev. Offline personal/debug/release exclude Firebase SDK.
     "betaImplementation"(platform(libs.firebase.bom))
     "betaImplementation"(libs.firebase.messaging)
+    "betaImplementation"(libs.firebase.crashlytics)
     "betaDevImplementation"(platform(libs.firebase.bom))
     "betaDevImplementation"(libs.firebase.messaging)
+    "betaDevImplementation"(libs.firebase.crashlytics)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

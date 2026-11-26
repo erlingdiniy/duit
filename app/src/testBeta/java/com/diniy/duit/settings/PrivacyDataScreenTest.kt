@@ -76,15 +76,41 @@ class PrivacyDataScreenTest {
     }
 
     @Test
+    fun crashReportsConsentCard_defaultsOff_togglesCleanly_andDisclosesNoSensitiveData() {
+        assertTrue(BuildConfig.CRASHLYTICS_ENABLED)
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        var toggled: Boolean? = null
+        activity.setContent {
+            DuitTheme {
+                PrivacyDataScreen(
+                    onBack = {},
+                    onOpenRoute = {},
+                    crashReportingEnabled = false,
+                    onSetCrashReporting = { toggled = it }
+                )
+            }
+        }
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Crash reports"))
+        compose.onNodeWithText("Status: Off — no reports collected.").assertExists()
+        compose.onNodeWithText("Crash reporting").assertExists()
+        compose.onNodeWithText("Never includes balances, transactions, receipts, names, emails, or PINs", substring = true).assertExists()
+        compose.onNodeWithText("Crash reporting").performClick()
+        assertEquals(true, toggled)
+    }
+
+    @Test
     fun licensesPage_includesFirebaseOnlyInPublicBuilds() {
         val publicNotices = activeLicenseNotices(publicEdition = true)
         val personalNotices = activeLicenseNotices(publicEdition = false)
         assertTrue(publicNotices.any { it.name == "Firebase Cloud Messaging SDK" })
+        assertTrue(publicNotices.any { it.name == "Firebase Crashlytics SDK" })
         assertFalse(personalNotices.any { it.name.contains("Firebase", ignoreCase = true) })
 
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         activity.setContent { DuitTheme { AboutLicensesPage(onBack = {}) } }
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Firebase Cloud Messaging SDK"))
         compose.onNodeWithText("Firebase Cloud Messaging SDK").assertExists()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Firebase Crashlytics SDK"))
+        compose.onNodeWithText("Firebase Crashlytics SDK").assertExists()
     }
 }

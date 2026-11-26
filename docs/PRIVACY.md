@@ -1,6 +1,6 @@
 # duit. Privacy Policy
 
-**Effective date:** 25 November 2026  
+**Effective date:** 26 November 2026  
 **Applies to:** the public duit. Android app (`com.diniy.duit.beta`), version `1.2.0` (Stable) and compatible public releases distributed through GitHub Releases (`erlingdiniy/duit-beta`). Personal builds built from source (`com.diniy.duit`) request no `INTERNET` permission and exclude Firebase entirely.
 
 duit. is a local-first personal finance app made by an independent developer (GitHub: **erlingdiniy**). This policy explains what the app stores on your device, what limited network connections the public release makes, and the controls you have.
@@ -8,10 +8,11 @@ duit. is a local-first personal finance app made by an independent developer (Gi
 ## 1. Summary
 
 - Your financial records and attached receipts stay on your phone. There is no account and no cloud sync.
-- The public release (`com.diniy.duit.beta`) goes online for three things only:
+- The public release (`com.diniy.duit.beta`) goes online for at most four limited purposes:
   1. Checking GitHub Releases (`erlingdiniy/duit-beta`) for app updates.
   2. Sending feedback **you choose** to submit.
   3. Receiving **Developer Broadcasts** (release announcements via Firebase Cloud Messaging topic, with analytics and advertising IDs disabled).
+  4. Sending **anonymous crash and ANR reports** through Firebase Crashlytics **only if you explicitly turn on Crash reporting** in **Settings -> Privacy & Your Data** (off by default).
 - Your balances, transactions, budgets, goals, tax notes, receipts, and backups are never sent to the developer.
 - The app contains no advertising, no behavioral tracking, and no analytics SDKs.
 
@@ -75,15 +76,25 @@ Public releases (`com.diniy.duit.beta`) include Firebase Cloud Messaging (FCM) s
 - **Controls:** Broadcasts appear on the dedicated **Developer Broadcasts** Android notification channel (`VISIBILITY_PRIVATE` on the lock screen) and can be muted or turned off anytime in Android's system notification settings for duit.
 - Google Play Services / Firebase handles push delivery under Google's Firebase privacy terms. Offline personal/source builds (`com.diniy.duit`) omit the Firebase SDK completely.
 
-## 8. Supporting the developer
+## 8. Optional Crash Reporting (Firebase Crashlytics)
+
+Public builds (`com.diniy.duit.beta`) include optional Firebase Crashlytics diagnostics strictly to identify fatal crashes, supported Android ANRs, and sanitized technical failure categories:
+
+- **Off by default (explicit opt-in):** Automatic crash reporting is disabled in the manifest (`firebase_crashlytics_collection_enabled = false`) and in app settings until you turn on **Crash reporting** under **Settings -> Privacy & Your Data**.
+- **What is sent when you opt in:** Crash and ANR stack traces, OS version and device model, app version (`versionName` / `versionCode`), and release channel (`stable`, `beta`, or `private_dev`).
+- **What is never included:** Wallet balances, transactions, salaries, commissions, debts, savings goals, Receipt Vault attachments or paths, SQLite database records, usernames, emails, phone numbers, GitHub PATs, OAuth tokens, PINs, or backup passwords.
+- **Analytics disabled & backups isolated:** Firebase Analytics and advertising ID collection remain disabled (`false`), and your crash reporting preference stays on your device (it is not included in encrypted financial backups).
+- **Turning it off:** Toggling **Crash reporting** off in **Settings -> Privacy & Your Data** immediately deletes unsent cached reports and disables crash collection (a full app restart completes teardown).
+
+## 9. Supporting the developer
 
 Voluntary donations under **Settings -> Support duit.** are temporarily unavailable. New public releases do not bundle any payment QR code, recipient name, or payment processor. `duit.` stays 100% free and performs no payment tracking.
 
-## 9. Permissions (`com.diniy.duit.beta`)
+## 10. Permissions (`com.diniy.duit.beta`)
 
 | Permission | Used for |
 | --- | --- |
-| `INTERNET`, `ACCESS_NETWORK_STATE` | GitHub update checks, opt-in feedback submission, and FCM broadcasts (omitted in personal/offline builds) |
+| `INTERNET`, `ACCESS_NETWORK_STATE` | GitHub update checks, opt-in feedback submission, FCM broadcasts, and opt-in crash reports (omitted in personal/offline builds) |
 | `REQUEST_INSTALL_PACKAGES` | Prompting Android's package installer for in-app updates after verification |
 | `com.google.android.c2dm.permission.RECEIVE` | Receiving FCM Developer Broadcasts (public edition only) |
 | `USE_BIOMETRIC` / `USE_FINGERPRINT` | Optional App Lock fingerprint/biometric unlock |
@@ -92,14 +103,14 @@ Voluntary donations under **Settings -> Support duit.** are temporarily unavaila
 
 Attaching receipts uses Android's system file/photo picker and camera intent without requesting broad gallery or external storage permissions. duit. never accesses your contacts, location, or microphone.
 
-## 10. Deleting your data
+## 11. Deleting your data
 
 - **Delete all financial data:** **Settings -> Data Management -> Delete All Financial Data** wipes local wallets, transactions, budgets, goals, obligations, tax records, challenges, and Receipt Vault files after confirmation (your PIN and UI settings are preserved).
 - **Uninstall duit.:** Removes the app database, preferences, keystore material, and private `filesDir/receipts/` folder from your device.
 - **External files you saved** (`.duitbackup` archives and CSV exports) remain wherever you stored them until you delete them.
 - **Feedback requests:** To request deletion of previously submitted feedback rows, submit a deletion request via **Settings -> Help & Feedback** referencing the approximate date and optional email address used.
 
-## 11. Changes & contact
+## 12. Changes & contact
 
 Updates to this policy are published alongside releases in `erlingdiniy/duit` and `erlingdiniy/duit-beta`.  
 For support or privacy requests, please use **Settings -> Help & Feedback** inside the app and avoid posting personal financial data on public GitHub issues.

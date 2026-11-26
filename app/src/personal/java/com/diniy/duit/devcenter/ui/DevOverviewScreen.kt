@@ -15,14 +15,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.diniy.duit.BuildConfig
 import com.diniy.duit.core.ui.components.PrismaticButton
 import com.diniy.duit.core.ui.components.PrismaticButtonVariant
 import com.diniy.duit.core.ui.components.SpatialGlassCard
 import com.diniy.duit.core.ui.components.SpatialGlassTier
 import com.diniy.duit.core.ui.theme.SpatialTheme
 import com.diniy.duit.devcenter.DevCenterUiState
+import com.diniy.duit.diagnostics.CrashReporting
+
+private const val CRASHLYTICS_CONSOLE_URL =
+    "https://console.firebase.google.com/project/duit-beta/crashlytics/app/android:com.diniy.duit.beta/issues"
 
 @Composable
 fun DevOverviewScreen(
@@ -147,6 +153,43 @@ fun DevOverviewScreen(
                 variant = PrismaticButtonVariant.Primary,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+
+        if (BuildConfig.CRASHLYTICS_ENABLED) {
+            item(key = "crash_monitoring") {
+                val context = LocalContext.current
+                val optInEnabled = CrashReporting.isCollectionEnabled()
+                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DevSectionTitle("Crash Monitoring")
+                        DevToneBadge(
+                            label = if (optInEnabled) "Opt-In ON" else "Opt-In OFF",
+                            tone = if (optInEnabled) "healthy" else "paused"
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    DevKeyValueRow(label = "Channel", value = BuildConfig.RELEASE_CHANNEL)
+                    DevKeyValueRow(label = "Version", value = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                    DevKeyValueRow(label = "Analytics", value = "Disabled")
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Firebase Console shows crash-free users, issue lists, affected versions, and recent trends without extra billing.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.secondaryText
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    PrismaticButton(
+                        text = "Open Console",
+                        onClick = { context.openHttpsUrl(CRASHLYTICS_CONSOLE_URL) },
+                        variant = PrismaticButtonVariant.Secondary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         }
 
         item(key = "workflows_section") {

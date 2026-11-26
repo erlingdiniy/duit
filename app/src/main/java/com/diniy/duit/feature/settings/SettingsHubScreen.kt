@@ -210,7 +210,9 @@ fun SettingsHubContainerScreen(
         )
         SettingsHubRoute.PRIVACY_DATA -> PrivacyDataScreen(
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
-            onOpenRoute = onNavigateRoute
+            onOpenRoute = onNavigateRoute,
+            crashReportingEnabled = uiState.appSettings.crashReportingEnabled,
+            onSetCrashReporting = viewModel::setCrashReportingEnabled
         )
         SettingsHubRoute.FEATURE_GUIDE -> FeatureGuideScreen(
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
@@ -1153,7 +1155,7 @@ private fun AboutPrivacyPage(onBack: () -> Unit) {
                 Icons.Rounded.Storage, colors.aqua, "Stays on your device",
                 com.diniy.duit.devcenter.DeveloperCenterEntryPoint.privacySummaryOrNull(com.diniy.duit.BuildConfig.FCM_ENABLED)
                     ?: if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
-                        "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. goes online only to check for app updates, receive developer broadcast announcements, and send feedback you choose to submit. Analytics remain disabled and your financial records are never sent."
+                        "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. goes online only to check for app updates, receive developer broadcast announcements, send feedback you choose to submit, and send optional crash reports if you opt in. Analytics remain disabled and your financial records are never sent."
                     } else {
                         "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
                     }
@@ -1210,10 +1212,17 @@ internal fun activeLicenseNotices(
     publicEdition: Boolean = com.diniy.duit.BuildConfig.FCM_ENABLED
 ): List<LicenseNotice> =
     if (publicEdition) {
-        BaseLicenseNotices + LicenseNotice(
-            "Firebase Cloud Messaging SDK",
-            "Copyright Google LLC. Bundled only in public builds to deliver optional Developer Broadcast announcements.",
-            "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+        BaseLicenseNotices + listOf(
+            LicenseNotice(
+                "Firebase Cloud Messaging SDK",
+                "Copyright Google LLC. Bundled only in public builds to deliver optional Developer Broadcast announcements.",
+                "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+            ),
+            LicenseNotice(
+                "Firebase Crashlytics SDK",
+                "Copyright Google LLC. Bundled strictly for optional opt-in crash and ANR diagnostics (analytics disabled).",
+                "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+            )
         )
     } else {
         BaseLicenseNotices
@@ -1526,7 +1535,12 @@ internal fun SettingsSwitchRow(
  * sent by FeedbackClient; FCM topic broadcasts without analytics; Support donations unavailable.
  */
 @Composable
-internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRoute) -> Unit) {
+internal fun PrivacyDataScreen(
+    onBack: () -> Unit,
+    onOpenRoute: (SettingsHubRoute) -> Unit,
+    crashReportingEnabled: Boolean = false,
+    onSetCrashReporting: (Boolean) -> Unit = {}
+) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     var showSummary by rememberSaveable { mutableStateOf(false) }
     var showFeedback by rememberSaveable { mutableStateOf(false) }
@@ -1587,6 +1601,69 @@ internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRout
                 "Optional release and maintenance announcements use Firebase Cloud Messaging topic subscriptions with analytics disabled. " +
                     "Public builds listen only to duit.'s active announcement channel without sending personal or financial records."
             )
+        }
+        if (com.diniy.duit.BuildConfig.CRASHLYTICS_ENABLED) {
+            item(key = "crash_reports") {
+                val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+                com.diniy.duit.core.ui.components.SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(26.dp),
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Text("Crash reports", style = typography.cardTitle, color = colors.primaryText)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = if (crashReportingEnabled) {
+                            "Status: On — sends crash traces after restart."
+                        } else {
+                            "Status: Off — no reports collected."
+                        },
+                        style = typography.caption,
+                        color = if (crashReportingEnabled) colors.readableOn(colors.aqua) else colors.secondaryText
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .toggleable(
+                                value = crashReportingEnabled,
+                                role = Role.Switch,
+                                onValueChange = onSetCrashReporting
+                            ),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                "Crash reporting",
+                                style = typography.transactionDescription,
+                                color = colors.primaryText
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Shares stack traces and app version via Firebase Crashlytics (Google). Never includes balances, transactions, receipts, names, emails, or PINs. Turning off deletes unsent reports.",
+                                style = typography.caption,
+                                color = colors.secondaryText
+                            )
+                        }
+                        Switch(
+                            checked = crashReportingEnabled,
+                            onCheckedChange = null,
+                            colors = com.diniy.duit.core.ui.components.candySwitchColors(
+                                personal = androidx.compose.material3.SwitchDefaults.colors(
+                                    checkedTrackColor = colors.coral,
+                                    checkedThumbColor = Color.White,
+                                    checkedBorderColor = colors.sticker,
+                                    uncheckedTrackColor = colors.baseSurface,
+                                    uncheckedThumbColor = colors.secondaryText,
+                                    uncheckedBorderColor = Color.Transparent
+                                )
+                            )
+                        )
+                    }
+                }
+            }
         }
         item(key = "support") {
             AboutInfoCard(
