@@ -72,11 +72,12 @@ android {
         versionName = personalVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Public edition (beta build type) makes Commission Tracking optional; personal builds keep it always on.
-        buildConfigField("boolean", "OPTIONAL_COMMISSION", "false")
+        // Align Personal Edition (debug/fluid/release) with the exact public v1.2.0 feature set and UX;
+        // DEVELOPER_CENTER_ENABLED, Firebase, updater, and feedback URL remain strictly variant-isolated.
+        buildConfigField("boolean", "OPTIONAL_COMMISSION", "true")
         buildConfigField("String", "FEEDBACK_URL", "\"\"")
         buildConfigField("boolean", "SUPPORT_PREVIEW", "false")
-        buildConfigField("boolean", "PUBLIC_EDITION", "false")
+        buildConfigField("boolean", "PUBLIC_EDITION", "true")
         buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
     }
 
@@ -203,7 +204,7 @@ androidComponents {
     }
 }
 
-// Keep Google Services strictly scoped to beta so personal/debug/release builds remain 100% offline.
+// Keep Google Services strictly scoped to beta so personal/debug/release builds remain FCM-free.
 tasks.matching {
     it.name.startsWith("process") &&
         it.name.endsWith("GoogleServices") &&
