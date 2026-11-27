@@ -288,6 +288,8 @@ interface UserPreferencesRepository {
     suspend fun hasCommissionFeatureChoice(): Boolean = true
     suspend fun saveCommissionFormulaConfig(config: CommissionFormulaConfig)
     suspend fun resetCommissionFormulaConfig()
+    suspend fun setCrashReportingEnabled(enabled: Boolean) = Unit
+    suspend fun setUsageAnalyticsEnabled(enabled: Boolean) = Unit
     suspend fun applyPortableSettings(snapshot: AppSettingsSnapshot)
     suspend fun restoreDefaultPreferences()
     // Defaults treat an unknown state as an existing user (never onboards) and keep test fakes compiling.
@@ -2363,6 +2365,12 @@ class OfflineUserPreferencesRepository(
 
     override suspend fun resetCommissionFormulaConfig() =
         dataStore.resetCommissionFormulaConfig()
+
+    override suspend fun setCrashReportingEnabled(enabled: Boolean) =
+        dataStore.setCrashReportingEnabled(enabled)
+
+    override suspend fun setUsageAnalyticsEnabled(enabled: Boolean) =
+        dataStore.setUsageAnalyticsEnabled(enabled)
 
     override suspend fun applyPortableSettings(snapshot: AppSettingsSnapshot) =
         dataStore.applyPortableSettings(snapshot)

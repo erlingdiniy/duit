@@ -304,6 +304,7 @@ fun DuitAppShell(
                                 container.userPreferencesRepository.setOnboardingCompleted(true)
                             }.onSuccess {
                                 if (enableNotifications) notificationViewModel.setMasterEnabled(true)
+                                com.diniy.duit.analytics.UsageAnalytics.logOnboardingCompleted(skipped = false)
                                 onboardingStage = OnboardingStage.DONE
                             }.onFailure {
                                 setupError = "Couldn't save your wallet. Please try again."
@@ -315,6 +316,7 @@ fun DuitAppShell(
                 onSkipSetup = {
                     coroutineScope.launch {
                         runCatching { container.userPreferencesRepository.setOnboardingCompleted(true) }
+                        com.diniy.duit.analytics.UsageAnalytics.logOnboardingCompleted(skipped = true)
                         onboardingStage = OnboardingStage.DONE
                     }
                 },
@@ -583,6 +585,40 @@ fun DuitAppShell(
     var walletActionError by rememberSaveable { mutableStateOf<String?>(null) }
     var editingWalletId by rememberSaveable { mutableStateOf<Long?>(null) }
 
+    LaunchedEffect(currentRoute, onboardingStage) {
+        if (onboardingStage == OnboardingStage.DONE) {
+            val feature = when (currentRoute) {
+                DuitRoute.HOME -> com.diniy.duit.analytics.AnalyticsFeature.HOME
+                DuitRoute.ACTIVITY -> com.diniy.duit.analytics.AnalyticsFeature.TRANSACTIONS
+                DuitRoute.PLANNING -> com.diniy.duit.analytics.AnalyticsFeature.PLANNING
+                DuitRoute.INSIGHTS -> com.diniy.duit.analytics.AnalyticsFeature.INSIGHTS
+                else -> null
+            }
+            if (feature != null) com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(feature)
+        }
+    }
+    LaunchedEffect(showCalendar) {
+        if (showCalendar) com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.MONEY_CALENDAR)
+    }
+    LaunchedEffect(showReceiptVault) {
+        if (showReceiptVault) com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.RECEIPT_VAULT)
+    }
+    LaunchedEffect(showNotificationSettings, showNotificationCentre) {
+        if (showNotificationSettings || showNotificationCentre) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.MONEY_REMINDERS)
+        }
+    }
+    LaunchedEffect(inspectedWalletId) {
+        if (inspectedWalletId != null) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.WALLETS)
+        }
+    }
+    LaunchedEffect(showTransactionEditor, inspectedTransactionId) {
+        if (showTransactionEditor || inspectedTransactionId != null) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.TRANSACTIONS)
+        }
+    }
+
     val homeViewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.factory(
             walletRepository = container.walletRepository,
@@ -675,6 +711,7 @@ fun DuitAppShell(
         val target = pendingWidgetDeepLink ?: return@LaunchedEffect
         if (backStackEntry == null) return@LaunchedEffect
         container.setPendingWidgetDeepLink(null)
+        com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.WIDGETS)
         when (target) {
             WidgetDeepLink.HOME -> navigateToRoute(DuitRoute.HOME)
             WidgetDeepLink.ACTIVITY -> navigateToRoute(DuitRoute.ACTIVITY)

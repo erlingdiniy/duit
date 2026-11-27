@@ -223,6 +223,28 @@ fun PlanningScreen(
     var showInactiveGoals by rememberSaveable { mutableStateOf(false) }
     var showChallenges by rememberSaveable { mutableStateOf(false) }
     var showTaxPocket by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(selectedSectionTab, billsSection) {
+        val feature = when (selectedSectionTab) {
+            PlanningSectionTab.GOALS -> com.diniy.duit.analytics.AnalyticsFeature.SAVINGS_GOALS
+            PlanningSectionTab.BUDGETS -> com.diniy.duit.analytics.AnalyticsFeature.BUDGETS
+            PlanningSectionTab.COMMITMENTS -> if (billsSection == BillsSection.INCOME && commissionEnabled) {
+                com.diniy.duit.analytics.AnalyticsFeature.COMMISSION_TRACKING
+            } else {
+                com.diniy.duit.analytics.AnalyticsFeature.BILLS_AND_DEBT
+            }
+        }
+        com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(feature)
+    }
+    androidx.compose.runtime.LaunchedEffect(showChallenges) {
+        if (showChallenges) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.SAVINGS_CHALLENGES)
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(showTaxPocket) {
+        if (showTaxPocket) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.MY_TAX_POCKET)
+        }
+    }
     var openChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
     // null = closed, 0 = new challenge, otherwise the id being edited.
     var editingChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }

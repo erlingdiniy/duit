@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,6 +9,7 @@ plugins {
 
 if (file("src/beta/google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 val betaRepository = providers.gradleProperty("duitBetaRepository").orElse("").get()
@@ -39,6 +42,9 @@ if (betaVersionName.contains("-beta.")) {
     require(betaVersionCode == expected) { "Beta $betaVersionName needs duitBetaVersionCode=$expected" }
 }
 val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
+val uploadCrashlyticsMapping = providers.gradleProperty("duitUploadCrashlyticsMapping").orElse("false").get().toBoolean()
+val crashlyticsQaTest = providers.gradleProperty("duitCrashlyticsQaTest").orElse("false").get().toBoolean()
+val analyticsQaTest = providers.gradleProperty("duitAnalyticsQaTest").orElse("false").get().toBoolean()
 
 android {
     namespace = "com.diniy.duit"
@@ -57,6 +63,13 @@ android {
         buildConfigField("String", "FEEDBACK_URL", "\"\"")
         buildConfigField("boolean", "SUPPORT_PREVIEW", "false")
         buildConfigField("boolean", "PUBLIC_EDITION", "false")
+        buildConfigField("boolean", "FCM_ENABLED", "false")
+        buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
+        buildConfigField("boolean", "CRASHLYTICS_ENABLED", "false")
+        buildConfigField("boolean", "ANALYTICS_ENABLED", "false")
+        buildConfigField("String", "RELEASE_CHANNEL", "\"personal\"")
+        buildConfigField("boolean", "CRASHLYTICS_QA_TEST", "false")
+        buildConfigField("boolean", "ANALYTICS_QA_TEST", "false")
     }
 
     signingConfigs {
@@ -90,6 +103,13 @@ android {
             buildConfigField("boolean", "OPTIONAL_COMMISSION", "true")
             buildConfigField("String", "FEEDBACK_URL", "\"$feedbackUrl\"")
             buildConfigField("boolean", "PUBLIC_EDITION", "true")
+            buildConfigField("boolean", "FCM_ENABLED", "true")
+            buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
+            buildConfigField("boolean", "CRASHLYTICS_ENABLED", "true")
+            buildConfigField("boolean", "ANALYTICS_ENABLED", "true")
+            buildConfigField("String", "RELEASE_CHANNEL", if (betaVersionName.contains("-beta.")) "\"beta\"" else "\"stable\"")
+            buildConfigField("boolean", "CRASHLYTICS_QA_TEST", crashlyticsQaTest.toString())
+            buildConfigField("boolean", "ANALYTICS_QA_TEST", analyticsQaTest.toString())
             // QA only: shows Support duit. with the placeholder before the real QR exists. Never set for releases.
             buildConfigField("boolean", "SUPPORT_PREVIEW", providers.gradleProperty("duitSupportPreview").orElse("false").get())
         }
@@ -111,6 +131,9 @@ android {
     }
 
     buildTypes.configureEach {
+        (this as org.gradle.api.plugins.ExtensionAware).extensions
+            .findByType(com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension::class.java)
+            ?.mappingFileUploadEnabled = (name == "beta") && uploadCrashlyticsMapping
         if (name != "beta") {
             sourceSets.getByName(name).java.srcDir("src/noUpdater/java")
         }
@@ -154,13 +177,115 @@ androidComponents {
     }
 }
 
-// Keep Google Services strictly scoped to beta so personal/debug/release builds remain 100% offline.
+// Keep Google Services and Crashlytics strictly scoped to beta so personal/debug/release builds remain 100% offline.
 tasks.matching {
     it.name.startsWith("process") &&
         it.name.endsWith("GoogleServices") &&
         !it.name.contains("Beta", ignoreCase = true)
 }.configureEach {
     enabled = false
+}
+
+tasks.matching {
+    it.name.contains("Crashlytics", ignoreCase = true) && !it.name.contains("Beta", ignoreCase = true)
+}.configureEach {
+    enabled = false
+}
+
+val verifyBetaReleaseIsolation by tasks.registering {
+    group = "verification"
+    description = "Verifies public beta/stable APKs and merged manifest enforce privacy flags, permissions, and zero private/QA artifacts."
+    val betaApkDir = layout.buildDirectory.dir("outputs/apk/beta")
+    val mergedManifestDir = layout.buildDirectory.dir("intermediates/merged_manifests/beta")
+    doLast {
+        val forbiddenMarkers = listOf(
+            "com/diniy/duit/devcenter",
+            "DevCenter",
+            "devcenter",
+            "DeveloperCenter",
+            "Developer Center",
+            "PRIVATE_DEV_EDITION",
+            "PrivateDevUpdates",
+            "PrivateDevUpdateModel",
+            "PrivateDevInstallStatusReceiver",
+            "duit_qa_crash",
+            "duit_qa_analytics",
+            "oauth2.googleapis.com",
+            "analyticsdata.googleapis.com"
+        )
+        val allowedBetaPermissions = setOf(
+            "android.permission.INTERNET",
+            "android.permission.REQUEST_INSTALL_PACKAGES",
+            "android.permission.USE_BIOMETRIC",
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            "android.permission.USE_FINGERPRINT",
+            "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.WAKE_LOCK",
+            "com.google.android.c2dm.permission.RECEIVE",
+            "android.permission.FOREGROUND_SERVICE",
+            "com.diniy.duit.beta.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        )
+
+        val manifestFiles = mergedManifestDir.get().asFile.walkTopDown()
+            .filter { it.isFile && it.name == "AndroidManifest.xml" }
+            .toList()
+        if (manifestFiles.isEmpty()) {
+            throw GradleException("verifyBetaReleaseIsolation: no merged beta AndroidManifest.xml found under ${mergedManifestDir.get().asFile}")
+        }
+        manifestFiles.forEach { manifest ->
+            val xml = manifest.readText(Charsets.UTF_8)
+            forbiddenMarkers.forEach { marker ->
+                if (xml.contains(marker)) {
+                    throw GradleException("verifyBetaReleaseIsolation: forbidden marker '$marker' found in ${manifest.absolutePath}")
+                }
+            }
+            if (!xml.contains("android:allowBackup=\"false\"")) {
+                throw GradleException("verifyBetaReleaseIsolation: android:allowBackup=\"false\" missing in ${manifest.absolutePath}")
+            }
+            if (!xml.contains("android:usesCleartextTraffic=\"false\"")) {
+                throw GradleException("verifyBetaReleaseIsolation: android:usesCleartextTraffic=\"false\" missing in ${manifest.absolutePath}")
+            }
+            val declaredPerms = Regex("""<uses-permission\b[^>]*android:name="([^"]+)"""")
+                .findAll(xml)
+                .map { it.groupValues[1] }
+                .toSet()
+            val unexpectedPerms = declaredPerms - allowedBetaPermissions
+            if (unexpectedPerms.isNotEmpty()) {
+                throw GradleException("verifyBetaReleaseIsolation: unexpected permissions in ${manifest.absolutePath}: $unexpectedPerms")
+            }
+        }
+
+        val apkFiles = betaApkDir.get().asFile.listFiles { f -> f.isFile && f.extension == "apk" }?.toList().orEmpty()
+        if (apkFiles.isEmpty()) {
+            throw GradleException("verifyBetaReleaseIsolation: no beta APK found under ${betaApkDir.get().asFile}")
+        }
+        apkFiles.forEach { apk ->
+            ZipFile(apk).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    val entryName = entry.name
+                    val isAudited = entryName == "AndroidManifest.xml" ||
+                        entryName.startsWith("res/") ||
+                        Regex("""classes\d*\.dex""").matches(entryName)
+                    if (!isAudited || entry.isDirectory) continue
+                    val raw = zip.getInputStream(entry).readBytes()
+                    val text = String(raw, Charsets.ISO_8859_1)
+                    forbiddenMarkers.forEach { marker ->
+                        if (text.contains(marker)) {
+                            throw GradleException("verifyBetaReleaseIsolation: forbidden marker '$marker' in ${apk.name}!$entryName")
+                        }
+                    }
+                }
+            }
+            logger.lifecycle("verifyBetaReleaseIsolation PASS: ${apk.name} (${manifestFiles.size} manifest, clean DEX/resources/permissions)")
+        }
+    }
+}
+
+tasks.matching { it.name == "assembleBeta" }.configureEach {
+    finalizedBy(verifyBetaReleaseIsolation)
 }
 
 ksp {
@@ -197,9 +322,11 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Phase 8: FCM Developer Broadcasts strictly for beta (public edition). Personal builds include zero Firebase SDK.
+    // Phase 8, 20C & 20D: FCM, Crashlytics & Analytics strictly for beta (public edition). Personal builds include zero Firebase SDK.
     "betaImplementation"(platform(libs.firebase.bom))
+    "betaImplementation"(libs.firebase.analytics)
     "betaImplementation"(libs.firebase.messaging)
+    "betaImplementation"(libs.firebase.crashlytics)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

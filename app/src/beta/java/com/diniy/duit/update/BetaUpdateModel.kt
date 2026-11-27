@@ -154,6 +154,7 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
                 val release = updates.check()
                 if (release != null) {
                     recordCheck("Update available: v${release.versionName.ifBlank { "build ${release.versionCode}" }}")
+                    com.diniy.duit.analytics.UsageAnalytics.logUpdatePromptAction("available")
                     mutableState.value = BetaUpdateState.Offer(release)
                 } else {
                     recordCheck("You're up to date")
@@ -192,8 +193,12 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
                 releaseLease()
                 mutableState.value = BetaUpdateState.Idle
             }
-            is BetaUpdateState.Offer, is BetaUpdateState.Permission, is BetaUpdateState.Error ->
+            is BetaUpdateState.Offer, is BetaUpdateState.Permission, is BetaUpdateState.Error -> {
+                if (mutableState.value is BetaUpdateState.Offer) {
+                    com.diniy.duit.analytics.UsageAnalytics.logUpdatePromptAction("dismissed")
+                }
                 mutableState.value = BetaUpdateState.Idle
+            }
             else -> Unit
         }
     }
@@ -205,6 +210,7 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
             is BetaUpdateState.Error -> current.release.takeIf { current.problem.canRetry } ?: return
             else -> return
         }
+        com.diniy.duit.analytics.UsageAnalytics.logUpdatePromptAction("started")
         if (!updates.canInstall()) {
             mutableState.value = BetaUpdateState.Permission(release)
             return
@@ -284,7 +290,10 @@ internal class BetaUpdateModel(private val app: Application) : AndroidViewModel(
                     waitForInstaller(release, 10.minutes.inWholeMilliseconds)
                 }
             }
-            PackageInstaller.STATUS_SUCCESS -> finish(BetaUpdateState.Idle)
+            PackageInstaller.STATUS_SUCCESS -> {
+                com.diniy.duit.analytics.UsageAnalytics.logUpdatePromptAction("installed")
+                finish(BetaUpdateState.Idle)
+            }
             PackageInstaller.STATUS_FAILURE_ABORTED -> finish(BetaUpdateState.Offer(release, cancelled = true))
             PackageInstaller.STATUS_FAILURE_STORAGE -> finish(BetaUpdateState.Error(release, UpdateProblem.STORAGE))
             PackageInstaller.STATUS_FAILURE_INVALID -> finish(BetaUpdateState.Error(release, UpdateProblem.INVALID_APK))

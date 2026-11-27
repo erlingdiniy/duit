@@ -204,10 +204,22 @@ class DuitContainer(private val application: Application) {
             "transactions",
             "budgets"
         )
-        // Defer channel setup, FCM init, Room open, and WorkManager enqueue off the main thread at cold start.
+        // Defer channel setup, FCM init, Crashlytics & Analytics consent, Room open, and WorkManager enqueue off the main thread at cold start.
         applicationScope.launch(Dispatchers.IO) {
             androidNotificationHelper.ensureChannelsCreated()
             com.diniy.duit.notifications.DeveloperBroadcasts.initialize(application)
+            val initialSettings = runCatching {
+                userPreferencesRepository.observeAppSettings().first()
+            }.getOrNull()
+            val initialCrashConsent = initialSettings?.crashReportingEnabled ?: false
+            val initialAnalyticsConsent = initialSettings?.usageAnalyticsEnabled ?: false
+            com.diniy.duit.diagnostics.CrashReporting.initialize(application, initialCrashConsent)
+            com.diniy.duit.analytics.UsageAnalytics.initialize(application, initialAnalyticsConsent)
+            if (initialCrashConsent) {
+                com.diniy.duit.diagnostics.CrashReporting.logEvent(
+                    com.diniy.duit.diagnostics.CrashBreadcrumbEvent.APP_START
+                )
+            }
             database.invalidationTracker.addObserver(
                 object : InvalidationTracker.Observer(
                     arrayOf(
@@ -284,6 +296,24 @@ class DuitContainer(private val application: Application) {
                 .drop(1)
                 .collectLatest {
                     widgetUpdateCoordinator.refreshAllWidgetsNow()
+                }
+        }
+        applicationScope.launch(Dispatchers.IO) {
+            userPreferencesRepository.observeAppSettings()
+                .map { it.crashReportingEnabled }
+                .distinctUntilChanged()
+                .drop(1)
+                .collectLatest { enabled ->
+                    com.diniy.duit.diagnostics.CrashReporting.applyConsent(application, enabled)
+                }
+        }
+        applicationScope.launch(Dispatchers.IO) {
+            userPreferencesRepository.observeAppSettings()
+                .map { it.usageAnalyticsEnabled }
+                .distinctUntilChanged()
+                .drop(1)
+                .collectLatest { enabled ->
+                    com.diniy.duit.analytics.UsageAnalytics.applyConsent(application, enabled)
                 }
         }
     }

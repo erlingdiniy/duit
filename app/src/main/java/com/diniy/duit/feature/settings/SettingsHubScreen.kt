@@ -125,6 +125,11 @@ fun SettingsHubContainerScreen(
     onPermissionUpdated: () -> Unit = {}
 ) {
     var financialOpenedFromHub by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(route) {
+        if (route == SettingsHubRoute.BACKUP_RESTORE) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.BACKUP_AND_RESTORE)
+        }
+    }
 
     when (route) {
         SettingsHubRoute.HUB -> SettingsHubOverviewScreen(
@@ -140,7 +145,8 @@ fun SettingsHubContainerScreen(
             onSelectTheme = viewModel::setThemeMode,
             onSelectGlassIntensity = viewModel::setGlassIntensity,
             onSetHaptics = viewModel::setHapticFeedbackEnabled,
-            onSetCommissionFeature = viewModel::setCommissionFeatureEnabled
+            onSetCommissionFeature = viewModel::setCommissionFeatureEnabled,
+            onSetUsageAnalytics = viewModel::setUsageAnalyticsEnabled
         )
         SettingsHubRoute.APPEARANCE -> AppearanceSettingsScreen(
             uiState = uiState,
@@ -208,7 +214,11 @@ fun SettingsHubContainerScreen(
         )
         SettingsHubRoute.PRIVACY_DATA -> PrivacyDataScreen(
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
-            onOpenRoute = onNavigateRoute
+            onOpenRoute = onNavigateRoute,
+            crashReportingEnabled = uiState.appSettings.crashReportingEnabled,
+            onSetCrashReporting = viewModel::setCrashReportingEnabled,
+            usageAnalyticsEnabled = uiState.appSettings.usageAnalyticsEnabled,
+            onSetUsageAnalytics = viewModel::setUsageAnalyticsEnabled
         )
         SettingsHubRoute.FEATURE_GUIDE -> FeatureGuideScreen(
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
@@ -236,7 +246,8 @@ private fun SettingsHubOverviewScreen(
     onSelectTheme: (ThemeMode) -> Unit,
     onSelectGlassIntensity: (GlassIntensity) -> Unit,
     onSetHaptics: (Boolean) -> Unit,
-    onSetCommissionFeature: (Boolean) -> Unit = {}
+    onSetCommissionFeature: (Boolean) -> Unit = {},
+    onSetUsageAnalytics: (Boolean) -> Unit = {}
 ) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
@@ -364,6 +375,16 @@ private fun SettingsHubOverviewScreen(
                             subtitle = "What's stored, what's sent and how to delete it",
                             onClick = { onSelectRoute(SettingsHubRoute.PRIVACY_DATA) }
                         )
+                        if (com.diniy.duit.BuildConfig.ANALYTICS_ENABLED) {
+                            SettingsGroupedSwitchItem(
+                                icon = Icons.Rounded.Info,
+                                accent = colors.skyBlue,
+                                title = "Usage Analytics",
+                                subtitle = if (app.usageAnalyticsEnabled) "On · Anonymous feature counts" else "Off · Anonymous feature counts",
+                                checked = app.usageAnalyticsEnabled,
+                                onCheckedChange = onSetUsageAnalytics
+                            )
+                        }
                         SettingsGroupedRowItem(
                             icon = Icons.Rounded.VerifiedUser,
                             accent = colors.aqua,
@@ -1142,7 +1163,7 @@ private fun AboutPrivacyPage(onBack: () -> Unit) {
             AboutInfoCard(
                 Icons.Rounded.Storage, colors.aqua, "Stays on your device",
                 if (com.diniy.duit.BuildConfig.PUBLIC_EDITION) {
-                    "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. goes online only to check for app updates, receive developer broadcast announcements, and send feedback you choose to submit. Analytics remain disabled and your financial records are never sent."
+                    "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. goes online only to check for app updates, receive developer broadcast announcements, send feedback you choose to submit, and send optional crash reports or anonymous feature counts only if you opt in. Advertising IDs are disabled and your financial records are never sent."
                 } else {
                     "Your wallets, transactions, plans and saved receipts are stored only on this phone. duit. doesn't ask for internet access, so your records aren't sent anywhere."
                 }
@@ -1196,13 +1217,25 @@ private val BaseLicenseNotices = listOf(
 )
 
 internal fun activeLicenseNotices(
-    publicEdition: Boolean = com.diniy.duit.BuildConfig.PUBLIC_EDITION
+    publicEdition: Boolean = com.diniy.duit.BuildConfig.FCM_ENABLED
 ): List<LicenseNotice> =
     if (publicEdition) {
-        BaseLicenseNotices + LicenseNotice(
-            "Firebase Cloud Messaging SDK",
-            "Copyright Google LLC. Bundled only in public builds to deliver optional Developer Broadcast announcements.",
-            "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+        BaseLicenseNotices + listOf(
+            LicenseNotice(
+                "Firebase Analytics SDK",
+                "Copyright Google LLC. Bundled strictly for optional opt-in anonymous feature analytics (off by default, ad IDs disabled).",
+                "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+            ),
+            LicenseNotice(
+                "Firebase Cloud Messaging SDK",
+                "Copyright Google LLC. Bundled only in public builds to deliver optional Developer Broadcast announcements.",
+                "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+            ),
+            LicenseNotice(
+                "Firebase Crashlytics SDK",
+                "Copyright Google LLC. Bundled strictly for optional opt-in crash and ANR diagnostics (zero financial data).",
+                "Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0"
+            )
         )
     } else {
         BaseLicenseNotices
@@ -1515,7 +1548,14 @@ internal fun SettingsSwitchRow(
  * sent by FeedbackClient; FCM topic broadcasts without analytics; Support donations unavailable.
  */
 @Composable
-internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRoute) -> Unit) {
+internal fun PrivacyDataScreen(
+    onBack: () -> Unit,
+    onOpenRoute: (SettingsHubRoute) -> Unit,
+    crashReportingEnabled: Boolean = false,
+    onSetCrashReporting: (Boolean) -> Unit = {},
+    usageAnalyticsEnabled: Boolean = false,
+    onSetUsageAnalytics: (Boolean) -> Unit = {}
+) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     var showSummary by rememberSaveable { mutableStateOf(false) }
     var showFeedback by rememberSaveable { mutableStateOf(false) }
@@ -1573,9 +1613,135 @@ internal fun PrivacyDataScreen(onBack: () -> Unit, onOpenRoute: (SettingsHubRout
         item(key = "broadcasts") {
             AboutInfoCard(
                 Icons.Rounded.Notifications, colors.skyBlue, "Developer broadcasts",
-                "Optional release and maintenance announcements use Firebase Cloud Messaging topic subscriptions with analytics disabled. " +
+                "Optional release and maintenance announcements use Firebase Cloud Messaging topic subscriptions with advertising IDs disabled. " +
                     "Public builds listen only to duit.'s active announcement channel without sending personal or financial records."
             )
+        }
+        if (com.diniy.duit.BuildConfig.CRASHLYTICS_ENABLED) {
+            item(key = "crash_reports") {
+                val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+                com.diniy.duit.core.ui.components.SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(26.dp),
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Text("Crash reports", style = typography.cardTitle, color = colors.primaryText)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = if (crashReportingEnabled) {
+                            "Status: On — sends crash traces after restart."
+                        } else {
+                            "Status: Off — no reports collected."
+                        },
+                        style = typography.caption,
+                        color = if (crashReportingEnabled) colors.readableOn(colors.aqua) else colors.secondaryText
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .toggleable(
+                                value = crashReportingEnabled,
+                                role = Role.Switch,
+                                onValueChange = onSetCrashReporting
+                            ),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                "Crash reporting",
+                                style = typography.transactionDescription,
+                                color = colors.primaryText
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Shares stack traces and app version via Firebase Crashlytics (Google). Never includes balances, transactions, receipts, names, emails, or PINs. Turning off deletes unsent reports.",
+                                style = typography.caption,
+                                color = colors.secondaryText
+                            )
+                        }
+                        Switch(
+                            checked = crashReportingEnabled,
+                            onCheckedChange = null,
+                            colors = com.diniy.duit.core.ui.components.candySwitchColors(
+                                personal = androidx.compose.material3.SwitchDefaults.colors(
+                                    checkedTrackColor = colors.coral,
+                                    checkedThumbColor = Color.White,
+                                    checkedBorderColor = colors.sticker,
+                                    uncheckedTrackColor = colors.baseSurface,
+                                    uncheckedThumbColor = colors.secondaryText,
+                                    uncheckedBorderColor = Color.Transparent
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        if (com.diniy.duit.BuildConfig.ANALYTICS_ENABLED) {
+            item(key = "usage_analytics") {
+                val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
+                com.diniy.duit.core.ui.components.SpatialGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(26.dp),
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Text("Usage analytics", style = typography.cardTitle, color = colors.primaryText)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = if (usageAnalyticsEnabled) {
+                            "Status: On — anonymous feature counts."
+                        } else {
+                            "Status: Off — no analytics collected."
+                        },
+                        style = typography.caption,
+                        color = if (usageAnalyticsEnabled) colors.readableOn(colors.aqua) else colors.secondaryText
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .toggleable(
+                                value = usageAnalyticsEnabled,
+                                role = Role.Switch,
+                                onValueChange = onSetUsageAnalytics
+                            ),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                "Usage Analytics",
+                                style = typography.transactionDescription,
+                                color = colors.primaryText
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Shares anonymous feature counts via Firebase Analytics (Google). Never collects balances, transactions, receipts, names, emails, or ad IDs. Turning off clears analytics data.",
+                                style = typography.caption,
+                                color = colors.secondaryText
+                            )
+                        }
+                        Switch(
+                            checked = usageAnalyticsEnabled,
+                            onCheckedChange = null,
+                            colors = com.diniy.duit.core.ui.components.candySwitchColors(
+                                personal = androidx.compose.material3.SwitchDefaults.colors(
+                                    checkedTrackColor = colors.coral,
+                                    checkedThumbColor = Color.White,
+                                    checkedBorderColor = colors.sticker,
+                                    uncheckedTrackColor = colors.baseSurface,
+                                    uncheckedThumbColor = colors.secondaryText,
+                                    uncheckedBorderColor = Color.Transparent
+                                )
+                            )
+                        )
+                    }
+                }
+            }
         }
         item(key = "support") {
             AboutInfoCard(

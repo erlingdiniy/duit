@@ -48,6 +48,20 @@ class MainActivity : FragmentActivity() {
         WidgetDeepLink.extract(intent)?.let { target ->
             container.setPendingWidgetDeepLink(target)
         }
+        if (BuildConfig.CRASHLYTICS_QA_TEST && savedInstanceState == null) {
+            when (intent?.getStringExtra("duit_qa_crash")) {
+                "nonfatal" -> com.diniy.duit.diagnostics.CrashReporting.recordNonFatal(
+                    com.diniy.duit.diagnostics.CrashDiagnosticCategory.QA_VERIFICATION,
+                    IllegalStateException("Phase 20C isolated QA non-fatal verification")
+                )
+                "fatal" -> throw IllegalStateException("Phase 20C isolated QA verification crash")
+            }
+        }
+        if (BuildConfig.ANALYTICS_QA_TEST && savedInstanceState == null) {
+            if (intent?.getStringExtra("duit_qa_analytics") == "batch") {
+                com.diniy.duit.analytics.UsageAnalytics.logQaVerificationBatch(applicationContext)
+            }
+        }
 
         // Phase 10B.3: mirror the saved theme into the per-app night mode (Android 12+) so the
         // system splash and launch window use the right theme from the very first frame, even

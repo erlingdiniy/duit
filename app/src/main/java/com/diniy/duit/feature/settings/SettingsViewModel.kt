@@ -194,6 +194,14 @@ class SettingsViewModel(
         viewModelScope.launch { userPreferencesRepository.resetCommissionFormulaConfig() }
     }
 
+    fun setCrashReportingEnabled(enabled: Boolean) {
+        viewModelScope.launch { userPreferencesRepository.setCrashReportingEnabled(enabled) }
+    }
+
+    fun setUsageAnalyticsEnabled(enabled: Boolean) {
+        viewModelScope.launch { userPreferencesRepository.setUsageAnalyticsEnabled(enabled) }
+    }
+
     // Encrypted Backup
     fun buildEncryptedBackup(
         password: CharArray,
@@ -203,6 +211,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             busyFlow.value = true
             feedbackFlow.value = null to null
+            com.diniy.duit.diagnostics.CrashReporting.logEvent(
+                com.diniy.duit.diagnostics.CrashBreadcrumbEvent.BACKUP_STARTED
+            )
             runCatching {
                 backupRestoreCoordinator.createEncryptedBackup(password)
             }.onSuccess { bytes ->
@@ -210,6 +221,12 @@ class SettingsViewModel(
                 onReady(bytes)
             }.onFailure { err ->
                 busyFlow.value = false
+                if (err !is BackupException) {
+                    com.diniy.duit.diagnostics.CrashReporting.recordNonFatal(
+                        com.diniy.duit.diagnostics.CrashDiagnosticCategory.BACKUP_ENGINE,
+                        err
+                    )
+                }
                 feedbackFlow.value = null to (err.message ?: "Unable to create encrypted backup.")
             }
         }
@@ -263,6 +280,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             busyFlow.value = true
             feedbackFlow.value = null to null
+            com.diniy.duit.diagnostics.CrashReporting.logEvent(
+                com.diniy.duit.diagnostics.CrashBreadcrumbEvent.RESTORE_STARTED
+            )
             runCatching {
                 backupRestoreCoordinator.restoreBackupAtomically(stage.bundle)
                 backupRestoreCoordinator.loadStorageSummary()
@@ -277,6 +297,12 @@ class SettingsViewModel(
                     ) to null
             }.onFailure { err ->
                 busyFlow.value = false
+                if (err !is BackupException) {
+                    com.diniy.duit.diagnostics.CrashReporting.recordNonFatal(
+                        com.diniy.duit.diagnostics.CrashDiagnosticCategory.RESTORE_ENGINE,
+                        err
+                    )
+                }
                 feedbackFlow.value = null to (err.message ?: "Restore failed cleanly. Existing database preserved.")
             }
         }
