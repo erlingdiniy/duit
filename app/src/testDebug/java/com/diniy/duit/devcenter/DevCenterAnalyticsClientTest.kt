@@ -123,8 +123,9 @@ class DevCenterAnalyticsClientTest {
         assertEquals(42L, snap.popularFeatures.first().count)
         assertEquals("1.2.0", snap.appVersions.first().label)
         assertEquals(7L, snap.updateAdoptions)
-        assertEquals(4, urlsCalled.size)
-        assertTrue(urlsCalled.all { it == "https://analyticsdata.googleapis.com/v1beta/properties/123456789:runReport" })
+        assertEquals(6, urlsCalled.size)
+        assertEquals(4, urlsCalled.count { it == "https://analyticsdata.googleapis.com/v1beta/properties/123456789:runReport" })
+        assertEquals(2, urlsCalled.count { it == "https://analyticsdata.googleapis.com/v1beta/properties/123456789:runRealtimeReport" })
     }
 
     @Test

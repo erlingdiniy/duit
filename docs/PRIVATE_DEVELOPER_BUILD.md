@@ -18,17 +18,19 @@ All financial features, Room migrations, UI screens, themes, and bug fixes live 
 2. Merge shared fixes into private `personal-edition`: `git checkout personal-edition && git merge main`.
 3. Never push `personal-edition` to `erlingdiniy/duit` or `erlingdiniy/duit-beta` (enforced by `.git/hooks/pre-push`).
 
-## 3. Phase 20B Versioning Strategy & Overwrite Protection
+## 3. Phase 20B–20E Synchronized Versioning Strategy & Overwrite Protection
 
-- **Public Stable `X.Y.Z`**: `X*1_000_000 + Y*1_000 + Z` (e.g. `1.2.0` -> `1002000`).
-- **Public Beta `X.Y.0-beta.N`**: `X*1_000_000 + Y*1_000 - 100 + N` (e.g. `1.2.0-beta.2` -> `1001902`).
+- **Public Stable `X.Y.Z`**: `X*1_000_000 + Y*1_000 + Z` (e.g. `1.2.0` -> `1002000`, `1.3.0` -> `1003000`).
+- **Public Beta `X.Y.0-beta.N`**: `X*1_000_000 + Y*1_000 - 100 + N` (e.g. `1.2.0-beta.2` -> `1001902`, `1.3.0-beta.1` -> `1002901`).
 - **Private Developer `X.Y.Z-dev[.N]` (`betaDev`)**:
   `major*10_000_000 + minor*10_000 + patch*100 + devPatch`
   - `1.2.0-dev` -> `10020000`
-  - `1.2.0-dev.1` -> `10020001`
-  - `1.2.1-dev` -> `10020100`
+  - `1.2.0-dev.2` -> `10020002`
+  - `1.3.0-dev.1` -> `10030001`
   - `2.0.0-dev` -> `20000000`
-- Every `-dev` build is guaranteed monotonically higher than any installed `1.x..9.x` public APK (`>= 10_020_000 > 1_002_000`) so public releases cannot accidentally downgrade or overwrite Developer Center.
+- Ordering invariant: `1002000` (`1.2.0`) < `1002901` (`1.3.0-beta.1`) < `1003000` (`1.3.0`) << `10020002` (`1.2.0-dev.2`) < `10030001` (`1.3.0-dev.1`).
+- Every `-dev` build is guaranteed monotonically higher than any installed `1.x..9.x` public APK (`>= 10_020_000`) so public releases cannot accidentally downgrade or overwrite Developer Center.
+- In-app GA4 OAuth/Data API reporting remains gated behind `EXPERIMENTAL_GA4_API_ENABLED = false` in `DevCenterModels.kt` until live verification is resumed; official Firebase Analytics Console shortcuts remain active.
 - `PrivateDevUpdates` additionally enforces:
   1. Target repository must not be `erlingdiniy/duit-beta` or `erlingdiniy/duit`, and GitHub API must confirm `"private": true`.
   2. GitHub PAT (`Authorization: Bearer ...`) is sent **only** to `api.github.com` and stripped before following the `302` redirect to `objects.githubusercontent.com` / `release-assets.githubusercontent.com`.
@@ -37,17 +39,18 @@ All financial features, Room migrations, UI screens, themes, and bug fixes live 
 
 ## 4. Pipeline Commands (Never Store Passwords or Keys in Repo)
 
-### Validate / Build via Unified Script (`scripts/release-pipeline.ps1`)
+### Synchronized & Individual Builds via Unified Script (`scripts/release-pipeline.ps1`)
 ```powershell
-# Dry-run validate & build PrivateDev v1.2.0-dev.1 without signing/publishing
-.\scripts\release-pipeline.ps1 -Target PrivateDev -VersionName 1.2.0-dev.1 -DryRun
+# Synchronized dry-run for Public Stable v1.3.0 + Private Developer v1.3.0-dev.1
+.\scripts\release-pipeline.ps1 -Target Synchronized -VersionName 1.3.0 -DevPatch 1 -DryRun
 
-# Interactive sign PrivateDev v1.2.0-dev.1 using %LOCALAPPDATA%\duit-beta-signing\duit-beta.p12
-.\scripts\release-pipeline.ps1 -Target PrivateDev -VersionName 1.2.0-dev.1
+# Interactive sign both v1.3.0 and v1.3.0-dev.1 using %LOCALAPPDATA%\duit-beta-signing\duit-beta.p12
+.\scripts\release-pipeline.ps1 -Target Synchronized -VersionName 1.3.0 -DevPatch 1
 
-# Validate Public Stable or Public Beta builds (verifyBetaReleaseIsolation runs automatically)
-.\scripts\release-pipeline.ps1 -Target Stable -VersionName 1.2.0 -DryRun
-.\scripts\release-pipeline.ps1 -Target Beta -VersionName 1.2.0-beta.2 -DryRun
+# Individual targets
+.\scripts\release-pipeline.ps1 -Target Stable -VersionName 1.3.0 -DryRun
+.\scripts\release-pipeline.ps1 -Target PrivateDev -VersionName 1.3.0-dev.1 -DryRun
+.\scripts\release-pipeline.ps1 -Target Beta -VersionName 1.3.0-beta.1 -DryRun
 ```
 
 ### Publishing a Future Private Developer Update (`erlingdiniy/duit-developer-console`)
