@@ -1,3 +1,4 @@
+import java.util.Properties
 import java.util.zip.ZipFile
 import javax.inject.Inject
 
@@ -46,6 +47,21 @@ val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
 val uploadCrashlyticsMapping = providers.gradleProperty("duitUploadCrashlyticsMapping").orElse("false").get().toBoolean()
 val crashlyticsQaTest = providers.gradleProperty("duitCrashlyticsQaTest").orElse("false").get().toBoolean()
 val analyticsQaTest = providers.gradleProperty("duitAnalyticsQaTest").orElse("false").get().toBoolean()
+val localProps = Properties().apply {
+    val lpFile = rootProject.file("local.properties")
+    if (lpFile.isFile) {
+        lpFile.inputStream().use { load(it) }
+    }
+}
+val devAnalyticsOAuthClientId = providers.gradleProperty("duitDevAnalyticsOAuthClientId").orNull
+    ?.trim()
+    .orEmpty()
+    .ifEmpty { localProps.getProperty("duitDevAnalyticsOAuthClientId", "").trim() }
+val devAnalyticsOAuthScheme = if (devAnalyticsOAuthClientId.endsWith(".apps.googleusercontent.com")) {
+    "com.googleusercontent.apps.${devAnalyticsOAuthClientId.removeSuffix(".apps.googleusercontent.com")}"
+} else {
+    "duit-dev-oauth-unconfigured"
+}
 
 // Private developer-enabled build (`betaDev`) shares the com.diniy.duit.beta package and signing key
 // and uses major*10_000_000 + minor*10_000 + patch*100 + devN (e.g. 1.2.0-dev.1 = 10020001) so private
@@ -112,6 +128,7 @@ android {
         buildConfigField("String", "RELEASE_CHANNEL", "\"personal\"")
         buildConfigField("boolean", "CRASHLYTICS_QA_TEST", "false")
         buildConfigField("boolean", "ANALYTICS_QA_TEST", "false")
+        buildConfigField("String", "DEV_ANALYTICS_OAUTH_CLIENT_ID", "\"\"")
     }
 
     signingConfigs {
@@ -174,6 +191,8 @@ android {
             buildConfigField("String", "RELEASE_CHANNEL", "\"private_dev\"")
             buildConfigField("boolean", "CRASHLYTICS_QA_TEST", crashlyticsQaTest.toString())
             buildConfigField("boolean", "ANALYTICS_QA_TEST", analyticsQaTest.toString())
+            buildConfigField("String", "DEV_ANALYTICS_OAUTH_CLIENT_ID", "\"$devAnalyticsOAuthClientId\"")
+            manifestPlaceholders["devAnalyticsOAuthScheme"] = devAnalyticsOAuthScheme
         }
         // Release-like build for on-device performance checks. Separate app ID, so it never touches
         // the installed app or its data; signed with the debug key so it can be sideloaded.
@@ -387,7 +406,13 @@ val verifyBetaReleaseIsolation by tasks.registering {
             "dev_ga4_property_id",
             "dev_analytics_token",
             "duit_qa_analytics",
-            "console.firebase.google.com/project/duit-beta/analytics"
+            "console.firebase.google.com/project/duit-beta/analytics",
+            "DevCenterAnalyticsOAuth",
+            "DevAnalyticsOAuthRedirectActivity",
+            "oauth2.googleapis.com",
+            "analytics.readonly",
+            "com.googleusercontent.apps.",
+            "oauth2redirect"
         )
         val allowedBetaPermissions = setOf(
             "android.permission.INTERNET",

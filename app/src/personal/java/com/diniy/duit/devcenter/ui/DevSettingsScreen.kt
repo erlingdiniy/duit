@@ -35,10 +35,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.diniy.duit.BuildConfig
 import com.diniy.duit.core.ui.components.PrismaticButton
 import com.diniy.duit.core.ui.components.PrismaticButtonVariant
 import com.diniy.duit.core.ui.components.PrismaticTextField
@@ -51,6 +53,7 @@ import com.diniy.duit.devcenter.DevAuthUiState
 import com.diniy.duit.devcenter.DevAutoLockTimeout
 import com.diniy.duit.devcenter.DevCenterUiState
 import com.diniy.duit.devcenter.DevCenterViewModel
+import com.diniy.duit.devcenter.EXPERIMENTAL_GA4_API_ENABLED
 import com.diniy.duit.devcenter.KillSwitchTarget
 
 @Composable
@@ -61,6 +64,7 @@ fun DevSettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = SpatialTheme.colors
+    val context = LocalContext.current
     val vault = uiState.vault
     val ks = uiState.dashboard.killSwitches
 
@@ -73,10 +77,13 @@ fun DevSettingsScreen(
     var sheetRangeInput by remember(vault.feedbackSheetRange) { mutableStateOf(vault.feedbackSheetRange) }
     var sheetsTokenInput by remember { mutableStateOf("") }
     var ga4PropertyInput by remember(vault.ga4PropertyId) { mutableStateOf(vault.ga4PropertyId) }
+    val effectiveOAuthClientId = vault.ga4OAuthClientId.ifBlank { BuildConfig.DEV_ANALYTICS_OAUTH_CLIENT_ID }
+    var ga4OAuthClientIdInput by remember(effectiveOAuthClientId) { mutableStateOf(effectiveOAuthClientId) }
     var analyticsTokenInput by remember { mutableStateOf("") }
 
     var githubExpanded by remember { mutableStateOf(vault.encryptedGithubPat.isNullOrBlank()) }
     var analyticsExpanded by remember { mutableStateOf(false) }
+    var showManualAnalyticsToken by remember { mutableStateOf(false) }
     var feedbackExpanded by remember { mutableStateOf(false) }
     var showChangePinDialog by remember { mutableStateOf(false) }
     var showWipeCredsDialog by remember { mutableStateOf(false) }
@@ -297,54 +304,133 @@ fun DevSettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val hasAnalyticsAuth = !vault.encryptedAnalyticsToken.isNullOrBlank() ||
+                        !vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
+                    val isAutoRefreshOAuth = vault.analyticsAuthMode == "oauth" &&
+                        !vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
                     Column(modifier = Modifier.weight(1f)) {
                         DevSectionTitle("Analytics Source (GA4)")
                         Text(
-                            text = if (vault.ga4PropertyId.isBlank()) "Optional GA4 Data API read-only" else "Property ${vault.ga4PropertyId} · ${vault.analyticsTokenHint}",
+                            text = when {
+                                !EXPERIMENTAL_GA4_API_ENABLED ->
+                                    "Unavailable for production use"
+                                isAutoRefreshOAuth ->
+                                    "Property ${vault.ga4PropertyId.ifBlank { "Unset" }} · Auto-refresh active"
+                                vault.ga4PropertyId.isBlank() ->
+                                    "Read-only Google sign-in · Auto-refresh"
+                                else ->
+                                    "Property ${vault.ga4PropertyId} · ${vault.analyticsTokenHint}"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.secondaryText
                         )
                     }
-                    Icon(
-                        imageVector = if (analyticsExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                        contentDescription = null,
-                        tint = colors.secondaryText
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        DevToneBadge(
+                            label = when {
+                                !EXPERIMENTAL_GA4_API_ENABLED -> "Experimental"
+                                hasAnalyticsAuth -> "Connected"
+                                else -> "Unset"
+                            },
+                            tone = when {
+                                !EXPERIMENTAL_GA4_API_ENABLED -> "warning"
+                                hasAnalyticsAuth -> "ok"
+                                else -> "warning"
+                            }
+                        )
+                        Icon(
+                            imageVector = if (analyticsExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = colors.secondaryText
+                        )
+                    }
                 }
 
                 AnimatedVisibility(visible = analyticsExpanded) {
                     Column {
                         Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = if (EXPERIMENTAL_GA4_API_ENABLED) {
+                                "Reads aggregate usage reports with your Google account. Secret keys never ship inside this app."
+                            } else {
+                                "Experimental GA4 sync is unverified and unavailable for production use. Use Firebase Console in Analytics instead."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.secondaryText
+                        )
+                        Spacer(Modifier.height(8.dp))
                         PrismaticTextField(
                             value = ga4PropertyInput,
                             onValueChange = { if (it.length <= 15 && it.all(Char::isDigit)) ga4PropertyInput = it },
                             label = "GA4 Property ID",
-                            placeholder = "123456789"
+                            placeholder = "565972794"
                         )
                         Spacer(Modifier.height(8.dp))
-                        SecretInputField(
-                            value = analyticsTokenInput,
-                            onValueChange = { analyticsTokenInput = it },
-                            label = "Read-Only Analytics OAuth Token",
-                            placeholder = "Optional ya29... analytics.readonly"
+                        PrismaticTextField(
+                            value = ga4OAuthClientIdInput,
+                            onValueChange = { ga4OAuthClientIdInput = it },
+                            label = "Google Client ID",
+                            placeholder = "digits-id.apps.googleusercontent.com"
                         )
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PrismaticButton(
-                                text = "Save API",
+                                text = "Google Sign-In",
                                 onClick = {
-                                    viewModel.saveAnalyticsConfig(ga4PropertyInput, analyticsTokenInput)
-                                    analyticsTokenInput = ""
+                                    viewModel.startAnalyticsGoogleSignIn(
+                                        propertyId = ga4PropertyInput,
+                                        oauthClientId = ga4OAuthClientIdInput
+                                    ) { url -> context.openHttpsUrl(url) }
                                 },
-                                variant = PrismaticButtonVariant.Secondary,
+                                enabled = EXPERIMENTAL_GA4_API_ENABLED,
+                                variant = PrismaticButtonVariant.Primary,
                                 modifier = Modifier.weight(1f)
                             )
                             PrismaticButton(
-                                text = "Clear API",
+                                text = "Disconnect",
                                 onClick = viewModel::clearAnalyticsSource,
                                 variant = PrismaticButtonVariant.Ghost,
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        TextButton(
+                            onClick = { showManualAnalyticsToken = !showManualAnalyticsToken },
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Text(
+                                text = if (showManualAnalyticsToken) "Hide Manual Key" else "Manual Key",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                        AnimatedVisibility(visible = showManualAnalyticsToken) {
+                            Column {
+                                Spacer(Modifier.height(6.dp))
+                                SecretInputField(
+                                    value = analyticsTokenInput,
+                                    onValueChange = { analyticsTokenInput = it },
+                                    label = "Read-Only Access Key",
+                                    placeholder = "Optional ya29... analytics.readonly"
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                PrismaticButton(
+                                    text = "Save Key",
+                                    onClick = {
+                                        viewModel.saveAnalyticsConfig(
+                                            propertyId = ga4PropertyInput,
+                                            rawAnalyticsToken = analyticsTokenInput,
+                                            oauthClientId = ga4OAuthClientIdInput
+                                        )
+                                        analyticsTokenInput = ""
+                                    },
+                                    enabled = EXPERIMENTAL_GA4_API_ENABLED,
+                                    variant = PrismaticButtonVariant.Secondary,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
                 }

@@ -59,6 +59,8 @@ class BetaDevEditionVerificationTest {
             "com.diniy.duit.devcenter.DevCenterGitHubClient",
             "com.diniy.duit.devcenter.DevCenterFeedbackClient",
             "com.diniy.duit.devcenter.DevCenterAnalyticsClient",
+            "com.diniy.duit.devcenter.DevCenterAnalyticsOAuth",
+            "com.diniy.duit.devcenter.DevAnalyticsOAuthRedirectActivity",
             "com.diniy.duit.devcenter.DevCenterViewModel",
             "com.diniy.duit.devcenter.ui.DeveloperCenterShellKt",
             "com.diniy.duit.devcenter.ui.DevAnalyticsScreenKt"

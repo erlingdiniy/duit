@@ -81,7 +81,12 @@ class HttpsUrlConnectionTransport : DevHttpTransport {
     }
 
     companion object {
-        val ALLOWED_HOSTS = setOf("api.github.com", "sheets.googleapis.com", "analyticsdata.googleapis.com")
+        val ALLOWED_HOSTS = setOf(
+            "api.github.com",
+            "sheets.googleapis.com",
+            "analyticsdata.googleapis.com",
+            "oauth2.googleapis.com"
+        )
 
         fun validateAllowlistedHttpsUrl(rawUrl: String) {
             val uri = runCatching { URI(rawUrl) }.getOrElse {

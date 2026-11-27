@@ -30,6 +30,7 @@ import com.diniy.duit.core.ui.theme.SpatialTheme
 import com.diniy.duit.devcenter.AnalyticsDateRange
 import com.diniy.duit.devcenter.AnalyticsSourceState
 import com.diniy.duit.devcenter.DevCenterUiState
+import com.diniy.duit.devcenter.EXPERIMENTAL_GA4_API_ENABLED
 
 private const val ANALYTICS_OVERVIEW_URL =
     "https://console.firebase.google.com/project/duit-beta/analytics/app/android:com.diniy.duit.beta/overview"
@@ -41,6 +42,7 @@ fun DevAnalyticsScreen(
     uiState: DevCenterUiState,
     onSelectDateRange: (AnalyticsDateRange) -> Unit,
     onRefresh: () -> Unit,
+    onSignInWithGoogle: ((String) -> Unit) -> Unit = {},
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -77,30 +79,79 @@ fun DevAnalyticsScreen(
                 DevKeyValueRow(label = "Channel", value = channel)
                 DevKeyValueRow(label = "Traffic Marker", value = trafficType ?: "public")
                 DevKeyValueRow(label = "Ad tracking", value = "Disabled")
-                val checkedIso = when (val s = uiState.analyticsState) {
-                    is AnalyticsSourceState.Ready -> s.snapshot.syncedAtIso
-                    is AnalyticsSourceState.Empty -> s.syncedAtIso
-                    is AnalyticsSourceState.Error -> s.syncedAtIso
-                    else -> null
+                if (EXPERIMENTAL_GA4_API_ENABLED) {
+                    val checkedIso = when (val s = uiState.analyticsState) {
+                        is AnalyticsSourceState.Ready -> s.snapshot.syncedAtIso
+                        is AnalyticsSourceState.Empty -> s.syncedAtIso
+                        is AnalyticsSourceState.Error -> s.syncedAtIso
+                        else -> null
+                    }
+                    DevKeyValueRow(label = "Last checked", value = checkedIso?.let(::formatIsoShort) ?: "Not checked")
                 }
-                DevKeyValueRow(label = "Last checked", value = checkedIso?.let(::formatIsoShort) ?: "Not checked")
             }
         }
 
-        item(key = "analytics_filters") {
-            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                DevSectionTitle("Date Range")
-                Spacer(Modifier.height(6.dp))
-                DevChoiceChipRow(
-                    items = AnalyticsDateRange.entries,
-                    selected = uiState.analyticsDateRange,
-                    labelOf = { it.label },
-                    onSelect = onSelectDateRange
-                )
+        if (!EXPERIMENTAL_GA4_API_ENABLED) {
+            item(key = "analytics_console_links") {
+                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                    DevSectionTitle("Firebase Console")
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Open live charts or debug events in Firebase.",
+                        style = typography.caption,
+                        color = colors.secondaryText
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PrismaticButton(
+                            text = "Open Analytics",
+                            onClick = { context.openHttpsUrl(ANALYTICS_OVERVIEW_URL) },
+                            variant = PrismaticButtonVariant.Primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        PrismaticButton(
+                            text = "Open DebugView",
+                            onClick = { context.openHttpsUrl(ANALYTICS_DEBUGVIEW_URL) },
+                            variant = PrismaticButtonVariant.Secondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
-        }
 
-        when (val state = uiState.analyticsState) {
+            item(key = "analytics_experimental_notice") {
+                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DevSectionTitle("In-App Report")
+                        DevToneBadge(label = "Experimental", tone = "warning")
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Unverified GA4 sync is unavailable for production use. Saved for a future update.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.secondaryText
+                    )
+                }
+            }
+        } else {
+            item(key = "analytics_filters") {
+                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                    DevSectionTitle("Date Range")
+                    Spacer(Modifier.height(6.dp))
+                    DevChoiceChipRow(
+                        items = AnalyticsDateRange.entries,
+                        selected = uiState.analyticsDateRange,
+                        labelOf = { it.label },
+                        onSelect = onSelectDateRange
+                    )
+                }
+            }
+
+            when (val state = uiState.analyticsState) {
             AnalyticsSourceState.Loading -> {
                 item(key = "analytics_loading") {
                     SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
@@ -117,17 +168,26 @@ fun DevAnalyticsScreen(
                         DevSectionTitle("Analytics Report")
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Connect read-only Google Analytics access in Settings, or view charts in Firebase Console.",
+                            text = state.summary,
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.secondaryText
                         )
                         Spacer(Modifier.height(10.dp))
-                        PrismaticButton(
-                            text = "Open Settings",
-                            onClick = onOpenSettings,
-                            variant = PrismaticButtonVariant.Primary,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        if (state.canSignInWithGoogle) {
+                            PrismaticButton(
+                                text = "Google Sign-In",
+                                onClick = { onSignInWithGoogle { url -> context.openHttpsUrl(url) } },
+                                variant = PrismaticButtonVariant.Primary,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            PrismaticButton(
+                                text = "Open Settings",
+                                onClick = onOpenSettings,
+                                variant = PrismaticButtonVariant.Primary,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }
@@ -181,6 +241,30 @@ fun DevAnalyticsScreen(
 
             is AnalyticsSourceState.Ready -> {
                 val snap = state.snapshot
+                if (snap.realtimeActiveUsers > 0L || snap.realtimeEventCount > 0L || snap.realtimeEvents.isNotEmpty()) {
+                    item(key = "analytics_realtime") {
+                        SpatialGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            tier = SpatialGlassTier.Standard,
+                            accentTint = colors.success
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                DevSectionTitle("Live (Last 30 Min)")
+                                DevToneBadge(label = "Realtime", tone = "healthy")
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            DevKeyValueRow(label = "Active users", value = snap.realtimeActiveUsers.toString())
+                            DevKeyValueRow(label = "Event count", value = snap.realtimeEventCount.toString())
+                            snap.realtimeEvents.take(6).forEach { ev ->
+                                DevKeyValueRow(label = ev.label, value = "${ev.count} events")
+                            }
+                        }
+                    }
+                }
                 item(key = "analytics_metrics_1") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -267,29 +351,30 @@ fun DevAnalyticsScreen(
             }
         }
 
-        item(key = "analytics_console_links") {
-            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                DevSectionTitle("Firebase Console")
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Open full charts or live event stream in Firebase.",
-                    style = typography.caption,
-                    color = colors.secondaryText
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrismaticButton(
-                        text = "Open Analytics",
-                        onClick = { context.openHttpsUrl(ANALYTICS_OVERVIEW_URL) },
-                        variant = PrismaticButtonVariant.Secondary,
-                        modifier = Modifier.weight(1f)
+            item(key = "analytics_console_links") {
+                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                    DevSectionTitle("Firebase Console")
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Open full charts or live event stream in Firebase.",
+                        style = typography.caption,
+                        color = colors.secondaryText
                     )
-                    PrismaticButton(
-                        text = "Open DebugView",
-                        onClick = { context.openHttpsUrl(ANALYTICS_DEBUGVIEW_URL) },
-                        variant = PrismaticButtonVariant.Ghost,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PrismaticButton(
+                            text = "Open Analytics",
+                            onClick = { context.openHttpsUrl(ANALYTICS_OVERVIEW_URL) },
+                            variant = PrismaticButtonVariant.Secondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        PrismaticButton(
+                            text = "Open DebugView",
+                            onClick = { context.openHttpsUrl(ANALYTICS_DEBUGVIEW_URL) },
+                            variant = PrismaticButtonVariant.Ghost,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }

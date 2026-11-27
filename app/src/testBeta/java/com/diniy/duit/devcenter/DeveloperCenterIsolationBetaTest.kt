@@ -1,6 +1,7 @@
 package com.diniy.duit.devcenter
 
 import com.diniy.duit.BuildConfig
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -19,6 +20,7 @@ class DeveloperCenterIsolationBetaTest {
         assertTrue(BuildConfig.FCM_ENABLED)
         assertTrue(BuildConfig.ANALYTICS_ENABLED)
         assertFalse(BuildConfig.ANALYTICS_QA_TEST)
+        assertEquals("", BuildConfig.DEV_ANALYTICS_OAUTH_CLIENT_ID)
         assertFalse(BuildConfig.PRIVATE_DEV_EDITION)
         assertTrue(com.diniy.duit.analytics.UsageAnalytics.isSupported)
         assertFalse(DeveloperCenterEntryPoint.isAvailable)
@@ -33,6 +35,8 @@ class DeveloperCenterIsolationBetaTest {
             "com.diniy.duit.devcenter.DevCenterGitHubClient",
             "com.diniy.duit.devcenter.DevCenterFeedbackClient",
             "com.diniy.duit.devcenter.DevCenterAnalyticsClient",
+            "com.diniy.duit.devcenter.DevCenterAnalyticsOAuth",
+            "com.diniy.duit.devcenter.DevAnalyticsOAuthRedirectActivity",
             "com.diniy.duit.devcenter.DevCenterViewModel",
             "com.diniy.duit.devcenter.DevHttpTransport",
             "com.diniy.duit.devcenter.DevCenterRedactor",

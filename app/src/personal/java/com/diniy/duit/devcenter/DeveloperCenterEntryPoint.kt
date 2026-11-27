@@ -64,6 +64,7 @@ internal class DevCenterRuntime(
     val githubClient = DevCenterGitHubClient(transport)
     val feedbackClient = DevCenterFeedbackClient(transport)
     val analyticsClient = DevCenterAnalyticsClient(transport)
+    val analyticsOAuth = DevCenterAnalyticsOAuth(transport)
     val authManager = DevCenterAuthManager(
         vault = vault,
         biometricGateway = biometricGateway,
@@ -74,6 +75,7 @@ internal class DevCenterRuntime(
         githubClient = githubClient,
         feedbackClient = feedbackClient,
         analyticsClient = analyticsClient,
+        analyticsOAuth = analyticsOAuth,
         authManager = authManager,
         scope = scope
     )
@@ -218,6 +220,7 @@ object DeveloperCenterEntryPoint {
         val rt = obtainRuntime(container, context)
         val authState by rt.authManager.uiState.collectAsStateWithLifecycle()
         val uiState by rt.viewModel.uiState.collectAsStateWithLifecycle()
+        val pendingOAuthUri by DevAnalyticsOAuthBus.pendingCallbackUri.collectAsStateWithLifecycle()
         val lifecycleOwner = LocalLifecycleOwner.current
 
         // Enforce FLAG_SECURE whenever Developer Center is active so screenshots/Recents never capture secrets.
@@ -249,6 +252,14 @@ object DeveloperCenterEntryPoint {
         LaunchedEffect(authState.stage) {
             if (authState.stage == DevLockStage.UNLOCKED) {
                 rt.viewModel.refreshAll()
+            }
+        }
+
+        LaunchedEffect(authState.stage, pendingOAuthUri) {
+            if (authState.stage == DevLockStage.UNLOCKED && pendingOAuthUri != null) {
+                DevAnalyticsOAuthBus.consumeCallbackUri()?.let { callbackUri ->
+                    rt.viewModel.handleAnalyticsOAuthRedirect(callbackUri)
+                }
             }
         }
 

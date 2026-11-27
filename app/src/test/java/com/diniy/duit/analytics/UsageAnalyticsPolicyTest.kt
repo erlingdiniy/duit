@@ -57,6 +57,21 @@ class UsageAnalyticsPolicyTest {
         assertEquals("private_dev", internalUpdate["release_channel"])
         assertEquals("1.2.0-dev.4", internalUpdate["app_version"])
         assertEquals("internal", internalUpdate["traffic_type"])
+
+        val defaultPrivateDev = UsageAnalyticsPolicy.buildDefaultEventParams(
+            versionName = "1.2.0-dev.5",
+            isPrivateDev = true,
+            isQaTest = false
+        )
+        assertEquals(mapOf("release_channel" to "private_dev", "traffic_type" to "internal"), defaultPrivateDev)
+
+        val defaultPublicBeta = UsageAnalyticsPolicy.buildDefaultEventParams(
+            versionName = "1.3.0-beta.2",
+            isPrivateDev = false,
+            isQaTest = false
+        )
+        assertEquals(mapOf("release_channel" to "beta"), defaultPublicBeta)
+        assertFalse(defaultPublicBeta.containsKey("traffic_type"))
     }
 
     @Test

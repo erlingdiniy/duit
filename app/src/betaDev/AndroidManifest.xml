@@ -28,6 +28,20 @@
             android:name=".update.PrivateDevInstallStatusReceiver"
             android:exported="false" />
 
+        <activity
+            android:name="com.diniy.duit.devcenter.DevAnalyticsOAuthRedirectActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="${devAnalyticsOAuthScheme}"
+                    android:path="/oauth2redirect" />
+            </intent-filter>
+        </activity>
+
         <!-- Phase 8 & 20D: FCM broadcasts and opt-in usage analytics preserved cleanly (off by default; zero ad IDs). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"

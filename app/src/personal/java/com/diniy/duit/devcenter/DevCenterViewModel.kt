@@ -1,5 +1,6 @@
 package com.diniy.duit.devcenter
 
+import com.diniy.duit.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,7 +61,7 @@ data class DevCenterUiState(
     val feedbackCategoryFilter: String = "All",
     val analyticsDateRange: AnalyticsDateRange = AnalyticsDateRange.THIRTY_DAYS,
     val analyticsState: AnalyticsSourceState = AnalyticsSourceState.Unavailable(
-        summary = "GA4 Data API credentials are optional and not configured yet. Use Firebase Console or add Property ID and read-only token in Settings.",
+        summary = "In-app GA4 reporting is experimental and unavailable for production use. Open Firebase Console for verified metrics.",
         hasPropertyId = false,
         hasToken = false
     ),
@@ -81,6 +82,7 @@ class DevCenterViewModel(
     private val githubClient: DevCenterGitHubClient,
     private val feedbackClient: DevCenterFeedbackClient,
     private val analyticsClient: DevCenterAnalyticsClient = DevCenterAnalyticsClient(HttpsUrlConnectionTransport()),
+    private val analyticsOAuth: DevCenterAnalyticsOAuth = DevCenterAnalyticsOAuth(HttpsUrlConnectionTransport()),
     val authManager: DevCenterAuthManager,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     private val nowMs: () -> Long = System::currentTimeMillis
@@ -148,13 +150,7 @@ class DevCenterViewModel(
                 importedCsvRaw = v.importedCsvRaw,
                 importedCsvLabel = v.importedCsvLabel
             )
-            val analyticsToken = vault.readAnalyticsToken()
-            val gaState = analyticsClient.loadAnalytics(
-                propertyId = v.ga4PropertyId,
-                analyticsAccessToken = analyticsToken,
-                dateRange = _uiState.value.analyticsDateRange,
-                syncedAtIso = isoUtcNow(nowMs())
-            )
+            val gaState = loadAnalyticsWithAutoRefresh(v)
             _uiState.update {
                 it.copy(
                     isRefreshing = false,
@@ -663,13 +659,7 @@ class DevCenterViewModel(
         _uiState.update { it.copy(isRefreshingAnalytics = true, analyticsState = AnalyticsSourceState.Loading) }
         scope.launch {
             val v = vault.getState()
-            val token = vault.readAnalyticsToken()
-            val gaState = analyticsClient.loadAnalytics(
-                propertyId = v.ga4PropertyId,
-                analyticsAccessToken = token,
-                dateRange = _uiState.value.analyticsDateRange,
-                syncedAtIso = isoUtcNow(nowMs())
-            )
+            val gaState = loadAnalyticsWithAutoRefresh(v)
             _uiState.update {
                 it.copy(
                     isRefreshingAnalytics = false,
@@ -679,18 +669,213 @@ class DevCenterViewModel(
         }
     }
 
-    fun saveAnalyticsConfig(propertyId: String, rawAnalyticsToken: String?) {
+    private suspend fun loadAnalyticsWithAutoRefresh(v: DevCenterVaultState): AnalyticsSourceState {
+        if (!EXPERIMENTAL_GA4_API_ENABLED) {
+            return AnalyticsSourceState.Unavailable(
+                summary = "In-app GA4 reporting is experimental and unavailable for production use. Open Firebase Console for live metrics.",
+                hasPropertyId = v.ga4PropertyId.isNotBlank(),
+                hasToken = !v.encryptedAnalyticsToken.isNullOrBlank() || !v.encryptedAnalyticsRefreshToken.isNullOrBlank(),
+                canSignInWithGoogle = false
+            )
+        }
+        val clientId = effectiveOAuthClientId(v)
+        val hasSavedCreds = !v.encryptedAnalyticsToken.isNullOrBlank() || !v.encryptedAnalyticsRefreshToken.isNullOrBlank()
+        return analyticsClient.loadAnalytics(
+            propertyId = v.ga4PropertyId,
+            analyticsAccessToken = vault.readAnalyticsToken(),
+            dateRange = _uiState.value.analyticsDateRange,
+            syncedAtIso = isoUtcNow(nowMs()),
+            hasSavedCredentials = hasSavedCreds,
+            canSignInWithGoogle = DevCenterValidators.isValidGoogleOAuthClientId(clientId),
+            tokenResolver = { forceRefresh -> resolveValidAnalyticsToken(forceRefresh) }
+        )
+    }
+
+    private fun effectiveOAuthClientId(v: DevCenterVaultState): String =
+        v.ga4OAuthClientId.trim().ifBlank { BuildConfig.DEV_ANALYTICS_OAUTH_CLIENT_ID.trim() }
+
+    internal suspend fun resolveValidAnalyticsToken(forceRefresh: Boolean = false): String? {
+        val v = vault.getState()
+        val accessToken = vault.readAnalyticsToken()
+        val refreshToken = vault.readAnalyticsRefreshToken()
+        val clientId = effectiveOAuthClientId(v)
+        val now = nowMs()
+        val isExpiring = v.analyticsTokenExpiresAtMs > 0L && now >= v.analyticsTokenExpiresAtMs - 60_000L
+
+        if (!refreshToken.isNullOrBlank() &&
+            DevCenterValidators.isValidGoogleOAuthClientId(clientId) &&
+            (forceRefresh || accessToken.isNullOrBlank() || isExpiring)
+        ) {
+            val refreshed = analyticsOAuth.refreshAccessToken(clientId = clientId, refreshToken = refreshToken)
+            val newExpiry = now + refreshed.expiresInSeconds * 1_000L
+            vault.updateRefreshedAnalyticsToken(
+                accessToken = refreshed.accessToken,
+                rotatedRefreshToken = refreshed.refreshToken,
+                expiresAtMs = newExpiry
+            )
+            vault.appendAuditEvent(
+                AuditLogEntry(
+                    id = "aud-$now",
+                    timestampIso = isoUtcNow(now),
+                    actor = "oauth_refresh",
+                    action = "analytics.token_refreshed",
+                    target = v.ga4PropertyId.ifBlank { "ga4_oauth" },
+                    status = "ok",
+                    summary = "Refreshed short-lived Google Analytics access token silently."
+                ),
+                extraSecrets = listOfNotNull(refreshed.accessToken, refreshed.refreshToken, refreshToken)
+            )
+            return refreshed.accessToken
+        }
+        return accessToken
+    }
+
+    fun startAnalyticsGoogleSignIn(
+        propertyId: String? = null,
+        oauthClientId: String? = null,
+        onLaunchBrowser: (String) -> Unit
+    ) {
+        authManager.recordUserActivity()
+        if (!EXPERIMENTAL_GA4_API_ENABLED) {
+            _uiState.update {
+                it.copy(errorBanner = "In-app GA4 sign-in is experimental and unavailable for production use. Open Firebase Console instead.")
+            }
+            return
+        }
+        scope.launch {
+            val v = vault.getState()
+            val cleanProp = propertyId?.trim()?.takeIf { it.isNotEmpty() }
+            if (cleanProp != null && !DevCenterValidators.isValidGa4PropertyId(cleanProp)) {
+                _uiState.update { it.copy(errorBanner = "GA4 Property ID must be 6 to 15 digits.") }
+                return@launch
+            }
+            val cleanClientId = oauthClientId?.trim()?.takeIf { it.isNotEmpty() } ?: effectiveOAuthClientId(v)
+            if (!DevCenterValidators.isValidGoogleOAuthClientId(cleanClientId)) {
+                _uiState.update {
+                    it.copy(errorBanner = "Android OAuth Client ID is missing or invalid. Enter it in Developer Settings.")
+                }
+                return@launch
+            }
+            vault.saveAnalyticsConfig(
+                propertyId = cleanProp ?: v.ga4PropertyId,
+                rawAnalyticsToken = null,
+                oauthClientId = cleanClientId
+            )
+            val session = analyticsOAuth.generatePkceSession(clientId = cleanClientId, nowMs = nowMs())
+            DevAnalyticsOAuthBus.pendingSession = session
+            val authUrl = analyticsOAuth.buildAuthorizationUrl(session)
+            vault.appendAuditEvent(
+                AuditLogEntry(
+                    id = "aud-${nowMs()}",
+                    timestampIso = isoUtcNow(nowMs()),
+                    actor = "operator",
+                    action = "analytics.oauth_started",
+                    target = (cleanProp ?: v.ga4PropertyId).ifBlank { "ga4_oauth" },
+                    status = "ok",
+                    summary = "Opened read-only Google Analytics OAuth PKCE authorization."
+                ),
+                extraSecrets = listOf(session.codeVerifier, session.state)
+            )
+            onLaunchBrowser(authUrl)
+        }
+    }
+
+    fun handleAnalyticsOAuthRedirect(rawUri: String) {
+        authManager.recordUserActivity()
+        if (!EXPERIMENTAL_GA4_API_ENABLED) {
+            DevAnalyticsOAuthBus.clear()
+            return
+        }
+        val session = DevAnalyticsOAuthBus.pendingSession
+        DevAnalyticsOAuthBus.pendingSession = null
+        if (session == null) {
+            _uiState.update { it.copy(errorBanner = "No active Google Analytics sign-in request was found.") }
+            return
+        }
+        val secrets = mutableListOf(session.codeVerifier, session.state)
+        when (val outcome = analyticsOAuth.parseCallbackUri(rawUri, session.state)) {
+            is OAuthCallbackOutcome.Error -> {
+                _uiState.update { it.copy(errorBanner = DevCenterRedactor.redact(outcome.message, secrets)) }
+            }
+            is OAuthCallbackOutcome.AuthorizationCode -> {
+                secrets += outcome.code
+                _uiState.update { it.copy(isRefreshingAnalytics = true, errorBanner = null) }
+                scope.launch {
+                    runCatching {
+                        val tokenRes = analyticsOAuth.exchangeAuthorizationCode(
+                            clientId = session.clientId,
+                            code = outcome.code,
+                            codeVerifier = session.codeVerifier,
+                            redirectUri = session.redirectUri
+                        )
+                        secrets += tokenRes.accessToken
+                        tokenRes.refreshToken?.let { secrets += it }
+                        val expiry = nowMs() + tokenRes.expiresInSeconds * 1_000L
+                        vault.saveAnalyticsOAuthSession(
+                            oauthClientId = session.clientId,
+                            accessToken = tokenRes.accessToken,
+                            refreshToken = tokenRes.refreshToken,
+                            expiresAtMs = expiry
+                        )
+                        vault.appendAuditEvent(
+                            AuditLogEntry(
+                                id = "aud-${nowMs()}",
+                                timestampIso = isoUtcNow(nowMs()),
+                                actor = "operator",
+                                action = "analytics.oauth_connected",
+                                target = vault.getState().ga4PropertyId.ifBlank { "ga4_oauth" },
+                                status = "ok",
+                                summary = if (tokenRes.refreshToken != null) {
+                                    "Connected read-only Google Analytics OAuth with automatic refresh."
+                                } else {
+                                    "Connected read-only Google Analytics OAuth session."
+                                }
+                            ),
+                            extraSecrets = secrets
+                        )
+                    }.onSuccess {
+                        _uiState.update {
+                            it.copy(
+                                isRefreshingAnalytics = false,
+                                statusBanner = "Google Analytics read-only connected.",
+                                errorBanner = null
+                            )
+                        }
+                        refreshAnalytics()
+                    }.onFailure { err ->
+                        _uiState.update {
+                            it.copy(
+                                isRefreshingAnalytics = false,
+                                errorBanner = DevCenterRedactor.redact(err.message ?: "OAuth token exchange failed.", secrets)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun saveAnalyticsConfig(
+        propertyId: String,
+        rawAnalyticsToken: String?,
+        oauthClientId: String? = null
+    ) {
         authManager.recordUserActivity()
         val cleanId = propertyId.trim()
         if (cleanId.isNotEmpty() && !DevCenterValidators.isValidGa4PropertyId(cleanId)) {
             _uiState.update { it.copy(errorBanner = "GA4 Property ID must be 6 to 15 digits.") }
             return
         }
+        val cleanClientId = oauthClientId?.trim()
+        if (!cleanClientId.isNullOrEmpty() && !DevCenterValidators.isValidGoogleOAuthClientId(cleanClientId)) {
+            _uiState.update { it.copy(errorBanner = "Android OAuth Client ID must end in .apps.googleusercontent.com.") }
+            return
+        }
         val cleanToken = rawAnalyticsToken?.trim().orEmpty()
         val secretList = buildList { if (cleanToken.isNotEmpty()) add(cleanToken) }
         scope.launch {
             runCatching {
-                vault.saveAnalyticsConfig(cleanId, cleanToken)
+                vault.saveAnalyticsConfig(cleanId, cleanToken, cleanClientId)
                 vault.appendAuditEvent(
                     AuditLogEntry(
                         id = "aud-${nowMs()}",
@@ -716,6 +901,7 @@ class DevCenterViewModel(
 
     fun clearAnalyticsSource() {
         authManager.recordUserActivity()
+        DevAnalyticsOAuthBus.clear()
         scope.launch {
             vault.clearAnalyticsSource()
             vault.appendAuditEvent(

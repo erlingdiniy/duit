@@ -200,6 +200,9 @@ fun DeveloperCenterShell(
                     uiState = uiState,
                     onSelectDateRange = viewModel::selectAnalyticsDateRange,
                     onRefresh = viewModel::refreshAnalytics,
+                    onSignInWithGoogle = { launchUrl ->
+                        viewModel.startAnalyticsGoogleSignIn(onLaunchBrowser = launchUrl)
+                    },
                     onOpenSettings = { viewModel.selectSection(DevCenterSection.SETTINGS) },
                     modifier = Modifier.weight(1f)
                 )

@@ -52,12 +52,20 @@ object UsageAnalytics {
                     ConsentType.ANALYTICS_STORAGE to if (enabled) ConsentStatus.GRANTED else ConsentStatus.DENIED
                 )
             )
-            analytics.setAnalyticsCollectionEnabled(enabled)
             if (!enabled) {
                 lastFeatureEventMs.clear()
+                analytics.setDefaultEventParameters(null)
+                analytics.setAnalyticsCollectionEnabled(false)
                 analytics.resetAnalyticsData()
                 return
             }
+            val defaultParams = UsageAnalyticsPolicy.buildDefaultEventParams(
+                versionName = BuildConfig.VERSION_NAME,
+                isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+                isQaTest = BuildConfig.ANALYTICS_QA_TEST
+            )
+            analytics.setDefaultEventParameters(defaultParams.toBundle())
+            analytics.setAnalyticsCollectionEnabled(true)
             analytics.setUserProperty(
                 "release_channel",
                 UsageAnalyticsPolicy.resolveReleaseChannel(BuildConfig.VERSION_NAME, BuildConfig.PRIVATE_DEV_EDITION)
@@ -116,6 +124,7 @@ object UsageAnalytics {
         logFeatureUsed(AnalyticsFeature.HOME)
         logFeatureUsed(AnalyticsFeature.WALLETS)
         logOnboardingCompleted(skipped = false)
+        logUpdatePromptAction("available")
         dispatchEvent(
             AnalyticsEventName.APP_UPDATED,
             UsageAnalyticsPolicy.buildAppUpdatedParams(

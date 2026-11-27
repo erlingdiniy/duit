@@ -147,4 +147,15 @@ object UsageAnalyticsPolicy {
             resolveTrafficType(isPrivateDev, isQaTest)?.let { put("traffic_type", it) }
         }
     )
+
+    fun buildDefaultEventParams(
+        versionName: String,
+        isPrivateDev: Boolean,
+        isQaTest: Boolean
+    ): Map<String, String> = sanitizeParams(
+        buildMap {
+            put("release_channel", resolveReleaseChannel(versionName, isPrivateDev))
+            resolveTrafficType(isPrivateDev, isQaTest)?.let { put("traffic_type", it) }
+        }
+    )
 }

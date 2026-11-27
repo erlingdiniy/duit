@@ -41,7 +41,10 @@ data class AnalyticsDashboardSnapshot(
     val popularFeatures: List<AnalyticsRankedItem>,
     val appVersions: List<AnalyticsRankedItem>,
     val updateAdoptions: Long,
-    val syncedAtIso: String
+    val syncedAtIso: String,
+    val realtimeActiveUsers: Long = 0L,
+    val realtimeEventCount: Long = 0L,
+    val realtimeEvents: List<AnalyticsRankedItem> = emptyList()
 )
 
 sealed interface AnalyticsSourceState {
@@ -49,7 +52,8 @@ sealed interface AnalyticsSourceState {
     data class Unavailable(
         val summary: String,
         val hasPropertyId: Boolean,
-        val hasToken: Boolean
+        val hasToken: Boolean,
+        val canSignInWithGoogle: Boolean = false
     ) : AnalyticsSourceState
     data class Empty(
         val dateRange: AnalyticsDateRange,
@@ -257,3 +261,10 @@ const val DEFAULT_CONSOLE_REPO = "erlingdiniy/duit-developer-console"
 const val DEFAULT_PRIVATE_UPDATE_REPO = "erlingdiniy/duit-developer-console"
 const val DEFAULT_FEEDBACK_RANGE = "Feedback!A1:F200"
 const val ANDROID_BROADCAST_CHANNEL_ID = "duit_developer_broadcasts"
+
+/**
+ * In-app GA4 Data API + OAuth 2.0 PKCE integration is preserved as experimental and disabled
+ * for production use pending future live end-to-end verification.
+ * Use the official Firebase Analytics Console shortcut in Developer Center for production metrics.
+ */
+const val EXPERIMENTAL_GA4_API_ENABLED: Boolean = false

@@ -30,6 +30,7 @@ object DevCenterValidators {
     val CUSTOM_BROADCAST_ID_REGEX = Regex("""^duit-custom-[a-z0-9._-]{4,50}$""")
     private val GITHUB_SLUG_REGEX = Regex("""^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$""")
     private val GA4_PROPERTY_ID_REGEX = Regex("""^\d{6,15}$""")
+    private val GOOGLE_OAUTH_CLIENT_ID_REGEX = Regex("""^\d{6,20}-[A-Za-z0-9_-]{8,80}\.apps\.googleusercontent\.com$""")
     val FORBIDDEN_PUBLIC_UPDATE_REPOS = setOf("erlingdiniy/duit-beta", "erlingdiniy/duit")
     private val random = SecureRandom()
 
@@ -47,6 +48,9 @@ object DevCenterValidators {
 
     fun isValidGa4PropertyId(propertyId: String?): Boolean =
         !propertyId.isNullOrBlank() && GA4_PROPERTY_ID_REGEX.matches(propertyId.trim())
+
+    fun isValidGoogleOAuthClientId(clientId: String?): Boolean =
+        !clientId.isNullOrBlank() && GOOGLE_OAUTH_CLIENT_ID_REGEX.matches(clientId.trim())
 
     fun isValidPrivateUpdateRepo(slug: String?): Boolean =
         isValidRepoSlug(slug) && slug!!.trim().lowercase(Locale.US) !in FORBIDDEN_PUBLIC_UPDATE_REPOS

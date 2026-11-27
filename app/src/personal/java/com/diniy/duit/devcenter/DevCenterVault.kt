@@ -39,8 +39,12 @@ data class DevCenterVaultState(
     val encryptedSheetsToken: String? = null,
     val sheetsTokenHint: String = "Not configured",
     val ga4PropertyId: String = "",
+    val ga4OAuthClientId: String = "",
+    val analyticsAuthMode: String = "none",
     val encryptedAnalyticsToken: String? = null,
     val analyticsTokenHint: String = "Not configured",
+    val encryptedAnalyticsRefreshToken: String? = null,
+    val analyticsTokenExpiresAtMs: Long = 0L,
     val importedCsvRaw: String? = null,
     val importedCsvLabel: String? = null,
     val customHistory: List<BroadcastHistoryEntry> = emptyList(),
@@ -85,6 +89,7 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         val patEnv = prefs[KEY_GITHUB_PAT]
         val sheetsEnv = prefs[KEY_SHEETS_TOKEN]
         val analyticsEnv = prefs[KEY_ANALYTICS_TOKEN]
+        val analyticsRefreshEnv = prefs[KEY_ANALYTICS_REFRESH_TOKEN]
         return DevCenterVaultState(
             isPinConfigured = !pinEnv.isNullOrBlank(),
             pinEnvelope = pinEnv,
@@ -104,8 +109,12 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
             encryptedSheetsToken = sheetsEnv,
             sheetsTokenHint = prefs[KEY_SHEETS_TOKEN_HINT] ?: if (sheetsEnv.isNullOrBlank()) "Not configured" else "Configured",
             ga4PropertyId = prefs[KEY_GA4_PROPERTY_ID] ?: "",
+            ga4OAuthClientId = prefs[KEY_GA4_OAUTH_CLIENT_ID] ?: "",
+            analyticsAuthMode = prefs[KEY_ANALYTICS_AUTH_MODE] ?: if (!analyticsEnv.isNullOrBlank()) "manual" else "none",
             encryptedAnalyticsToken = analyticsEnv,
             analyticsTokenHint = prefs[KEY_ANALYTICS_TOKEN_HINT] ?: if (analyticsEnv.isNullOrBlank()) "Not configured" else "Configured",
+            encryptedAnalyticsRefreshToken = prefs[KEY_ANALYTICS_REFRESH_TOKEN],
+            analyticsTokenExpiresAtMs = prefs[KEY_ANALYTICS_EXPIRES_AT_MS] ?: 0L,
             importedCsvRaw = prefs[KEY_IMPORTED_CSV],
             importedCsvLabel = prefs[KEY_IMPORTED_CSV_LABEL],
             customHistory = decodeHistory(prefs[KEY_CUSTOM_HISTORY_JSON]),
@@ -141,12 +150,24 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
             prefs[KEY_SHEETS_TOKEN_HINT] = next.sheetsTokenHint
         }
         if (next.ga4PropertyId.isBlank()) prefs.remove(KEY_GA4_PROPERTY_ID) else prefs[KEY_GA4_PROPERTY_ID] = next.ga4PropertyId
+        if (next.ga4OAuthClientId.isBlank()) prefs.remove(KEY_GA4_OAUTH_CLIENT_ID) else prefs[KEY_GA4_OAUTH_CLIENT_ID] = next.ga4OAuthClientId
+        prefs[KEY_ANALYTICS_AUTH_MODE] = next.analyticsAuthMode
         if (next.encryptedAnalyticsToken.isNullOrBlank()) {
             prefs.remove(KEY_ANALYTICS_TOKEN)
             prefs.remove(KEY_ANALYTICS_TOKEN_HINT)
         } else {
             prefs[KEY_ANALYTICS_TOKEN] = next.encryptedAnalyticsToken
             prefs[KEY_ANALYTICS_TOKEN_HINT] = next.analyticsTokenHint
+        }
+        if (next.encryptedAnalyticsRefreshToken.isNullOrBlank()) {
+            prefs.remove(KEY_ANALYTICS_REFRESH_TOKEN)
+        } else {
+            prefs[KEY_ANALYTICS_REFRESH_TOKEN] = next.encryptedAnalyticsRefreshToken
+        }
+        if (next.analyticsTokenExpiresAtMs <= 0L) {
+            prefs.remove(KEY_ANALYTICS_EXPIRES_AT_MS)
+        } else {
+            prefs[KEY_ANALYTICS_EXPIRES_AT_MS] = next.analyticsTokenExpiresAtMs
         }
         if (next.importedCsvRaw.isNullOrBlank()) prefs.remove(KEY_IMPORTED_CSV) else prefs[KEY_IMPORTED_CSV] = next.importedCsvRaw
         if (next.importedCsvLabel.isNullOrBlank()) prefs.remove(KEY_IMPORTED_CSV_LABEL) else prefs[KEY_IMPORTED_CSV_LABEL] = next.importedCsvLabel
@@ -272,8 +293,12 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         private val KEY_SHEETS_TOKEN = stringPreferencesKey("dev_sheets_token_env")
         private val KEY_SHEETS_TOKEN_HINT = stringPreferencesKey("dev_sheets_token_hint")
         private val KEY_GA4_PROPERTY_ID = stringPreferencesKey("dev_ga4_property_id")
+        private val KEY_GA4_OAUTH_CLIENT_ID = stringPreferencesKey("dev_ga4_oauth_client_id")
+        private val KEY_ANALYTICS_AUTH_MODE = stringPreferencesKey("dev_analytics_auth_mode")
         private val KEY_ANALYTICS_TOKEN = stringPreferencesKey("dev_analytics_token_env")
         private val KEY_ANALYTICS_TOKEN_HINT = stringPreferencesKey("dev_analytics_token_hint")
+        private val KEY_ANALYTICS_REFRESH_TOKEN = stringPreferencesKey("dev_analytics_refresh_token_env")
+        private val KEY_ANALYTICS_EXPIRES_AT_MS = longPreferencesKey("dev_analytics_expires_at_ms")
         private val KEY_IMPORTED_CSV = stringPreferencesKey("dev_imported_csv")
         private val KEY_IMPORTED_CSV_LABEL = stringPreferencesKey("dev_imported_csv_label")
         private val KEY_CUSTOM_HISTORY_JSON = stringPreferencesKey("dev_custom_history_json")
@@ -417,24 +442,85 @@ class DevCenterVault(
                 githubPatHint = "Not configured",
                 encryptedSheetsToken = null,
                 sheetsTokenHint = "Not configured",
+                analyticsAuthMode = "none",
                 encryptedAnalyticsToken = null,
-                analyticsTokenHint = "Not configured"
+                analyticsTokenHint = "Not configured",
+                encryptedAnalyticsRefreshToken = null,
+                analyticsTokenExpiresAtMs = 0L
             )
         }
     }
 
-    suspend fun saveAnalyticsConfig(propertyId: String, rawAnalyticsToken: String?) {
+    suspend fun saveAnalyticsConfig(
+        propertyId: String,
+        rawAnalyticsToken: String?,
+        oauthClientId: String? = null
+    ) {
         val cleanId = propertyId.trim()
         val cleanToken = rawAnalyticsToken?.trim().orEmpty()
+        val cleanClientId = oauthClientId?.trim()
         storage.update { cur ->
             val (sealedToken, hint) = when {
                 cleanToken.isNotEmpty() -> tokenProtector.seal(cleanToken) to DevCenterRedactor.maskToken(cleanToken)
                 else -> cur.encryptedAnalyticsToken to cur.analyticsTokenHint
             }
+            val nextMode = when {
+                cleanToken.isNotEmpty() -> "manual"
+                else -> cur.analyticsAuthMode
+            }
             cur.copy(
                 ga4PropertyId = cleanId,
+                ga4OAuthClientId = cleanClientId ?: cur.ga4OAuthClientId,
+                analyticsAuthMode = nextMode,
                 encryptedAnalyticsToken = sealedToken,
-                analyticsTokenHint = hint
+                analyticsTokenHint = hint,
+                encryptedAnalyticsRefreshToken = if (cleanToken.isNotEmpty()) null else cur.encryptedAnalyticsRefreshToken,
+                analyticsTokenExpiresAtMs = if (cleanToken.isNotEmpty()) 0L else cur.analyticsTokenExpiresAtMs
+            )
+        }
+    }
+
+    suspend fun saveAnalyticsOAuthSession(
+        oauthClientId: String,
+        accessToken: String,
+        refreshToken: String?,
+        expiresAtMs: Long,
+        propertyId: String? = null
+    ) {
+        val cleanAccess = accessToken.trim()
+        val cleanRefresh = refreshToken?.trim()?.takeIf { it.isNotEmpty() }
+        val sealedAccess = tokenProtector.seal(cleanAccess)
+        val sealedRefresh = cleanRefresh?.let { tokenProtector.seal(it) }
+        val hint = DevCenterRedactor.maskToken(cleanAccess)
+        storage.update { cur ->
+            cur.copy(
+                ga4PropertyId = propertyId?.trim()?.takeIf { it.isNotEmpty() } ?: cur.ga4PropertyId,
+                ga4OAuthClientId = oauthClientId.trim(),
+                analyticsAuthMode = "oauth",
+                encryptedAnalyticsToken = sealedAccess,
+                analyticsTokenHint = hint,
+                encryptedAnalyticsRefreshToken = sealedRefresh ?: cur.encryptedAnalyticsRefreshToken,
+                analyticsTokenExpiresAtMs = expiresAtMs
+            )
+        }
+    }
+
+    suspend fun updateRefreshedAnalyticsToken(
+        accessToken: String,
+        rotatedRefreshToken: String?,
+        expiresAtMs: Long
+    ) {
+        val cleanAccess = accessToken.trim()
+        val sealedAccess = tokenProtector.seal(cleanAccess)
+        val sealedRotated = rotatedRefreshToken?.trim()?.takeIf { it.isNotEmpty() }?.let { tokenProtector.seal(it) }
+        val hint = DevCenterRedactor.maskToken(cleanAccess)
+        storage.update { cur ->
+            cur.copy(
+                analyticsAuthMode = "oauth",
+                encryptedAnalyticsToken = sealedAccess,
+                analyticsTokenHint = hint,
+                encryptedAnalyticsRefreshToken = sealedRotated ?: cur.encryptedAnalyticsRefreshToken,
+                analyticsTokenExpiresAtMs = expiresAtMs
             )
         }
     }
@@ -444,12 +530,21 @@ class DevCenterVault(
         return tokenProtector.unseal(sealed)?.trim()?.takeIf { it.isNotEmpty() }
     }
 
+    suspend fun readAnalyticsRefreshToken(): String? {
+        val sealed = storage.read().encryptedAnalyticsRefreshToken ?: return null
+        return tokenProtector.unseal(sealed)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     suspend fun clearAnalyticsSource() {
         storage.update {
             it.copy(
                 ga4PropertyId = "",
+                ga4OAuthClientId = "",
+                analyticsAuthMode = "none",
                 encryptedAnalyticsToken = null,
-                analyticsTokenHint = "Not configured"
+                analyticsTokenHint = "Not configured",
+                encryptedAnalyticsRefreshToken = null,
+                analyticsTokenExpiresAtMs = 0L
             )
         }
     }
