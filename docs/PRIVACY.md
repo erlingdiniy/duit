@@ -1,7 +1,7 @@
 # duit. Privacy Policy
 
 **Effective date:** 27 November 2026  
-**Applies to:** the public duit. Android app (`com.diniy.duit.beta`), version `1.2.0` (Stable) and compatible public releases distributed through GitHub Releases (`erlingdiniy/duit-beta`). Personal builds built from source (`com.diniy.duit`) request no `INTERNET` permission and exclude Firebase entirely.
+**Applies to:** the public duit. Android app (`com.diniy.duit.beta`), version `1.3.0` (Stable) and compatible public releases distributed through GitHub Releases (`erlingdiniy/duit-beta`). Personal builds built from source (`com.diniy.duit`) request no `INTERNET` permission and exclude Firebase entirely.
 
 duit. is a local-first personal finance app made by an independent developer (GitHub: **erlingdiniy**). This policy explains what the app stores on your device, what limited network connections the public release makes, and the controls you have.
 

@@ -112,5 +112,30 @@ class PrivacyDataScreenTest {
         compose.onNodeWithText("Firebase Cloud Messaging SDK").assertExists()
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Firebase Crashlytics SDK"))
         compose.onNodeWithText("Firebase Crashlytics SDK").assertExists()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Firebase Analytics SDK"))
+        compose.onNodeWithText("Firebase Analytics SDK").assertExists()
+    }
+
+    @Test
+    fun usageAnalyticsConsentCard_defaultsOff_togglesCleanly_andDisclosesNoSensitiveData() {
+        assertTrue(BuildConfig.ANALYTICS_ENABLED)
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        var toggled: Boolean? = null
+        activity.setContent {
+            DuitTheme {
+                PrivacyDataScreen(
+                    onBack = {},
+                    onOpenRoute = {},
+                    usageAnalyticsEnabled = false,
+                    onSetUsageAnalytics = { toggled = it }
+                )
+            }
+        }
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Usage analytics"))
+        compose.onNodeWithText("Status: Off — no analytics collected.").assertExists()
+        compose.onNodeWithText("Usage Analytics").assertExists()
+        compose.onNodeWithText("Never collects balances, transactions, receipts, names, emails, or ad IDs", substring = true).assertExists()
+        compose.onNodeWithText("Usage Analytics").performClick()
+        assertEquals(true, toggled)
     }
 }
