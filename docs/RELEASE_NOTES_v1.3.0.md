@@ -17,4 +17,5 @@
 - Package: `com.diniy.duit.beta` (`versionCode 1003000`)
 - Target Repository: `erlingdiniy/duit-beta` (Stable release channel)
 - Expected Signing Certificate SHA-256: `e26f499ec2524650f5fbb7cf139e62f3de7dd001ad1afbbe1718034a2b785d14`
-- Signed APK SHA-256: populate after interactive release signing with `duit-beta.p12`.
+- Signed APK File: `duit-1.3.0.apk` (9,340,269 bytes)
+- Signed APK SHA-256: `e409103f9859fcea44f81710d6c2e3e3c378a5b4c05bb864d1685a82d2238947`
