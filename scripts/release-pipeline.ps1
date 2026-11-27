@@ -17,7 +17,8 @@ param(
     [ValidateRange(1, 99)]
     [int]$DevPatch = 1,
     [switch]$DryRun,
-    [switch]$UploadCrashlyticsMapping
+    [switch]$UploadCrashlyticsMapping,
+    [switch]$SignStagedOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -160,9 +161,19 @@ function Assert-PublicApk([string]$ApkPath, [string]$ExpectedVerName, [int]$Expe
 
     $forbidden = @(
         "com/diniy/duit/devcenter", "DevCenter", "devcenter", "DeveloperCenter", "Developer Center",
+        "duit_dev_center_prefs", "duit_dev_center_pat_v1", "duit_dev_center_pin_v1", "duit_dev_center_sheets_v1",
+        "custom-broadcast.yml", "ENABLE_CUSTOM_FCM_DISPATCH", "QA_FCM_TOKEN_COPY",
+        "Private developer build", "Public in-app updates are disabled",
         "PRIVATE_DEV_EDITION", "PrivateDevUpdates", "PrivateDevUpdateModel", "PrivateDevInstallStatusReceiver",
+        "duit_private_dev_updates", "duit-dev-install", "dev_private_update_repo", "Private updates",
+        "Crash Monitoring", "console.firebase.google.com/project/duit-beta/crashlytics",
+        "duit_qa_crash", "Phase 20C isolated QA verification crash",
+        "DevCenterAnalyticsClient", "DevAnalyticsScreen", "analyticsdata.googleapis.com",
+        "dev_ga4_property_id", "dev_analytics_token", "duit_qa_analytics",
+        "console.firebase.google.com/project/duit-beta/analytics",
         "DevCenterAnalyticsOAuth", "DevAnalyticsOAuthRedirectActivity", "oauth2.googleapis.com",
-        "duit_qa_crash", "duit_qa_analytics", ("github_pat" + "_11"), ("ghp" + "_")
+        "analytics.readonly", "com.googleusercontent.apps.", "oauth2redirect",
+        ("github_pat" + "_11"), ("ghp" + "_")
     )
     Scan-ApkMarkers -ApkPath $ApkPath -ForbiddenMarkers $forbidden -RequiredDexMarkers @("duit-beta-install") -Label "Public APK"
     Write-Host "[PASS] Public APK audit clean: $pkg v$vn ($vc)" -ForegroundColor Green
@@ -195,12 +206,19 @@ function Sign-Or-Stage([string]$SourceUnsignedApk, [string]$DestDir, [string]$Ba
     New-Item -ItemType Directory -Force -Path $DestDir | Out-Null
     $stagedUnsigned = Join-Path $DestDir "$BaseFileName-unsigned.apk"
     $stagedSigned = Join-Path $DestDir "$BaseFileName.apk"
-    Copy-Item $SourceUnsignedApk $stagedUnsigned -Force
+    if ($SignStagedOnly) {
+        if (-not (Test-Path $stagedUnsigned)) {
+            throw "Missing staged unsigned APK for -SignStagedOnly: $stagedUnsigned"
+        }
+    } else {
+        Copy-Item $SourceUnsignedApk $stagedUnsigned -Force
+    }
     if ($DryRun) {
         $hash = (Get-FileHash $stagedUnsigned -Algorithm SHA256).Hash
         $size = (Get-Item $stagedUnsigned).Length
         Write-Host "[DRY-RUN PASS] Staged unsigned APK: $stagedUnsigned ($size bytes, SHA256=$hash)" -ForegroundColor Cyan
         Write-Host "[DRY-RUN] Manual sign/publish deferred: $PublishHint" -ForegroundColor Cyan
+        return $null
     } else {
         if (-not (Test-Path $keystore)) { throw "Original keystore missing at $keystore" }
         $tmpSigned = Join-Path $env:TEMP ("duit-sign-" + [guid]::NewGuid().ToString("N") + ".apk")
@@ -217,13 +235,17 @@ function Sign-Or-Stage([string]$SourceUnsignedApk, [string]$DestDir, [string]$Ba
         $size = (Get-Item $stagedSigned).Length
         Write-Host "[SIGNED PASS] $stagedSigned ($size bytes) | SHA256=$sha" -ForegroundColor Green
         Write-Host "Next (manual approval): $PublishHint" -ForegroundColor Yellow
+        return $stagedSigned
     }
 }
 
 Assert-BranchSynchronized
 Assert-NoPublicPrivateLeak
+if ($SignStagedOnly -and $DryRun) {
+    throw "Cannot combine -SignStagedOnly and -DryRun"
+}
 
-$mappingProp = if ($UploadCrashlyticsMapping -and -not $DryRun) { "true" } else { "false" }
+$mappingProp = if ($UploadCrashlyticsMapping) { "true" } else { "false" }
 $runStable = ($Target -eq "Stable" -or $Target -eq "Synchronized" -or $Target -eq "All")
 $runBeta = ($Target -eq "Beta" -or $Target -eq "All")
 $runPrivateDev = ($Target -eq "PrivateDev" -or $Target -eq "Synchronized" -or $Target -eq "All")
@@ -239,12 +261,20 @@ if ($runStable) {
     }
     $parts = $stableCandidate.Split(".")
     $stableCode = [int]$parts[0] * 1000000 + [int]$parts[1] * 1000 + [int]$parts[2]
-    Invoke-GradleTarget @("testBetaUnitTest", "assembleBeta", "-PduitBetaVersionName=$stableCandidate", "-PduitBetaVersionCode=$stableCode", "-PduitBetaAppName=duit.", "-PduitUploadCrashlyticsMapping=$mappingProp")
     $unsignedPublic = Join-Path $repoRoot "app\build\outputs\apk\beta\app-beta-unsigned.apk"
-    Assert-PublicApk -ApkPath $unsignedPublic -ExpectedVerName $stableCandidate -ExpectedVerCode $stableCode
+    if (-not $SignStagedOnly) {
+        $stableTasks = @("testBetaUnitTest", "assembleBeta") +
+            $(if ($mappingProp -eq "true") { @("uploadCrashlyticsMappingFileBeta") } else { @() }) +
+            @("-PduitBetaVersionName=$stableCandidate", "-PduitBetaVersionCode=$stableCode", "-PduitBetaAppName=duit.", "-PduitUploadCrashlyticsMapping=$mappingProp")
+        Invoke-GradleTarget $stableTasks
+        Assert-PublicApk -ApkPath $unsignedPublic -ExpectedVerName $stableCandidate -ExpectedVerCode $stableCode
+    }
     $publicStageDir = "C:\Users\SV\Documents\duit-release-staging\release-v$stableCandidate"
-    Sign-Or-Stage -SourceUnsignedApk $unsignedPublic -DestDir $publicStageDir -BaseFileName "duit-$stableCandidate" `
+    $signedPublic = Sign-Or-Stage -SourceUnsignedApk $unsignedPublic -DestDir $publicStageDir -BaseFileName "duit-$stableCandidate" `
         -PublishHint "gh release create v$stableCandidate `"$publicStageDir\duit-$stableCandidate.apk`" -R erlingdiniy/duit-beta --title `"duit. v$stableCandidate`" --notes-file `"$publicStageDir\RELEASE_NOTES_v$stableCandidate.md`""
+    if ($signedPublic) {
+        Assert-PublicApk -ApkPath $signedPublic -ExpectedVerName $stableCandidate -ExpectedVerCode $stableCode
+    }
 }
 
 if ($runBeta) {
@@ -253,9 +283,14 @@ if ($runBeta) {
         throw "SAFETY BLOCK: Beta target requires X.Y.0-beta.N versionName, refusing: $betaVer"
     }
     $betaCode = [int]$Matches[1] * 1000000 + [int]$Matches[2] * 1000 - 100 + [int]$Matches[3]
-    Invoke-GradleTarget @("testBetaUnitTest", "assembleBeta", "-PduitBetaVersionName=$betaVer", "-PduitBetaVersionCode=$betaCode", "-PduitBetaAppName=duit. Beta", "-PduitUploadCrashlyticsMapping=$mappingProp")
-    $unsignedBeta = Join-Path $repoRoot "app\build\outputs\apk\beta\app-beta-unsigned.apk"
-    Assert-PublicApk -ApkPath $unsignedBeta -ExpectedVerName $betaVer -ExpectedVerCode $betaCode
+    if (-not $SignStagedOnly) {
+        $betaTasks = @("testBetaUnitTest", "assembleBeta") +
+            $(if ($mappingProp -eq "true") { @("uploadCrashlyticsMappingFileBeta") } else { @() }) +
+            @("-PduitBetaVersionName=$betaVer", "-PduitBetaVersionCode=$betaCode", "-PduitBetaAppName=duit. Beta", "-PduitUploadCrashlyticsMapping=$mappingProp")
+        Invoke-GradleTarget $betaTasks
+        $unsignedBeta = Join-Path $repoRoot "app\build\outputs\apk\beta\app-beta-unsigned.apk"
+        Assert-PublicApk -ApkPath $unsignedBeta -ExpectedVerName $betaVer -ExpectedVerCode $betaCode
+    }
 }
 
 if ($runPrivateDev) {
@@ -280,22 +315,26 @@ if ($runPrivateDev) {
         throw "VersionCode $VersionCode does not match required formula $expectedDevCode"
     }
 
-    Invoke-GradleTarget @(
-        "testBetaDevUnitTest",
-        "assembleBetaDev",
-        "-PduitBetaVersionName=$baseStableVer",
-        "-PduitBetaVersionCode=$baseStableCode",
-        "-PduitBetaAppName=duit.",
-        "-PduitBetaDevVersionName=$devVer",
-        "-PduitBetaDevVersionCode=$expectedDevCode",
-        "-PduitUploadCrashlyticsMapping=$mappingProp"
-    )
-
     $unsignedDev = Join-Path $repoRoot "app\build\outputs\apk\betaDev\app-betaDev-unsigned.apk"
-    Assert-PrivateDevApk -ApkPath $unsignedDev -ExpectedVerName $devVer -ExpectedVerCode $expectedDevCode
+    if (-not $SignStagedOnly) {
+        $devTasks = @("testBetaDevUnitTest", "assembleBetaDev") +
+            $(if ($mappingProp -eq "true") { @("uploadCrashlyticsMappingFileBetaDev") } else { @() }) + @(
+                "-PduitBetaVersionName=$baseStableVer",
+                "-PduitBetaVersionCode=$baseStableCode",
+                "-PduitBetaAppName=duit.",
+                "-PduitBetaDevVersionName=$devVer",
+                "-PduitBetaDevVersionCode=$expectedDevCode",
+                "-PduitUploadCrashlyticsMapping=$mappingProp"
+            )
+        Invoke-GradleTarget $devTasks
+        Assert-PrivateDevApk -ApkPath $unsignedDev -ExpectedVerName $devVer -ExpectedVerCode $expectedDevCode
+    }
     $devStageDir = Join-Path "C:\Users\SV\Documents\duit-release-staging\private-dev" "v$devVer"
-    Sign-Or-Stage -SourceUnsignedApk $unsignedDev -DestDir $devStageDir -BaseFileName "duit-$devVer" `
+    $signedDev = Sign-Or-Stage -SourceUnsignedApk $unsignedDev -DestDir $devStageDir -BaseFileName "duit-$devVer" `
         -PublishHint "gh release create v$devVer `"$devStageDir\duit-$devVer.apk`" -R erlingdiniy/duit-developer-console --title `"duit. v$devVer (Private Developer)`" --notes-file `"$devStageDir\RELEASE_NOTES_v$devVer.md`""
+    if ($signedDev) {
+        Assert-PrivateDevApk -ApkPath $signedDev -ExpectedVerName $devVer -ExpectedVerCode $expectedDevCode
+    }
 }
 
 Assert-NoPublicPrivateLeak
