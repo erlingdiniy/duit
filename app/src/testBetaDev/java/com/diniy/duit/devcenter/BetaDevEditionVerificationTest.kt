@@ -41,10 +41,13 @@ class BetaDevEditionVerificationTest {
         assertTrue(BuildConfig.DEVELOPER_CENTER_ENABLED)
         assertTrue(BuildConfig.PRIVATE_DEV_EDITION)
         assertTrue(BuildConfig.CRASHLYTICS_ENABLED)
+        assertTrue(BuildConfig.ANALYTICS_ENABLED)
         assertEquals("private_dev", BuildConfig.RELEASE_CHANNEL)
         assertFalse(BuildConfig.CRASHLYTICS_QA_TEST)
+        assertFalse(BuildConfig.ANALYTICS_QA_TEST)
         assertEquals("", BuildConfig.BETA_REPOSITORY)
         assertTrue(com.diniy.duit.diagnostics.CrashReporting.isSupported)
+        assertTrue(com.diniy.duit.analytics.UsageAnalytics.isSupported)
 
         assertTrue(DeveloperCenterEntryPoint.isAvailable)
         assertNotNull(DeveloperCenterEntryPoint.privacySummaryOrNull(fcmEnabled = true))
@@ -55,8 +58,10 @@ class BetaDevEditionVerificationTest {
             "com.diniy.duit.devcenter.DevCenterAuthManager",
             "com.diniy.duit.devcenter.DevCenterGitHubClient",
             "com.diniy.duit.devcenter.DevCenterFeedbackClient",
+            "com.diniy.duit.devcenter.DevCenterAnalyticsClient",
             "com.diniy.duit.devcenter.DevCenterViewModel",
-            "com.diniy.duit.devcenter.ui.DeveloperCenterShellKt"
+            "com.diniy.duit.devcenter.ui.DeveloperCenterShellKt",
+            "com.diniy.duit.devcenter.ui.DevAnalyticsScreenKt"
         )
         for (className in requiredDevClasses) {
             assertTrue("betaDev must include $className", runCatching { Class.forName(className) }.isSuccess)

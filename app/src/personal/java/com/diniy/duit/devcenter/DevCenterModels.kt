@@ -5,11 +5,61 @@ package com.diniy.duit.devcenter
  */
 enum class DevCenterSection(val label: String) {
     OVERVIEW("Overview"),
+    ANALYTICS("Analytics"),
     NOTIFICATIONS("Notifications"),
     HISTORY("History"),
     RELEASES("Releases"),
     FEEDBACK("Feedback"),
     SETTINGS("Settings")
+}
+
+enum class AnalyticsDateRange(val days: Int, val label: String, val startDate: String) {
+    SEVEN_DAYS(7, "7d", "7daysAgo"),
+    THIRTY_DAYS(30, "30d", "30daysAgo"),
+    NINETY_DAYS(90, "90d", "90daysAgo")
+}
+
+data class AnalyticsDailyPoint(
+    val dateLabel: String,
+    val activeUsers: Long,
+    val newUsers: Long
+)
+
+data class AnalyticsRankedItem(
+    val label: String,
+    val count: Long,
+    val users: Long
+)
+
+data class AnalyticsDashboardSnapshot(
+    val dateRange: AnalyticsDateRange,
+    val activeUsers: Long,
+    val newUsers: Long,
+    val returningRatePercent: Int,
+    val avgEngagementSeconds: Long,
+    val growthTrend: List<AnalyticsDailyPoint>,
+    val popularFeatures: List<AnalyticsRankedItem>,
+    val appVersions: List<AnalyticsRankedItem>,
+    val updateAdoptions: Long,
+    val syncedAtIso: String
+)
+
+sealed interface AnalyticsSourceState {
+    data object Loading : AnalyticsSourceState
+    data class Unavailable(
+        val summary: String,
+        val hasPropertyId: Boolean,
+        val hasToken: Boolean
+    ) : AnalyticsSourceState
+    data class Empty(
+        val dateRange: AnalyticsDateRange,
+        val syncedAtIso: String
+    ) : AnalyticsSourceState
+    data class Ready(val snapshot: AnalyticsDashboardSnapshot) : AnalyticsSourceState
+    data class Error(
+        val message: String,
+        val syncedAtIso: String? = null
+    ) : AnalyticsSourceState
 }
 
 enum class DevAutoLockTimeout(val timeoutMs: Long, val label: String) {

@@ -195,6 +195,17 @@ fun HomeScreen(
         (uiState.wallets + uiState.archivedWallets).associateBy { it.id }
     }
 
+    androidx.compose.runtime.LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.SAFE_TO_SPEND)
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(showAddWalletSheet, showAllWalletsSheet) {
+        if (showAddWalletSheet || showAllWalletsSheet) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.WALLETS)
+        }
+    }
+
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

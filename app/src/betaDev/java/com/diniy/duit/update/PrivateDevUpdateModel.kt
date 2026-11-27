@@ -155,6 +155,7 @@ internal class PrivateDevUpdateModel(private val app: Application) : AndroidView
                     is PrivateCheckResult.Available -> {
                         mutableRepo.value = result.repo
                         recordCheck("Update ready: v${result.release.versionName}")
+                        com.diniy.duit.analytics.UsageAnalytics.logUpdatePromptAction("available")
                         mutableState.value = PrivateUpdateState.Offer(result.release)
                     }
                     is PrivateCheckResult.UpToDate -> {
@@ -209,8 +210,12 @@ internal class PrivateDevUpdateModel(private val app: Application) : AndroidView
                 releaseLease()
                 mutableState.value = PrivateUpdateState.Idle
             }
-            is PrivateUpdateState.Offer, is PrivateUpdateState.Permission, is PrivateUpdateState.Error ->
+            is PrivateUpdateState.Offer, is PrivateUpdateState.Permission, is PrivateUpdateState.Error -> {
+                if (mutableState.value is PrivateUpdateState.Offer) {
+                    com.diniy.duit.analytics.UsageAnalytics.logUpdatePromptAction("dismissed")
+                }
                 mutableState.value = PrivateUpdateState.Idle
+            }
             else -> Unit
         }
     }
@@ -222,6 +227,7 @@ internal class PrivateDevUpdateModel(private val app: Application) : AndroidView
             is PrivateUpdateState.Error -> current.release.takeIf { current.problem.canRetry } ?: return
             else -> return
         }
+        com.diniy.duit.analytics.UsageAnalytics.logUpdatePromptAction("started")
         if (!updates.canInstall()) {
             mutableState.value = PrivateUpdateState.Permission(release)
             return
@@ -304,7 +310,10 @@ internal class PrivateDevUpdateModel(private val app: Application) : AndroidView
                     waitForInstaller(release, 10.minutes.inWholeMilliseconds)
                 }
             }
-            PackageInstaller.STATUS_SUCCESS -> finish(PrivateUpdateState.Idle)
+            PackageInstaller.STATUS_SUCCESS -> {
+                com.diniy.duit.analytics.UsageAnalytics.logUpdatePromptAction("installed")
+                finish(PrivateUpdateState.Idle)
+            }
             PackageInstaller.STATUS_FAILURE_ABORTED -> finish(PrivateUpdateState.Offer(release, cancelled = true))
             PackageInstaller.STATUS_FAILURE_STORAGE -> finish(PrivateUpdateState.Error(release, PrivateUpdateProblem.STORAGE))
             PackageInstaller.STATUS_FAILURE_INVALID -> finish(PrivateUpdateState.Error(release, PrivateUpdateProblem.INVALID_APK))

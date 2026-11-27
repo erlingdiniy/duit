@@ -38,6 +38,9 @@ data class DevCenterVaultState(
     val feedbackSheetRange: String = DEFAULT_FEEDBACK_RANGE,
     val encryptedSheetsToken: String? = null,
     val sheetsTokenHint: String = "Not configured",
+    val ga4PropertyId: String = "",
+    val encryptedAnalyticsToken: String? = null,
+    val analyticsTokenHint: String = "Not configured",
     val importedCsvRaw: String? = null,
     val importedCsvLabel: String? = null,
     val customHistory: List<BroadcastHistoryEntry> = emptyList(),
@@ -81,6 +84,7 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         val pinEnv = prefs[KEY_PIN_ENVELOPE]
         val patEnv = prefs[KEY_GITHUB_PAT]
         val sheetsEnv = prefs[KEY_SHEETS_TOKEN]
+        val analyticsEnv = prefs[KEY_ANALYTICS_TOKEN]
         return DevCenterVaultState(
             isPinConfigured = !pinEnv.isNullOrBlank(),
             pinEnvelope = pinEnv,
@@ -99,6 +103,9 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
             feedbackSheetRange = prefs[KEY_FEEDBACK_RANGE] ?: DEFAULT_FEEDBACK_RANGE,
             encryptedSheetsToken = sheetsEnv,
             sheetsTokenHint = prefs[KEY_SHEETS_TOKEN_HINT] ?: if (sheetsEnv.isNullOrBlank()) "Not configured" else "Configured",
+            ga4PropertyId = prefs[KEY_GA4_PROPERTY_ID] ?: "",
+            encryptedAnalyticsToken = analyticsEnv,
+            analyticsTokenHint = prefs[KEY_ANALYTICS_TOKEN_HINT] ?: if (analyticsEnv.isNullOrBlank()) "Not configured" else "Configured",
             importedCsvRaw = prefs[KEY_IMPORTED_CSV],
             importedCsvLabel = prefs[KEY_IMPORTED_CSV_LABEL],
             customHistory = decodeHistory(prefs[KEY_CUSTOM_HISTORY_JSON]),
@@ -132,6 +139,14 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         } else {
             prefs[KEY_SHEETS_TOKEN] = next.encryptedSheetsToken
             prefs[KEY_SHEETS_TOKEN_HINT] = next.sheetsTokenHint
+        }
+        if (next.ga4PropertyId.isBlank()) prefs.remove(KEY_GA4_PROPERTY_ID) else prefs[KEY_GA4_PROPERTY_ID] = next.ga4PropertyId
+        if (next.encryptedAnalyticsToken.isNullOrBlank()) {
+            prefs.remove(KEY_ANALYTICS_TOKEN)
+            prefs.remove(KEY_ANALYTICS_TOKEN_HINT)
+        } else {
+            prefs[KEY_ANALYTICS_TOKEN] = next.encryptedAnalyticsToken
+            prefs[KEY_ANALYTICS_TOKEN_HINT] = next.analyticsTokenHint
         }
         if (next.importedCsvRaw.isNullOrBlank()) prefs.remove(KEY_IMPORTED_CSV) else prefs[KEY_IMPORTED_CSV] = next.importedCsvRaw
         if (next.importedCsvLabel.isNullOrBlank()) prefs.remove(KEY_IMPORTED_CSV_LABEL) else prefs[KEY_IMPORTED_CSV_LABEL] = next.importedCsvLabel
@@ -256,6 +271,9 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         private val KEY_FEEDBACK_RANGE = stringPreferencesKey("dev_feedback_range")
         private val KEY_SHEETS_TOKEN = stringPreferencesKey("dev_sheets_token_env")
         private val KEY_SHEETS_TOKEN_HINT = stringPreferencesKey("dev_sheets_token_hint")
+        private val KEY_GA4_PROPERTY_ID = stringPreferencesKey("dev_ga4_property_id")
+        private val KEY_ANALYTICS_TOKEN = stringPreferencesKey("dev_analytics_token_env")
+        private val KEY_ANALYTICS_TOKEN_HINT = stringPreferencesKey("dev_analytics_token_hint")
         private val KEY_IMPORTED_CSV = stringPreferencesKey("dev_imported_csv")
         private val KEY_IMPORTED_CSV_LABEL = stringPreferencesKey("dev_imported_csv_label")
         private val KEY_CUSTOM_HISTORY_JSON = stringPreferencesKey("dev_custom_history_json")
@@ -398,7 +416,40 @@ class DevCenterVault(
                 encryptedGithubPat = null,
                 githubPatHint = "Not configured",
                 encryptedSheetsToken = null,
-                sheetsTokenHint = "Not configured"
+                sheetsTokenHint = "Not configured",
+                encryptedAnalyticsToken = null,
+                analyticsTokenHint = "Not configured"
+            )
+        }
+    }
+
+    suspend fun saveAnalyticsConfig(propertyId: String, rawAnalyticsToken: String?) {
+        val cleanId = propertyId.trim()
+        val cleanToken = rawAnalyticsToken?.trim().orEmpty()
+        storage.update { cur ->
+            val (sealedToken, hint) = when {
+                cleanToken.isNotEmpty() -> tokenProtector.seal(cleanToken) to DevCenterRedactor.maskToken(cleanToken)
+                else -> cur.encryptedAnalyticsToken to cur.analyticsTokenHint
+            }
+            cur.copy(
+                ga4PropertyId = cleanId,
+                encryptedAnalyticsToken = sealedToken,
+                analyticsTokenHint = hint
+            )
+        }
+    }
+
+    suspend fun readAnalyticsToken(): String? {
+        val sealed = storage.read().encryptedAnalyticsToken ?: return null
+        return tokenProtector.unseal(sealed)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    suspend fun clearAnalyticsSource() {
+        storage.update {
+            it.copy(
+                ga4PropertyId = "",
+                encryptedAnalyticsToken = null,
+                analyticsTokenHint = "Not configured"
             )
         }
     }

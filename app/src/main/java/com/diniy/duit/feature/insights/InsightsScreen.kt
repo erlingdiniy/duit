@@ -118,6 +118,17 @@ fun InsightsScreen(
     var showPersonality by rememberSaveable { mutableStateOf(false) }
     var showLittleWins by rememberSaveable { mutableStateOf(false) }
 
+    androidx.compose.runtime.LaunchedEffect(showPersonality) {
+        if (showPersonality) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.MONEY_PERSONALITY)
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(showLittleWins) {
+        if (showLittleWins) {
+            com.diniy.duit.analytics.UsageAnalytics.logFeatureUsed(com.diniy.duit.analytics.AnalyticsFeature.LITTLE_WINS_CLUB)
+        }
+    }
+
     androidx.activity.compose.BackHandler(
         enabled = !showPersonality && !showLittleWins && selectedTab != InsightsSectionTab.OVERVIEW
     ) {

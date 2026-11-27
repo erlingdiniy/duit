@@ -1,6 +1,6 @@
 # duit. Privacy Policy
 
-**Effective date:** 26 November 2026  
+**Effective date:** 27 November 2026  
 **Applies to:** the public duit. Android app (`com.diniy.duit.beta`), version `1.2.0` (Stable) and compatible public releases distributed through GitHub Releases (`erlingdiniy/duit-beta`). Personal builds built from source (`com.diniy.duit`) request no `INTERNET` permission and exclude Firebase entirely.
 
 duit. is a local-first personal finance app made by an independent developer (GitHub: **erlingdiniy**). This policy explains what the app stores on your device, what limited network connections the public release makes, and the controls you have.
@@ -8,13 +8,14 @@ duit. is a local-first personal finance app made by an independent developer (Gi
 ## 1. Summary
 
 - Your financial records and attached receipts stay on your phone. There is no account and no cloud sync.
-- The public release (`com.diniy.duit.beta`) goes online for at most four limited purposes:
+- The public release (`com.diniy.duit.beta`) goes online for at most five limited purposes:
   1. Checking GitHub Releases (`erlingdiniy/duit-beta`) for app updates.
   2. Sending feedback **you choose** to submit.
-  3. Receiving **Developer Broadcasts** (release announcements via Firebase Cloud Messaging topic, with analytics and advertising IDs disabled).
+  3. Receiving **Developer Broadcasts** (release announcements via Firebase Cloud Messaging topic, with advertising IDs disabled).
   4. Sending **anonymous crash and ANR reports** through Firebase Crashlytics **only if you explicitly turn on Crash reporting** in **Settings -> Privacy & Your Data** (off by default).
+  5. Sending **privacy-first feature usage counts** through Firebase Analytics **only if you explicitly turn on Usage Analytics** in **Settings -> Security & Privacy** or **Settings -> Privacy & Your Data** (off by default, separate from crash reporting).
 - Your balances, transactions, budgets, goals, tax notes, receipts, and backups are never sent to the developer.
-- The app contains no advertising, no behavioral tracking, and no analytics SDKs.
+- The app contains no advertising, no ad personalization, and no Advertising ID (`AD_ID`) collection.
 
 ## 2. Data stored on your device
 
@@ -71,7 +72,7 @@ Public releases (`com.diniy.duit.beta`) query `api.github.com` for releases unde
 Public releases (`com.diniy.duit.beta`) include Firebase Cloud Messaging (FCM) strictly to deliver optional announcement notifications from the developer (for example, critical release notices):
 
 - **Topic subscription only:** The app subscribes only to its active release-channel topic (`duit_beta_broadcasts` for beta builds; `duit_announcements` for stable builds), and automatically unsubscribes from the inactive topic when switching between channels.
-- **Analytics disabled:** Both `firebase_analytics_collection_enabled` and `google_analytics_adid_collection_enabled` are explicitly disabled (`false`) in [`app/src/beta/AndroidManifest.xml`](../app/src/beta/AndroidManifest.xml).
+- **Advertising IDs disabled:** `google_analytics_adid_collection_enabled` is explicitly disabled (`false`), and `com.google.android.gms.permission.AD_ID` is stripped from [`app/src/beta/AndroidManifest.xml`](../app/src/beta/AndroidManifest.xml).
 - **Zero financial or token uploads:** duit. never uploads FCM registration tokens, balances, transactions, or receipts to any developer server. Deep links inside broadcast notifications are restricted to an allowlisted internal screen list (`DeveloperBroadcastSpec`) and never open arbitrary URLs.
 - **Controls:** Broadcasts appear on the dedicated **Developer Broadcasts** Android notification channel (`VISIBILITY_PRIVATE` on the lock screen) and can be muted or turned off anytime in Android's system notification settings for duit.
 - Google Play Services / Firebase handles push delivery under Google's Firebase privacy terms. Offline personal/source builds (`com.diniy.duit`) omit the Firebase SDK completely.
@@ -81,36 +82,47 @@ Public releases (`com.diniy.duit.beta`) include Firebase Cloud Messaging (FCM) s
 Public builds (`com.diniy.duit.beta`) include optional Firebase Crashlytics diagnostics strictly to identify fatal crashes, supported Android ANRs, and sanitized technical failure categories:
 
 - **Off by default (explicit opt-in):** Automatic crash reporting is disabled in the manifest (`firebase_crashlytics_collection_enabled = false`) and in app settings until you turn on **Crash reporting** under **Settings -> Privacy & Your Data**.
+- **Separate consent & backups isolated:** Turning on Crash reporting never turns on Usage Analytics, and your crash reporting preference stays on your device (it is not included in encrypted financial backups).
 - **What is sent when you opt in:** Crash and ANR stack traces, OS version and device model, app version (`versionName` / `versionCode`), and release channel (`stable`, `beta`, or `private_dev`).
 - **What is never included:** Wallet balances, transactions, salaries, commissions, debts, savings goals, Receipt Vault attachments or paths, SQLite database records, usernames, emails, phone numbers, GitHub PATs, OAuth tokens, PINs, or backup passwords.
-- **Analytics disabled & backups isolated:** Firebase Analytics and advertising ID collection remain disabled (`false`), and your crash reporting preference stays on your device (it is not included in encrypted financial backups).
 - **Turning it off:** Toggling **Crash reporting** off in **Settings -> Privacy & Your Data** immediately deletes unsent cached reports and disables crash collection (a full app restart completes teardown).
 
-## 9. Supporting the developer
+## 9. Optional Usage Analytics (Firebase Analytics)
+
+Public builds (`com.diniy.duit.beta`) include optional privacy-first Firebase Analytics strictly to measure aggregated app adoption, release channels, and generic feature usage:
+
+- **Off by default (explicit opt-in):** `firebase_analytics_collection_enabled = false` is set in the manifest until you explicitly turn on **Usage Analytics** in **Settings -> Security & Privacy** or **Settings -> Privacy & Your Data**.
+- **Separate consent & backups isolated:** Usage Analytics is independent from Crash reporting, and your analytics consent choice is never included in encrypted `.duitbackup` archives.
+- **Advertising & cross-app tracking permanently disabled:** Android Advertising ID (`AD_ID`), ad services permissions, `ad_storage`, `ad_user_data`, `ad_personalization`, and user ID assignment (`setUserId`) are permanently disabled or stripped, even when Usage Analytics is turned on.
+- **Strict allowlisted events only:** When enabled, duit. only sends generic non-financial events (`feature_used` with an allowlisted feature name, `onboarding_completed`, `app_updated`, `update_prompt_action`, and `release_channel`; internal developer/QA builds tag `traffic_type = internal` so they stay excluded from public metrics).
+- **Zero financial or personal data:** Balances, wallet names, transactions, categories, salaries, commissions, debts, savings amounts, receipts, emails, phone numbers, PATs, OAuth tokens, PINs, and passwords are never included.
+- **Instant withdrawal & data reset:** Turning **Usage Analytics** off at any time immediately disables analytics collection, sets Analytics consent to denied, and calls `resetAnalyticsData()` to clear local instance state and any queued unsent events.
+
+## 10. Supporting the developer
 
 Voluntary donations under **Settings -> Support duit.** are temporarily unavailable. New public releases do not bundle any payment QR code, recipient name, or payment processor. `duit.` stays 100% free and performs no payment tracking.
 
-## 10. Permissions (`com.diniy.duit.beta`)
+## 11. Permissions (`com.diniy.duit.beta`)
 
 | Permission | Used for |
 | --- | --- |
-| `INTERNET`, `ACCESS_NETWORK_STATE` | GitHub update checks, opt-in feedback submission, FCM broadcasts, and opt-in crash reports (omitted in personal/offline builds) |
+| `INTERNET`, `ACCESS_NETWORK_STATE` | GitHub update checks, opt-in feedback submission, FCM broadcasts, and opt-in crash reports / usage analytics (omitted in personal/offline builds) |
 | `REQUEST_INSTALL_PACKAGES` | Prompting Android's package installer for in-app updates after verification |
 | `com.google.android.c2dm.permission.RECEIVE` | Receiving FCM Developer Broadcasts (public edition only) |
 | `USE_BIOMETRIC` / `USE_FINGERPRINT` | Optional App Lock fingerprint/biometric unlock |
 | `POST_NOTIFICATIONS` | Local money reminders (bills, budgets, savings) and Developer Broadcasts |
 | `RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`, `FOREGROUND_SERVICE` | Re-scheduling local WorkManager reminders after device restart |
 
-Attaching receipts uses Android's system file/photo picker and camera intent without requesting broad gallery or external storage permissions. duit. never accesses your contacts, location, or microphone.
+Attaching receipts uses Android's system file/photo picker and camera intent without requesting broad gallery or external storage permissions. Advertising ID (`com.google.android.gms.permission.AD_ID`) and Android AdServices permissions are explicitly removed (`tools:node="remove"`). duit. never accesses your contacts, location, or microphone.
 
-## 11. Deleting your data
+## 12. Deleting your data
 
 - **Delete all financial data:** **Settings -> Data Management -> Delete All Financial Data** wipes local wallets, transactions, budgets, goals, obligations, tax records, challenges, and Receipt Vault files after confirmation (your PIN and UI settings are preserved).
 - **Uninstall duit.:** Removes the app database, preferences, keystore material, and private `filesDir/receipts/` folder from your device.
 - **External files you saved** (`.duitbackup` archives and CSV exports) remain wherever you stored them until you delete them.
 - **Feedback requests:** To request deletion of previously submitted feedback rows, submit a deletion request via **Settings -> Help & Feedback** referencing the approximate date and optional email address used.
 
-## 12. Changes & contact
+## 13. Changes & contact
 
 Updates to this policy are published alongside releases in `erlingdiniy/duit` and `erlingdiniy/duit-beta`.  
 For support or privacy requests, please use **Settings -> Help & Feedback** inside the app and avoid posting personal financial data on public GitHub issues.

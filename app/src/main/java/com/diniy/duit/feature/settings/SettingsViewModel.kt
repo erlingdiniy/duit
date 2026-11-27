@@ -198,6 +198,10 @@ class SettingsViewModel(
         viewModelScope.launch { userPreferencesRepository.setCrashReportingEnabled(enabled) }
     }
 
+    fun setUsageAnalyticsEnabled(enabled: Boolean) {
+        viewModelScope.launch { userPreferencesRepository.setUsageAnalyticsEnabled(enabled) }
+    }
+
     // Encrypted Backup
     fun buildEncryptedBackup(
         password: CharArray,

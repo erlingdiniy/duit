@@ -63,6 +63,7 @@ internal class DevCenterRuntime(
     val transport: DevHttpTransport = HttpsUrlConnectionTransport()
     val githubClient = DevCenterGitHubClient(transport)
     val feedbackClient = DevCenterFeedbackClient(transport)
+    val analyticsClient = DevCenterAnalyticsClient(transport)
     val authManager = DevCenterAuthManager(
         vault = vault,
         biometricGateway = biometricGateway,
@@ -72,6 +73,7 @@ internal class DevCenterRuntime(
         vault = vault,
         githubClient = githubClient,
         feedbackClient = feedbackClient,
+        analyticsClient = analyticsClient,
         authManager = authManager,
         scope = scope
     )
@@ -85,7 +87,7 @@ object DeveloperCenterEntryPoint {
     const val isAvailable: Boolean = true
 
     fun privacySummaryOrNull(fcmEnabled: Boolean): String = if (fcmEnabled) {
-        "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. duit. goes online for Firebase developer broadcasts (analytics disabled), optional opt-in crash reports (off by default), feedback you submit, and inside your PIN-locked Developer Center."
+        "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. duit. goes online for Firebase developer broadcasts, optional opt-in crash reports and anonymous usage analytics (both off by default, advertising IDs permanently disabled), feedback you submit, and inside your PIN-locked Developer Center."
     } else {
         "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. Firebase Analytics and public telemetry remain excluded; internet access is used only inside your PIN-locked Developer Center."
     }

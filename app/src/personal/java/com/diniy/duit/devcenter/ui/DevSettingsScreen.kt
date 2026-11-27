@@ -72,8 +72,11 @@ fun DevSettingsScreen(
     var sheetIdInput by remember(vault.feedbackSheetId) { mutableStateOf(vault.feedbackSheetId) }
     var sheetRangeInput by remember(vault.feedbackSheetRange) { mutableStateOf(vault.feedbackSheetRange) }
     var sheetsTokenInput by remember { mutableStateOf("") }
+    var ga4PropertyInput by remember(vault.ga4PropertyId) { mutableStateOf(vault.ga4PropertyId) }
+    var analyticsTokenInput by remember { mutableStateOf("") }
 
     var githubExpanded by remember { mutableStateOf(vault.encryptedGithubPat.isNullOrBlank()) }
+    var analyticsExpanded by remember { mutableStateOf(false) }
     var feedbackExpanded by remember { mutableStateOf(false) }
     var showChangePinDialog by remember { mutableStateOf(false) }
     var showWipeCredsDialog by remember { mutableStateOf(false) }
@@ -96,7 +99,7 @@ fun DevSettingsScreen(
             title = { Text("Clear Credentials") },
             text = {
                 Text(
-                    "Removes saved GitHub key and Sheets access from Developer Center storage. Financial data stays untouched.",
+                    "Removes saved GitHub key, Analytics token, and Sheets access from Developer Center storage. Financial data stays untouched.",
                     style = MaterialTheme.typography.bodySmall
                 )
             },
@@ -273,6 +276,75 @@ fun DevSettingsScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        item(key = "analytics_source") {
+            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .candyPressable(
+                            onClick = { analyticsExpanded = !analyticsExpanded },
+                            onClickLabel = "Toggle Analytics API settings"
+                        )
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        DevSectionTitle("Analytics Source (GA4)")
+                        Text(
+                            text = if (vault.ga4PropertyId.isBlank()) "Optional GA4 Data API read-only" else "Property ${vault.ga4PropertyId} · ${vault.analyticsTokenHint}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.secondaryText
+                        )
+                    }
+                    Icon(
+                        imageVector = if (analyticsExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = colors.secondaryText
+                    )
+                }
+
+                AnimatedVisibility(visible = analyticsExpanded) {
+                    Column {
+                        Spacer(Modifier.height(8.dp))
+                        PrismaticTextField(
+                            value = ga4PropertyInput,
+                            onValueChange = { if (it.length <= 15 && it.all(Char::isDigit)) ga4PropertyInput = it },
+                            label = "GA4 Property ID",
+                            placeholder = "123456789"
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SecretInputField(
+                            value = analyticsTokenInput,
+                            onValueChange = { analyticsTokenInput = it },
+                            label = "Read-Only Analytics OAuth Token",
+                            placeholder = "Optional ya29... analytics.readonly"
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PrismaticButton(
+                                text = "Save API",
+                                onClick = {
+                                    viewModel.saveAnalyticsConfig(ga4PropertyInput, analyticsTokenInput)
+                                    analyticsTokenInput = ""
+                                },
+                                variant = PrismaticButtonVariant.Secondary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            PrismaticButton(
+                                text = "Clear API",
+                                onClick = viewModel::clearAnalyticsSource,
+                                variant = PrismaticButtonVariant.Ghost,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }

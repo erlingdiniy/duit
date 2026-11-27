@@ -71,5 +71,6 @@ data class AppSettingsSnapshot(
     val commissionFeatureEnabled: Boolean = true,
     val commissionFormulaConfig: CommissionFormulaConfig = CommissionFormulaConfig(),
     val crashReportingEnabled: Boolean = false,
+    val usageAnalyticsEnabled: Boolean = false,
     val hasCompletedOnboarding: Boolean = false
 )

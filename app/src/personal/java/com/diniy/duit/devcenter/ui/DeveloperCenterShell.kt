@@ -1,6 +1,7 @@
 package com.diniy.duit.devcenter.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -136,43 +138,33 @@ fun DeveloperCenterShell(
                 }
             }
 
-            // Two unclipped rows of 3 equal-width chips so all 6 modules stay 1-tap reachable with full touch area.
-            Column(
+            // Horizontally scrollable pill rail so all 7 Developer Center sections remain 1-tap reachable at >= 48dp height.
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                DevCenterSection.entries.chunked(3).forEach { rowSections ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowSections.forEach { section ->
-                            val isSelected = section == uiState.activeSection
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { viewModel.selectSection(section) },
-                                label = {
-                                    Text(
-                                        text = section.label,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = colors.primaryAction.copy(alpha = 0.16f),
-                                    selectedLabelColor = colors.primaryAction
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 48.dp)
+                DevCenterSection.entries.forEach { section ->
+                    val isSelected = section == uiState.activeSection
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { viewModel.selectSection(section) },
+                        label = {
+                            Text(
+                                text = section.label,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        }
-                    }
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = colors.primaryAction.copy(alpha = 0.16f),
+                            selectedLabelColor = colors.primaryAction
+                        ),
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    )
                 }
             }
 
@@ -201,6 +193,13 @@ fun DeveloperCenterShell(
                     onOpenNotifications = { viewModel.selectSection(DevCenterSection.NOTIFICATIONS) },
                     onOpenHistory = { viewModel.selectSection(DevCenterSection.HISTORY) },
                     onOpenReleases = { viewModel.selectSection(DevCenterSection.RELEASES) },
+                    onOpenSettings = { viewModel.selectSection(DevCenterSection.SETTINGS) },
+                    modifier = Modifier.weight(1f)
+                )
+                DevCenterSection.ANALYTICS -> DevAnalyticsScreen(
+                    uiState = uiState,
+                    onSelectDateRange = viewModel::selectAnalyticsDateRange,
+                    onRefresh = viewModel::refreshAnalytics,
                     onOpenSettings = { viewModel.selectSection(DevCenterSection.SETTINGS) },
                     modifier = Modifier.weight(1f)
                 )

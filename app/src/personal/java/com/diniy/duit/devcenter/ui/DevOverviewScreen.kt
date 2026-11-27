@@ -174,7 +174,10 @@ fun DevOverviewScreen(
                     Spacer(Modifier.height(6.dp))
                     DevKeyValueRow(label = "Channel", value = BuildConfig.RELEASE_CHANNEL)
                     DevKeyValueRow(label = "Version", value = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                    DevKeyValueRow(label = "Analytics", value = "Disabled")
+                    DevKeyValueRow(
+                        label = "Analytics",
+                        value = if (com.diniy.duit.analytics.UsageAnalytics.isCollectionEnabled()) "Opt-In ON" else "Opt-In OFF"
+                    )
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = "Firebase Console shows crash-free users, issue lists, affected versions, and recent trends without extra billing.",

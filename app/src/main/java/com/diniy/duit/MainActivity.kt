@@ -57,6 +57,11 @@ class MainActivity : FragmentActivity() {
                 "fatal" -> throw IllegalStateException("Phase 20C isolated QA verification crash")
             }
         }
+        if (BuildConfig.ANALYTICS_QA_TEST && savedInstanceState == null) {
+            if (intent?.getStringExtra("duit_qa_analytics") == "batch") {
+                com.diniy.duit.analytics.UsageAnalytics.logQaVerificationBatch(applicationContext)
+            }
+        }
 
         // Phase 10B.3: mirror the saved theme into the per-app night mode (Android 12+) so the
         // system splash and launch window use the right theme from the very first frame, even

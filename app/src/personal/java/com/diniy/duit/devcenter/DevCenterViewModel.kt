@@ -58,6 +58,13 @@ data class DevCenterUiState(
     ),
     val feedbackSearchQuery: String = "",
     val feedbackCategoryFilter: String = "All",
+    val analyticsDateRange: AnalyticsDateRange = AnalyticsDateRange.THIRTY_DAYS,
+    val analyticsState: AnalyticsSourceState = AnalyticsSourceState.Unavailable(
+        summary = "GA4 Data API credentials are optional and not configured yet. Use Firebase Console or add Property ID and read-only token in Settings.",
+        hasPropertyId = false,
+        hasToken = false
+    ),
+    val isRefreshingAnalytics: Boolean = false,
     val pendingKillSwitchModal: PendingKillSwitchModal? = null
 ) {
     val combinedBroadcastHistory: List<BroadcastHistoryEntry>
@@ -67,12 +74,13 @@ data class DevCenterUiState(
 
 /**
  * Coordinates Developer Center remote telemetry, custom FCM workflow dispatches,
- * release monitoring, feedback viewing, kill switches, and security settings.
+ * release monitoring, analytics insights, feedback viewing, kill switches, and security settings.
  */
 class DevCenterViewModel(
     private val vault: DevCenterVault,
     private val githubClient: DevCenterGitHubClient,
     private val feedbackClient: DevCenterFeedbackClient,
+    private val analyticsClient: DevCenterAnalyticsClient = DevCenterAnalyticsClient(HttpsUrlConnectionTransport()),
     val authManager: DevCenterAuthManager,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     private val nowMs: () -> Long = System::currentTimeMillis
@@ -140,12 +148,20 @@ class DevCenterViewModel(
                 importedCsvRaw = v.importedCsvRaw,
                 importedCsvLabel = v.importedCsvLabel
             )
+            val analyticsToken = vault.readAnalyticsToken()
+            val gaState = analyticsClient.loadAnalytics(
+                propertyId = v.ga4PropertyId,
+                analyticsAccessToken = analyticsToken,
+                dateRange = _uiState.value.analyticsDateRange,
+                syncedAtIso = isoUtcNow(nowMs())
+            )
             _uiState.update {
                 it.copy(
                     isRefreshing = false,
                     dashboard = snapshot,
                     latestCustomRun = customRun,
                     feedbackState = fbState,
+                    analyticsState = gaState,
                     errorBanner = snapshot.degradedNotice
                 )
             }
@@ -629,6 +645,98 @@ class DevCenterViewModel(
                         "Feedback source cleared. Import a CSV or configure read-only Sheets in Settings."
                     ),
                     statusBanner = "Feedback source cleared."
+                )
+            }
+        }
+    }
+
+    fun selectAnalyticsDateRange(range: AnalyticsDateRange) {
+        authManager.recordUserActivity()
+        if (_uiState.value.analyticsDateRange == range) return
+        _uiState.update { it.copy(analyticsDateRange = range) }
+        refreshAnalytics()
+    }
+
+    fun refreshAnalytics() {
+        authManager.recordUserActivity()
+        if (_uiState.value.isRefreshingAnalytics) return
+        _uiState.update { it.copy(isRefreshingAnalytics = true, analyticsState = AnalyticsSourceState.Loading) }
+        scope.launch {
+            val v = vault.getState()
+            val token = vault.readAnalyticsToken()
+            val gaState = analyticsClient.loadAnalytics(
+                propertyId = v.ga4PropertyId,
+                analyticsAccessToken = token,
+                dateRange = _uiState.value.analyticsDateRange,
+                syncedAtIso = isoUtcNow(nowMs())
+            )
+            _uiState.update {
+                it.copy(
+                    isRefreshingAnalytics = false,
+                    analyticsState = gaState
+                )
+            }
+        }
+    }
+
+    fun saveAnalyticsConfig(propertyId: String, rawAnalyticsToken: String?) {
+        authManager.recordUserActivity()
+        val cleanId = propertyId.trim()
+        if (cleanId.isNotEmpty() && !DevCenterValidators.isValidGa4PropertyId(cleanId)) {
+            _uiState.update { it.copy(errorBanner = "GA4 Property ID must be 6 to 15 digits.") }
+            return
+        }
+        val cleanToken = rawAnalyticsToken?.trim().orEmpty()
+        val secretList = buildList { if (cleanToken.isNotEmpty()) add(cleanToken) }
+        scope.launch {
+            runCatching {
+                vault.saveAnalyticsConfig(cleanId, cleanToken)
+                vault.appendAuditEvent(
+                    AuditLogEntry(
+                        id = "aud-${nowMs()}",
+                        timestampIso = isoUtcNow(nowMs()),
+                        actor = "operator",
+                        action = "credentials.analytics_saved",
+                        target = cleanId.ifBlank { "ga4_property" },
+                        status = "ok",
+                        summary = "Saved Keystore-sealed GA4 read-only config."
+                    ),
+                    extraSecrets = secretList
+                )
+            }.onSuccess {
+                _uiState.update { it.copy(statusBanner = "Analytics source updated.", errorBanner = null) }
+                refreshAnalytics()
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(errorBanner = DevCenterRedactor.redact(err.message ?: "Save failed.", secretList))
+                }
+            }
+        }
+    }
+
+    fun clearAnalyticsSource() {
+        authManager.recordUserActivity()
+        scope.launch {
+            vault.clearAnalyticsSource()
+            vault.appendAuditEvent(
+                AuditLogEntry(
+                    id = "aud-${nowMs()}",
+                    timestampIso = isoUtcNow(nowMs()),
+                    actor = "operator",
+                    action = "credentials.analytics_cleared",
+                    target = "ga4_property",
+                    status = "ok",
+                    summary = "Cleared GA4 Property ID and read-only Analytics token."
+                )
+            )
+            _uiState.update {
+                it.copy(
+                    analyticsState = AnalyticsSourceState.Unavailable(
+                        summary = "Analytics credentials cleared. Add Property ID and read-only token in Settings to reload.",
+                        hasPropertyId = false,
+                        hasToken = false
+                    ),
+                    statusBanner = "Analytics source cleared."
                 )
             }
         }

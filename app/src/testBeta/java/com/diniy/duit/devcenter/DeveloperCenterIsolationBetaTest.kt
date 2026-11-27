@@ -17,7 +17,10 @@ class DeveloperCenterIsolationBetaTest {
         assertTrue(BuildConfig.PUBLIC_EDITION)
         assertFalse(BuildConfig.DEVELOPER_CENTER_ENABLED)
         assertTrue(BuildConfig.FCM_ENABLED)
+        assertTrue(BuildConfig.ANALYTICS_ENABLED)
+        assertFalse(BuildConfig.ANALYTICS_QA_TEST)
         assertFalse(BuildConfig.PRIVATE_DEV_EDITION)
+        assertTrue(com.diniy.duit.analytics.UsageAnalytics.isSupported)
         assertFalse(DeveloperCenterEntryPoint.isAvailable)
         assertTrue(
             "Public beta build must retain BetaUpdates updater",
@@ -29,6 +32,7 @@ class DeveloperCenterIsolationBetaTest {
             "com.diniy.duit.devcenter.DevCenterAuthManager",
             "com.diniy.duit.devcenter.DevCenterGitHubClient",
             "com.diniy.duit.devcenter.DevCenterFeedbackClient",
+            "com.diniy.duit.devcenter.DevCenterAnalyticsClient",
             "com.diniy.duit.devcenter.DevCenterViewModel",
             "com.diniy.duit.devcenter.DevHttpTransport",
             "com.diniy.duit.devcenter.DevCenterRedactor",
@@ -36,6 +40,7 @@ class DeveloperCenterIsolationBetaTest {
             "com.diniy.duit.devcenter.DevCenterModelsKt",
             "com.diniy.duit.devcenter.ui.DeveloperCenterShellKt",
             "com.diniy.duit.devcenter.ui.DevOverviewScreenKt",
+            "com.diniy.duit.devcenter.ui.DevAnalyticsScreenKt",
             "com.diniy.duit.devcenter.ui.DevNotificationsScreenKt",
             "com.diniy.duit.devcenter.ui.DevHistoryScreenKt",
             "com.diniy.duit.devcenter.ui.DevReleasesScreenKt",

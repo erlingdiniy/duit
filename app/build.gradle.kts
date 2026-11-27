@@ -45,6 +45,7 @@ if (betaVersionName.contains("-beta.")) {
 val betaKeyStore = providers.environmentVariable("DUIT_BETA_KEYSTORE").orNull
 val uploadCrashlyticsMapping = providers.gradleProperty("duitUploadCrashlyticsMapping").orElse("false").get().toBoolean()
 val crashlyticsQaTest = providers.gradleProperty("duitCrashlyticsQaTest").orElse("false").get().toBoolean()
+val analyticsQaTest = providers.gradleProperty("duitAnalyticsQaTest").orElse("false").get().toBoolean()
 
 // Private developer-enabled build (`betaDev`) shares the com.diniy.duit.beta package and signing key
 // and uses major*10_000_000 + minor*10_000 + patch*100 + devN (e.g. 1.2.0-dev.1 = 10020001) so private
@@ -107,8 +108,10 @@ android {
         buildConfigField("boolean", "FCM_ENABLED", "false")
         buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
         buildConfigField("boolean", "CRASHLYTICS_ENABLED", "false")
+        buildConfigField("boolean", "ANALYTICS_ENABLED", "false")
         buildConfigField("String", "RELEASE_CHANNEL", "\"personal\"")
         buildConfigField("boolean", "CRASHLYTICS_QA_TEST", "false")
+        buildConfigField("boolean", "ANALYTICS_QA_TEST", "false")
     }
 
     signingConfigs {
@@ -150,8 +153,10 @@ android {
             buildConfigField("boolean", "FCM_ENABLED", "true")
             buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
             buildConfigField("boolean", "CRASHLYTICS_ENABLED", "true")
+            buildConfigField("boolean", "ANALYTICS_ENABLED", "true")
             buildConfigField("String", "RELEASE_CHANNEL", if (betaVersionName.contains("-beta.")) "\"beta\"" else "\"stable\"")
             buildConfigField("boolean", "CRASHLYTICS_QA_TEST", crashlyticsQaTest.toString())
+            buildConfigField("boolean", "ANALYTICS_QA_TEST", analyticsQaTest.toString())
             // QA only: shows Support duit. with the placeholder before the real QR exists. Never set for releases.
             buildConfigField("boolean", "SUPPORT_PREVIEW", providers.gradleProperty("duitSupportPreview").orElse("false").get())
         }
@@ -165,8 +170,10 @@ android {
             buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
             buildConfigField("boolean", "PRIVATE_DEV_EDITION", "true")
             buildConfigField("boolean", "CRASHLYTICS_ENABLED", "true")
+            buildConfigField("boolean", "ANALYTICS_ENABLED", "true")
             buildConfigField("String", "RELEASE_CHANNEL", "\"private_dev\"")
             buildConfigField("boolean", "CRASHLYTICS_QA_TEST", crashlyticsQaTest.toString())
+            buildConfigField("boolean", "ANALYTICS_QA_TEST", analyticsQaTest.toString())
         }
         // Release-like build for on-device performance checks. Separate app ID, so it never touches
         // the installed app or its data; signed with the debug key so it can be sideloaded.
@@ -373,7 +380,14 @@ val verifyBetaReleaseIsolation by tasks.registering {
             "Crash Monitoring",
             "console.firebase.google.com/project/duit-beta/crashlytics",
             "duit_qa_crash",
-            "Phase 20C isolated QA verification crash"
+            "Phase 20C isolated QA verification crash",
+            "DevCenterAnalyticsClient",
+            "DevAnalyticsScreen",
+            "analyticsdata.googleapis.com",
+            "dev_ga4_property_id",
+            "dev_analytics_token",
+            "duit_qa_analytics",
+            "console.firebase.google.com/project/duit-beta/analytics"
         )
         val allowedBetaPermissions = setOf(
             "android.permission.INTERNET",
@@ -484,11 +498,13 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Phase 8 & 20C: FCM & Crashlytics strictly for beta and private betaDev. Offline personal/debug/release exclude Firebase SDK.
+    // Phase 8, 20C & 20D: FCM, Crashlytics & Analytics strictly for beta and private betaDev. Offline personal/debug/release exclude Firebase SDK.
     "betaImplementation"(platform(libs.firebase.bom))
+    "betaImplementation"(libs.firebase.analytics)
     "betaImplementation"(libs.firebase.messaging)
     "betaImplementation"(libs.firebase.crashlytics)
     "betaDevImplementation"(platform(libs.firebase.bom))
+    "betaDevImplementation"(libs.firebase.analytics)
     "betaDevImplementation"(libs.firebase.messaging)
     "betaDevImplementation"(libs.firebase.crashlytics)
 

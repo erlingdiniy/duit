@@ -2,6 +2,11 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_TOPICS" tools:node="remove" />
+    <uses-permission android:name="com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE" tools:node="remove" />
     <!-- Launcher name comes from duitBetaAppName ("duit." for v1.2.0-dev on top of stable). -->
     <application
         android:label="${appLabel}"
@@ -23,7 +28,7 @@
             android:name=".update.PrivateDevInstallStatusReceiver"
             android:exported="false" />
 
-        <!-- Phase 8: Developer Broadcasts (FCM) preserved in private developer build; zero analytics collection. -->
+        <!-- Phase 8 & 20D: FCM broadcasts and opt-in usage analytics preserved cleanly (off by default; zero ad IDs). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="duit_developer_broadcasts" />
@@ -35,6 +40,21 @@
             android:value="false" />
         <meta-data
             android:name="google_analytics_adid_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_ssaid_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_analytics_storage"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_storage"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_user_data"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_personalization_signals"
             android:value="false" />
         <meta-data
             android:name="firebase_crashlytics_collection_enabled"
