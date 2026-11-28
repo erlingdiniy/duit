@@ -179,6 +179,8 @@ function Assert-PublicApk([string]$ApkPath, [string]$ExpectedVerName, [int]$Expe
         "DevCrashReportsScreen", "DevRemoteConfigScreen", "DevGitHubScreen",
         "DevInfrastructureScreen", "DevAuditLogsScreen", "duit_dev_alerts",
         "https://www.googleapis.com/auth/firebase.remoteconfig", "spreadsheets.readonly",
+        "DevBackendClient", "DevDeviceKeyManager", "DevEnrollmentScreen",
+        "/v1/admin/", "/v1/auth/enroll", "duit_dev_backend_jwt_v1", "duit_dev_mc_ecdsa",
         ("github_pat" + "_11"), ("ghp" + "_")
     )
     Scan-ApkMarkers -ApkPath $ApkPath -ForbiddenMarkers $forbidden -RequiredDexMarkers @("duit-beta-install") -Label "Public APK"

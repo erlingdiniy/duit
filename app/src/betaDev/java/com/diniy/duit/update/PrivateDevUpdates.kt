@@ -8,11 +8,14 @@ import android.content.pm.PackageManager
 import android.content.pm.Signature
 import android.os.Build
 import com.diniy.duit.BuildConfig
+import com.diniy.duit.devcenter.AndroidKeyStoreDeviceKeyManager
 import com.diniy.duit.devcenter.DataStoreDevCenterStorage
 import com.diniy.duit.devcenter.DEFAULT_PRIVATE_UPDATE_REPO
+import com.diniy.duit.devcenter.DevBackendClient
 import com.diniy.duit.devcenter.DevCenterRedactor
 import com.diniy.duit.devcenter.DevCenterValidators
 import com.diniy.duit.devcenter.DevCenterVault
+import com.diniy.duit.devcenter.HttpsUrlConnectionTransport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -39,7 +42,8 @@ internal data class PrivateDevRelease(
     val sha256: String,
     val versionName: String,
     val notes: String,
-    val publishedDate: String
+    val publishedDate: String,
+    val isBackendStream: Boolean = false
 )
 
 internal sealed interface PrivateCheckResult {
@@ -117,12 +121,18 @@ internal class HttpsPrivateDownloadTransport : PrivateDownloadTransport {
         maxBytes: Long,
         onResponse: (contentLength: Long, stream: InputStream) -> Unit
     ) = withContext(Dispatchers.IO) {
-        validateApiUri(assetApiUrl)
+        val isBackendOta = isBackendOtaStreamUri(assetApiUrl)
+        if (!isBackendOta) {
+            validateApiUri(assetApiUrl)
+        }
         var currentUri = assetApiUrl
         var sendAuth = true
         repeat(4) {
-            val conn = (currentUri.toURL().openConnection() as? HttpsURLConnection)
-                ?: throw IOException("HTTPS connection required")
+            val conn = (currentUri.toURL().openConnection() as? java.net.HttpURLConnection)
+                ?: throw IOException("HTTP connection required")
+            if (currentUri.scheme.equals("http", ignoreCase = true) && !BuildConfig.DEBUG) {
+                throw SecurityException("HTTPS connection required")
+            }
             try {
                 conn.instanceFollowRedirects = false
                 conn.connectTimeout = 10_000
@@ -130,10 +140,19 @@ internal class HttpsPrivateDownloadTransport : PrivateDownloadTransport {
                 conn.useCaches = false
                 conn.setRequestProperty("User-Agent", "duit-private-updater/1.0")
                 if (sendAuth) {
-                    validateApiUri(currentUri)
-                    conn.setRequestProperty("Authorization", "Bearer ${pat.trim()}")
-                    conn.setRequestProperty("Accept", "application/octet-stream")
-                    conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                    if (isBackendOta) {
+                        HttpsUrlConnectionTransport.validateBackendUrl(
+                            currentUri.toString(),
+                            allowLoopbackDebug = BuildConfig.DEBUG
+                        )
+                        conn.setRequestProperty("Authorization", "Bearer ${pat.trim()}")
+                        conn.setRequestProperty("Accept", "application/vnd.android.package-archive")
+                    } else {
+                        validateApiUri(currentUri)
+                        conn.setRequestProperty("Authorization", "Bearer ${pat.trim()}")
+                        conn.setRequestProperty("Accept", "application/octet-stream")
+                        conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                    }
                 } else {
                     validateCdnUri(currentUri)
                 }
@@ -150,6 +169,9 @@ internal class HttpsPrivateDownloadTransport : PrivateDownloadTransport {
                         return@withContext
                     }
                     301, 302, 303, 307, 308 -> {
+                        if (isBackendOta) {
+                            throw SecurityException("Redirects blocked on backend OTA stream")
+                        }
                         val location = conn.getHeaderField("Location")
                             ?: throw IOException("Missing download redirect location")
                         val nextUri = currentUri.resolve(location)
@@ -158,7 +180,7 @@ internal class HttpsPrivateDownloadTransport : PrivateDownloadTransport {
                         // Never leak GitHub PAT outside api.github.com.
                         sendAuth = false
                     }
-                    401, 403 -> throw AuthRejectedException("GitHub asset authorization failed (HTTP $code)")
+                    401, 403 -> throw AuthRejectedException("Private update authorization failed (HTTP $code)")
                     else -> throw IOException("Download failed (HTTP $code)")
                 }
             } catch (err: Throwable) {
@@ -206,6 +228,13 @@ internal class PrivateDevUpdates(
                 signers = pkg.signingInfo?.apkContentsSigners?.toSet().orEmpty()
             )
         }
+    },
+    private val backendClientProvider: () -> DevBackendClient? = {
+        val vault = DevCenterVault(DataStoreDevCenterStorage(context))
+        DevBackendClient(vault, AndroidKeyStoreDeviceKeyManager(), HttpsUrlConnectionTransport())
+    },
+    private val isBackendEnrolledProvider: suspend () -> Boolean = {
+        DevCenterVault(DataStoreDevCenterStorage(context)).getState().isBackendEnrolled
     }
 ) {
     private val manager = context.packageManager
@@ -214,6 +243,13 @@ internal class PrivateDevUpdates(
         repoProvider().trim().ifBlank { DEFAULT_PRIVATE_UPDATE_REPO }
 
     suspend fun check(): PrivateCheckResult = withContext(Dispatchers.IO) {
+        if (runCatching { isBackendEnrolledProvider() }.getOrDefault(false)) {
+            val client = backendClientProvider()
+            val baseUrl = client?.resolveBaseUrl().orEmpty()
+            if (client != null && baseUrl.isNotBlank()) {
+                return@withContext checkViaBackend(client, baseUrl)
+            }
+        }
         val repo = currentRepo()
         if (!DevCenterValidators.isValidPrivateUpdateRepo(repo)) {
             throw NotPrivateRepoException("Private update channel cannot point to a public repository.")
@@ -246,17 +282,59 @@ internal class PrivateDevUpdates(
         }
     }
 
+    private suspend fun checkViaBackend(client: DevBackendClient, baseUrl: String): PrivateCheckResult {
+        return try {
+            val ota = client.fetchLatestPrivateOta() ?: return PrivateCheckResult.UpToDate(currentRepo())
+            if (!DevCenterValidators.isValidPrivateUpdateRepo(ota.repository)) {
+                throw NotPrivateRepoException("Private update channel cannot point to a public repository.")
+            }
+            if (ota.versionCode <= installedVersionCode() || !ota.versionName.contains("-dev") || ota.versionName.contains("-beta.")) {
+                return PrivateCheckResult.UpToDate(ota.repository)
+            }
+            val rel = PrivateDevRelease(
+                versionCode = ota.versionCode,
+                assetApiUrl = URI("$baseUrl/v1/admin/ota/download/${ota.assetId}"),
+                size = ota.sizeBytes,
+                sha256 = ota.sha256.lowercase(),
+                versionName = ota.versionName,
+                notes = ota.notes.take(MAX_NOTES_CHARS),
+                publishedDate = ota.publishedAt.take(10).takeIf { DATE_REGEX.matches(it) }.orEmpty(),
+                isBackendStream = true
+            )
+            PrivateCheckResult.Available(rel, ota.repository)
+        } catch (err: NotPrivateRepoException) {
+            throw err
+        } catch (err: com.diniy.duit.devcenter.DeviceRevokedException) {
+            throw AuthRejectedException(DevCenterRedactor.redact(err.message))
+        } catch (err: Exception) {
+            throw IOException(DevCenterRedactor.redact(err.message ?: "Private update check failed", listOf(baseUrl)))
+        }
+    }
+
     suspend fun notesForInstalled(): String? = withContext(Dispatchers.IO) {
         val repo = currentRepo()
         if (!DevCenterValidators.isValidPrivateUpdateRepo(repo)) return@withContext null
         val pat = patProvider()?.trim().orEmpty()
-        if (pat.isEmpty()) return@withContext null
-        runCatching {
-            val repoMeta = JSONObject(transport.getJson(URI("https://api.github.com/repos/$repo"), pat))
-            if (!repoMeta.optBoolean("private", false)) return@withContext null
-            val raw = transport.getJson(URI("https://api.github.com/repos/$repo/releases?per_page=20"), pat)
-            findPrivateReleaseNotes(JSONArray(raw), installedVersionCode())
-        }.getOrNull()
+        if (pat.isNotEmpty()) {
+            return@withContext runCatching {
+                val repoMeta = JSONObject(transport.getJson(URI("https://api.github.com/repos/$repo"), pat))
+                if (!repoMeta.optBoolean("private", false)) return@withContext null
+                val raw = transport.getJson(URI("https://api.github.com/repos/$repo/releases?per_page=20"), pat)
+                findPrivateReleaseNotes(JSONArray(raw), installedVersionCode())
+            }.getOrNull()
+        }
+        if (runCatching { isBackendEnrolledProvider() }.getOrDefault(false)) {
+            val client = backendClientProvider() ?: return@withContext null
+            return@withContext runCatching {
+                val ota = client.fetchLatestPrivateOta()
+                if (ota != null && ota.versionCode == installedVersionCode()) {
+                    ota.notes.take(MAX_NOTES_CHARS)
+                } else {
+                    null
+                }
+            }.getOrNull()
+        }
+        null
     }
 
     fun installedVersionCode(): Long = installedPackageProvider().longVersionCode
@@ -274,13 +352,32 @@ internal class PrivateDevUpdates(
         status: suspend (sessionId: Int) -> IntentSender
     ): Int = withContext(Dispatchers.IO) {
         check(canInstall()) { "Allow installs from duit. before continuing" }
-        val pat = patProvider()?.trim().orEmpty()
-        if (pat.isEmpty()) {
-            throw AuthRejectedException("Connect your GitHub PAT in Developer Settings to download private updates.")
+        var authToken = ""
+        if (release.isBackendStream) {
+            val client = backendClientProvider()
+                ?: throw AuthRejectedException("Enroll this device in Developer Center to download private updates.")
+            authToken = runCatching { client.ensureValidAccessToken(forceReauth = false) }
+                .getOrElse { throw AuthRejectedException(it.message ?: "Device session unavailable.") }
+        } else {
+            authToken = patProvider()?.trim().orEmpty()
+            if (authToken.isEmpty()) {
+                throw AuthRejectedException("Connect your device in Developer Center (or add GitHub PAT) to download updates.")
+            }
         }
         val apk = File.createTempFile("duit-private-dev-", ".apk", context.cacheDir)
         try {
-            downloadAndVerifyFile(release, pat, apk, onProgress)
+            if (release.isBackendStream) {
+                try {
+                    downloadAndVerifyFile(release, authToken, apk, onProgress)
+                } catch (authErr: AuthRejectedException) {
+                    val client = backendClientProvider() ?: throw authErr
+                    val refreshed = client.ensureValidAccessToken(forceReauth = true)
+                    authToken = refreshed
+                    downloadAndVerifyFile(release, refreshed, apk, onProgress)
+                }
+            } else {
+                downloadAndVerifyFile(release, authToken, apk, onProgress)
+            }
             val candidate = candidateArchiveProvider(apk) ?: throw IOException("Invalid APK archive")
             val current = installedPackageProvider()
             @Suppress("DEPRECATION")
@@ -297,7 +394,7 @@ internal class PrivateDevUpdates(
         } catch (err: Exception) {
             val cleanMsg = DevCenterRedactor.redact(
                 err.message ?: "Private update failed",
-                listOf(pat, release.assetApiUrl.toString())
+                listOf(authToken, release.assetApiUrl.toString())
             )
             when (err) {
                 is AuthRejectedException -> throw AuthRejectedException(cleanMsg)
@@ -496,6 +593,9 @@ private fun validateApiUri(uri: URI) {
         throw SecurityException("Unexpected GitHub API URL")
     }
 }
+
+private fun isBackendOtaStreamUri(uri: URI): Boolean =
+    Regex("""/v1/admin/ota/download/\d+""").matches(uri.path.orEmpty())
 
 private fun validateCdnUri(uri: URI) {
     val host = uri.host?.lowercase().orEmpty()

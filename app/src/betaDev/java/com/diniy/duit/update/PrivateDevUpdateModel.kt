@@ -164,8 +164,8 @@ internal class PrivateDevUpdateModel(private val app: Application) : AndroidView
                     }
                     PrivateCheckResult.AuthRequired -> {
                         recordCheck(
-                            if (manual) "Add GitHub PAT in Developer Settings"
-                            else "Private channel requires GitHub PAT"
+                            if (manual) "Enroll device in Developer Center"
+                            else "Private updates await enrollment"
                         )
                     }
                 }
@@ -173,7 +173,7 @@ internal class PrivateDevUpdateModel(private val app: Application) : AndroidView
                 throw cancelled
             } catch (err: Exception) {
                 val safeMsg = when (classifyPrivateUpdateFailure(err)) {
-                    PrivateUpdateProblem.AUTH -> "GitHub PAT lacks access to private repo"
+                    PrivateUpdateProblem.AUTH -> "Private update authorization failed"
                     PrivateUpdateProblem.NOT_PRIVATE_REPO -> DevCenterRedactor.redact(err.message ?: "Repo must be private")
                     PrivateUpdateProblem.NETWORK -> "Offline — couldn't check updates"
                     PrivateUpdateProblem.TIMEOUT -> "Timed out checking private updates"

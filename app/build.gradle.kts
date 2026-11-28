@@ -62,6 +62,18 @@ val devAnalyticsOAuthScheme = if (devAnalyticsOAuthClientId.endsWith(".apps.goog
 } else {
     "duit-dev-oauth-unconfigured"
 }
+val devBackendUrl = providers.gradleProperty("duitDevBackendUrl").orNull
+    ?.trim()
+    .orEmpty()
+    .ifEmpty { localProps.getProperty("duitDevBackendUrl", "").trim() }
+    .trimEnd('/')
+require(
+    devBackendUrl.isEmpty() ||
+        Regex("""https://[A-Za-z0-9.-]+(?:/[A-Za-z0-9_./-]*)?""").matches(devBackendUrl) ||
+        Regex("""http://127\.0\.0\.1:\d+""").matches(devBackendUrl)
+) {
+    "duitDevBackendUrl must be an HTTPS URL (or loopback 127.0.0.1 for local QA), got $devBackendUrl"
+}
 
 // Private developer-enabled build (`betaDev`) shares the com.diniy.duit.beta package and signing key
 // and uses major*10_000_000 + minor*10_000 + patch*100 + devN (e.g. 1.2.0-dev.1 = 10020001) so private
@@ -129,6 +141,7 @@ android {
         buildConfigField("boolean", "CRASHLYTICS_QA_TEST", "false")
         buildConfigField("boolean", "ANALYTICS_QA_TEST", "false")
         buildConfigField("String", "DEV_ANALYTICS_OAUTH_CLIENT_ID", "\"\"")
+        buildConfigField("String", "DEV_BACKEND_URL", "\"\"")
     }
 
     signingConfigs {
@@ -145,12 +158,14 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
+            buildConfigField("String", "DEV_BACKEND_URL", "\"$devBackendUrl\"")
         }
         release {
             // R8 compiles Compose to fast, optimised code; debug builds feel noticeably slower (Phase 11P).
             isMinifyEnabled = true
             isShrinkResources = true
             buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
+            buildConfigField("String", "DEV_BACKEND_URL", "\"$devBackendUrl\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -176,6 +191,7 @@ android {
             buildConfigField("boolean", "ANALYTICS_QA_TEST", analyticsQaTest.toString())
             // QA only: shows Support duit. with the placeholder before the real QR exists. Never set for releases.
             buildConfigField("boolean", "SUPPORT_PREVIEW", providers.gradleProperty("duitSupportPreview").orElse("false").get())
+            buildConfigField("String", "DEV_BACKEND_URL", "\"\"")
         }
         // Private developer-enabled build over com.diniy.duit.beta: exact public v1.2.0 experience + FCM + Developer Center,
         // with public in-app GitHub auto-updates disabled at compile time so public APKs cannot overwrite it.
@@ -192,6 +208,7 @@ android {
             buildConfigField("boolean", "CRASHLYTICS_QA_TEST", crashlyticsQaTest.toString())
             buildConfigField("boolean", "ANALYTICS_QA_TEST", analyticsQaTest.toString())
             buildConfigField("String", "DEV_ANALYTICS_OAUTH_CLIENT_ID", "\"$devAnalyticsOAuthClientId\"")
+            buildConfigField("String", "DEV_BACKEND_URL", "\"$devBackendUrl\"")
             manifestPlaceholders["devAnalyticsOAuthScheme"] = devAnalyticsOAuthScheme
         }
         // Release-like build for on-device performance checks. Separate app ID, so it never touches
@@ -430,7 +447,14 @@ val verifyBetaReleaseIsolation by tasks.registering {
             "DevAuditLogsScreen",
             "duit_dev_alerts",
             "https://www.googleapis.com/auth/firebase.remoteconfig",
-            "spreadsheets.readonly"
+            "spreadsheets.readonly",
+            "DevBackendClient",
+            "DevDeviceKeyManager",
+            "DevEnrollmentScreen",
+            "/v1/admin/",
+            "/v1/auth/enroll",
+            "duit_dev_backend_jwt_v1",
+            "duit_dev_mc_ecdsa"
         )
         val allowedBetaPermissions = setOf(
             "android.permission.INTERNET",

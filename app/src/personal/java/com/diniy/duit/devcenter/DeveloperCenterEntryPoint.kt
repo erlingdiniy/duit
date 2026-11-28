@@ -69,6 +69,8 @@ internal class DevCenterRuntime(
     val githubManager = DevCenterGitHubManager(transport, githubClient)
     val singleDeviceFcmClient = DevCenterSingleDeviceFcmClient(transport)
     val infraMonitor = DevCenterInfraMonitor(transport)
+    val keyManager = AndroidKeyStoreDeviceKeyManager()
+    val backendClient = DevBackendClient(vault = vault, keyManager = keyManager, transport = transport)
     val authManager = DevCenterAuthManager(
         vault = vault,
         biometricGateway = biometricGateway,
@@ -97,7 +99,9 @@ internal class DevCenterRuntime(
                 title = if (count == 1) "1 new feedback item" else "$count new feedback items",
                 body = "Open Developer Center Feedback Inbox to review."
             )
-        }
+        },
+        backendClient = backendClient,
+        onClearHardwareKey = { keyManager.deleteKey() }
     )
 }
 
@@ -269,8 +273,10 @@ object DeveloperCenterEntryPoint {
             rt.authManager.onEnterDeveloperCenter()
         }
 
-        LaunchedEffect(authState.stage) {
-            if (authState.stage == DevLockStage.UNLOCKED) {
+        LaunchedEffect(authState.stage, uiState.vault.isBackendEnrolled, uiState.vault.legacyManualBypass) {
+            if (authState.stage == DevLockStage.UNLOCKED &&
+                (uiState.vault.isBackendEnrolled || uiState.vault.legacyManualBypass)
+            ) {
                 rt.viewModel.refreshAll()
             }
         }
@@ -317,6 +323,17 @@ object DeveloperCenterEntryPoint {
                 onSubmitPin = rt.authManager::verifyPinAndUnlock,
                 onTriggerBiometric = triggerBiometric,
                 onDismissError = rt.authManager::clearError
+            )
+            return
+        }
+
+        if (!uiState.vault.isBackendEnrolled && !uiState.vault.legacyManualBypass) {
+            com.diniy.duit.devcenter.ui.DevEnrollmentScreen(
+                uiState = uiState,
+                onEnroll = rt.viewModel::enrollDevice,
+                onUseManualMode = rt.viewModel::enterLegacyManualMode,
+                onBack = onBack,
+                onLockNow = rt.authManager::lockNow
             )
             return
         }

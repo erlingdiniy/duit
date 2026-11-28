@@ -61,8 +61,21 @@ data class DevCenterVaultState(
     val lastFullSyncIso: String? = null,
     val usedBroadcastIds: Set<String> = emptySet(),
     val lastLiveDispatchMs: Long = 0L,
-    val auditLog: List<AuditLogEntry> = emptyList()
-)
+    val auditLog: List<AuditLogEntry> = emptyList(),
+    val backendUrlOverride: String = "",
+    val enrolledDeviceId: String = "",
+    val enrolledDeviceLabel: String = "",
+    val hardwareKeyAlias: String = "",
+    val hardwareKeyBacked: Boolean = false,
+    val legacyManualBypass: Boolean = false,
+    val encryptedBackendAccessToken: String? = null,
+    val backendAccessExpiresAtMs: Long = 0L,
+    val encryptedBackendRefreshToken: String? = null,
+    val backendRefreshExpiresAtMs: Long = 0L
+) {
+    val isBackendEnrolled: Boolean
+        get() = enrolledDeviceId.isNotBlank() && !encryptedBackendRefreshToken.isNullOrBlank()
+}
 
 private fun defaultBroadcastTemplates(): List<BroadcastTemplate> = listOf(
     BroadcastTemplate(
@@ -172,7 +185,17 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
             lastFullSyncIso = prefs[KEY_LAST_FULL_SYNC_ISO],
             usedBroadcastIds = prefs[KEY_USED_BROADCAST_IDS] ?: emptySet(),
             lastLiveDispatchMs = prefs[KEY_LAST_LIVE_MS] ?: 0L,
-            auditLog = decodeAuditLog(prefs[KEY_AUDIT_LOG_JSON])
+            auditLog = decodeAuditLog(prefs[KEY_AUDIT_LOG_JSON]),
+            backendUrlOverride = prefs[KEY_BACKEND_URL_OVERRIDE] ?: "",
+            enrolledDeviceId = prefs[KEY_ENROLLED_DEVICE_ID] ?: "",
+            enrolledDeviceLabel = prefs[KEY_ENROLLED_DEVICE_LABEL] ?: "",
+            hardwareKeyAlias = prefs[KEY_HW_KEY_ALIAS] ?: "",
+            hardwareKeyBacked = prefs[KEY_HW_KEY_BACKED] ?: false,
+            legacyManualBypass = prefs[KEY_LEGACY_MANUAL_BYPASS] ?: false,
+            encryptedBackendAccessToken = prefs[KEY_BACKEND_ACCESS_TOKEN],
+            backendAccessExpiresAtMs = prefs[KEY_BACKEND_ACCESS_EXPIRES_MS] ?: 0L,
+            encryptedBackendRefreshToken = prefs[KEY_BACKEND_REFRESH_TOKEN],
+            backendRefreshExpiresAtMs = prefs[KEY_BACKEND_REFRESH_EXPIRES_MS] ?: 0L
         )
     }
 
@@ -238,6 +261,16 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         prefs[KEY_USED_BROADCAST_IDS] = next.usedBroadcastIds
         prefs[KEY_LAST_LIVE_MS] = next.lastLiveDispatchMs
         prefs[KEY_AUDIT_LOG_JSON] = encodeAuditLog(next.auditLog.take(MAX_AUDIT_ITEMS))
+        if (next.backendUrlOverride.isBlank()) prefs.remove(KEY_BACKEND_URL_OVERRIDE) else prefs[KEY_BACKEND_URL_OVERRIDE] = next.backendUrlOverride
+        if (next.enrolledDeviceId.isBlank()) prefs.remove(KEY_ENROLLED_DEVICE_ID) else prefs[KEY_ENROLLED_DEVICE_ID] = next.enrolledDeviceId
+        if (next.enrolledDeviceLabel.isBlank()) prefs.remove(KEY_ENROLLED_DEVICE_LABEL) else prefs[KEY_ENROLLED_DEVICE_LABEL] = next.enrolledDeviceLabel
+        if (next.hardwareKeyAlias.isBlank()) prefs.remove(KEY_HW_KEY_ALIAS) else prefs[KEY_HW_KEY_ALIAS] = next.hardwareKeyAlias
+        prefs[KEY_HW_KEY_BACKED] = next.hardwareKeyBacked
+        prefs[KEY_LEGACY_MANUAL_BYPASS] = next.legacyManualBypass
+        if (next.encryptedBackendAccessToken.isNullOrBlank()) prefs.remove(KEY_BACKEND_ACCESS_TOKEN) else prefs[KEY_BACKEND_ACCESS_TOKEN] = next.encryptedBackendAccessToken
+        if (next.backendAccessExpiresAtMs <= 0L) prefs.remove(KEY_BACKEND_ACCESS_EXPIRES_MS) else prefs[KEY_BACKEND_ACCESS_EXPIRES_MS] = next.backendAccessExpiresAtMs
+        if (next.encryptedBackendRefreshToken.isNullOrBlank()) prefs.remove(KEY_BACKEND_REFRESH_TOKEN) else prefs[KEY_BACKEND_REFRESH_TOKEN] = next.encryptedBackendRefreshToken
+        if (next.backendRefreshExpiresAtMs <= 0L) prefs.remove(KEY_BACKEND_REFRESH_EXPIRES_MS) else prefs[KEY_BACKEND_REFRESH_EXPIRES_MS] = next.backendRefreshExpiresAtMs
     }
 
     private fun encodeHistory(list: List<BroadcastHistoryEntry>): String {
@@ -520,6 +553,16 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         private val KEY_USED_BROADCAST_IDS = stringSetPreferencesKey("dev_used_broadcast_ids")
         private val KEY_LAST_LIVE_MS = longPreferencesKey("dev_last_live_ms")
         private val KEY_AUDIT_LOG_JSON = stringPreferencesKey("dev_audit_log_json")
+        private val KEY_BACKEND_URL_OVERRIDE = stringPreferencesKey("dev_backend_url_override")
+        private val KEY_ENROLLED_DEVICE_ID = stringPreferencesKey("dev_enrolled_device_id")
+        private val KEY_ENROLLED_DEVICE_LABEL = stringPreferencesKey("dev_enrolled_device_label")
+        private val KEY_HW_KEY_ALIAS = stringPreferencesKey("dev_hw_key_alias")
+        private val KEY_HW_KEY_BACKED = booleanPreferencesKey("dev_hw_key_backed")
+        private val KEY_LEGACY_MANUAL_BYPASS = booleanPreferencesKey("dev_legacy_manual_bypass")
+        private val KEY_BACKEND_ACCESS_TOKEN = stringPreferencesKey("dev_backend_access_token_env")
+        private val KEY_BACKEND_ACCESS_EXPIRES_MS = longPreferencesKey("dev_backend_access_expires_ms")
+        private val KEY_BACKEND_REFRESH_TOKEN = stringPreferencesKey("dev_backend_refresh_token_env")
+        private val KEY_BACKEND_REFRESH_EXPIRES_MS = longPreferencesKey("dev_backend_refresh_expires_ms")
     }
 }
 
@@ -872,6 +915,98 @@ class DevCenterVault(
         )
         storage.update { cur ->
             cur.copy(auditLog = (listOf(cleanEntry) + cur.auditLog).take(150))
+        }
+    }
+
+    suspend fun saveBackendUrlOverride(url: String) {
+        val clean = url.trim().trimEnd('/')
+        storage.update { it.copy(backendUrlOverride = clean) }
+    }
+
+    suspend fun setLegacyManualBypass(enabled: Boolean) {
+        storage.update { it.copy(legacyManualBypass = enabled) }
+    }
+
+    suspend fun saveBackendEnrollment(
+        backendUrl: String?,
+        deviceId: String,
+        label: String,
+        keyAlias: String,
+        hardwareBacked: Boolean,
+        accessToken: String,
+        accessExpiresAtMs: Long,
+        refreshToken: String,
+        refreshExpiresAtMs: Long
+    ) {
+        val sealedAccess = tokenProtector.seal(accessToken.trim())
+        val sealedRefresh = tokenProtector.seal(refreshToken.trim())
+        storage.update { cur ->
+            cur.copy(
+                backendUrlOverride = backendUrl?.trim()?.trimEnd('/') ?: cur.backendUrlOverride,
+                enrolledDeviceId = deviceId.trim(),
+                enrolledDeviceLabel = label.trim(),
+                hardwareKeyAlias = keyAlias.trim(),
+                hardwareKeyBacked = hardwareBacked,
+                legacyManualBypass = false,
+                encryptedBackendAccessToken = sealedAccess,
+                backendAccessExpiresAtMs = accessExpiresAtMs,
+                encryptedBackendRefreshToken = sealedRefresh,
+                backendRefreshExpiresAtMs = refreshExpiresAtMs
+            )
+        }
+    }
+
+    suspend fun updateBackendSessionTokens(
+        accessToken: String,
+        accessExpiresAtMs: Long,
+        refreshToken: String,
+        refreshExpiresAtMs: Long
+    ) {
+        val sealedAccess = tokenProtector.seal(accessToken.trim())
+        val sealedRefresh = tokenProtector.seal(refreshToken.trim())
+        storage.update { cur ->
+            cur.copy(
+                encryptedBackendAccessToken = sealedAccess,
+                backendAccessExpiresAtMs = accessExpiresAtMs,
+                encryptedBackendRefreshToken = sealedRefresh,
+                backendRefreshExpiresAtMs = refreshExpiresAtMs
+            )
+        }
+    }
+
+    suspend fun readBackendAccessToken(): String? {
+        val sealed = storage.read().encryptedBackendAccessToken ?: return null
+        return tokenProtector.unseal(sealed)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    suspend fun readBackendRefreshToken(): String? {
+        val sealed = storage.read().encryptedBackendRefreshToken ?: return null
+        return tokenProtector.unseal(sealed)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    suspend fun clearBackendEnrollment() {
+        storage.update {
+            it.copy(
+                enrolledDeviceId = "",
+                enrolledDeviceLabel = "",
+                hardwareKeyAlias = "",
+                hardwareKeyBacked = false,
+                encryptedBackendAccessToken = null,
+                backendAccessExpiresAtMs = 0L,
+                encryptedBackendRefreshToken = null,
+                backendRefreshExpiresAtMs = 0L
+            )
+        }
+    }
+
+    suspend fun syncFeedbackTriageFromBackend(items: List<TriagedFeedbackItem>) {
+        if (items.isEmpty()) return
+        storage.update { cur ->
+            val next = cur.feedbackTriageMap.toMutableMap()
+            for (item in items) {
+                next[item.entry.id] = item.triage
+            }
+            cur.copy(feedbackTriageMap = next)
         }
     }
 }

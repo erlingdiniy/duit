@@ -21,6 +21,7 @@ class DeveloperCenterIsolationBetaTest {
         assertTrue(BuildConfig.ANALYTICS_ENABLED)
         assertFalse(BuildConfig.ANALYTICS_QA_TEST)
         assertEquals("", BuildConfig.DEV_ANALYTICS_OAUTH_CLIENT_ID)
+        assertEquals("", BuildConfig.DEV_BACKEND_URL)
         assertFalse(BuildConfig.PRIVATE_DEV_EDITION)
         assertTrue(com.diniy.duit.analytics.UsageAnalytics.isSupported)
         assertFalse(DeveloperCenterEntryPoint.isAvailable)
@@ -61,7 +62,10 @@ class DeveloperCenterIsolationBetaTest {
             "com.diniy.duit.devcenter.ui.DevAuditLogsScreenKt",
             "com.diniy.duit.devcenter.ui.DevFeedbackScreenKt",
             "com.diniy.duit.devcenter.ui.DevSettingsScreenKt",
-            "com.diniy.duit.devcenter.ui.DevCenterAuthScreenKt"
+            "com.diniy.duit.devcenter.ui.DevCenterAuthScreenKt",
+            "com.diniy.duit.devcenter.DevDeviceKeyManager",
+            "com.diniy.duit.devcenter.DevBackendClient",
+            "com.diniy.duit.devcenter.ui.DevEnrollmentScreenKt"
         )
         for (className in excludedClasses) {
             val missing = runCatching { Class.forName(className) }.isFailure

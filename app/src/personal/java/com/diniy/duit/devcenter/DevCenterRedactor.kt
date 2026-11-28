@@ -6,7 +6,7 @@ package com.diniy.duit.devcenter
  */
 object DevCenterRedactor {
     private val KNOWN_TOKEN_PATTERN = Regex(
-        """\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{8,}\b|\bgithub_pat_[A-Za-z0-9_]{12,}\b|\bya29\.[A-Za-z0-9._-]{12,}\b|\b1//[A-Za-z0-9._-]{12,}|[A-Za-z0-9_-]{18,}:APA91b[A-Za-z0-9_-]{16,}"""
+        """\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{8,}\b|\bgithub_pat_[A-Za-z0-9_]{12,}\b|\bya29\.[A-Za-z0-9._-]{12,}\b|\b1//[A-Za-z0-9._-]{12,}|\bdrc_[A-Za-z0-9_-]{12,}\b|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|[A-Za-z0-9_-]{18,}:APA91b[A-Za-z0-9_-]{16,}"""
     )
     private val BEARER_PATTERN = Regex("""(?i)Bearer\s+[A-Za-z0-9._~+/=-]{6,}""")
     private val PRESIGNED_URL_PATTERN = Regex(

@@ -12,19 +12,24 @@ enum class FeedbackPriority(val label: String, val rank: Int) {
     }
 }
 
-enum class FeedbackTriageStatus(val label: String, val sheetStatus: String) {
-    PENDING("Pending", "New"),
-    IN_PROGRESS("In Progress", "Reviewed"),
-    RESOLVED("Resolved", "Done"),
-    ARCHIVED("Archived", "Won't Fix");
+enum class FeedbackTriageStatus(val label: String, val sheetStatus: String, val apiValue: String) {
+    PENDING("Pending", "New", "pending"),
+    IN_PROGRESS("In Progress", "Reviewed", "in_progress"),
+    RESOLVED("Resolved", "Done", "resolved"),
+    ARCHIVED("Archived", "Won't Fix", "archived"),
+    SPAM("Spam", "Spam", "spam");
 
     companion object {
         fun fromStored(raw: String?, fallbackSheetStatus: String = ""): FeedbackTriageStatus {
-            entries.firstOrNull { it.name.equals(raw?.trim(), ignoreCase = true) }?.let { return it }
+            val clean = raw?.trim().orEmpty()
+            entries.firstOrNull {
+                it.name.equals(clean, ignoreCase = true) || it.apiValue.equals(clean, ignoreCase = true)
+            }?.let { return it }
             return when (fallbackSheetStatus.trim().lowercase()) {
                 "done", "resolved" -> RESOLVED
                 "reviewed", "planned", "in progress" -> IN_PROGRESS
                 "won't fix", "wont fix", "archived" -> ARCHIVED
+                "spam" -> SPAM
                 else -> PENDING
             }
         }
@@ -237,3 +242,51 @@ data class InfraMonitorSnapshot(
     val oauthAutoRefreshReady: Boolean = false,
     val lastSyncIso: String? = null
 )
+
+data class EnrolledDeviceInfo(
+    val deviceId: String,
+    val label: String,
+    val keyAlgorithm: String,
+    val hardwareBacked: Boolean,
+    val attestationSummary: String,
+    val createdAtMs: Long,
+    val lastSeenAtMs: Long,
+    val revokedAtMs: Long?,
+    val isCurrentDevice: Boolean = false
+)
+
+data class BackendAutoScheduledBroadcast(
+    val id: String,
+    val broadcastId: String,
+    val title: String,
+    val body: String,
+    val category: BroadcastCategory,
+    val audience: BroadcastAudience,
+    val route: BroadcastDestination,
+    val scheduledAtMs: Long,
+    val status: String,
+    val reason: String,
+    val dispatchedAtMs: Long? = null,
+    val workflowUrl: String? = null,
+    val errorMessage: String? = null
+)
+
+data class BackendPrivateOtaRelease(
+    val repository: String,
+    val tag: String,
+    val versionName: String,
+    val versionCode: Long,
+    val assetId: Long,
+    val assetName: String,
+    val sizeBytes: Long,
+    val sha256: String,
+    val publishedAt: String,
+    val notes: String
+)
+
+enum class ZeroConfigBackendMode {
+    NOT_CONFIGURED,
+    NEEDS_ENROLLMENT,
+    CONNECTED,
+    LEGACY_MANUAL
+}
