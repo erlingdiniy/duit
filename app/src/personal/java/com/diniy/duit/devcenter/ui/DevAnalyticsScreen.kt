@@ -34,6 +34,7 @@ fun DevAnalyticsScreen(
     onSelectDateRange: (AnalyticsDateRange) -> Unit,
     onRefresh: () -> Unit,
     onSignInWithGoogle: ((String) -> Unit) -> Unit = {},
+    onTriggerSync: (() -> Unit)? = null,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -110,15 +111,20 @@ fun DevAnalyticsScreen(
 
             is AnalyticsSourceState.Unavailable -> {
                 item(key = "an_unavailable") {
+                    val enrolled = uiState.vault.isBackendEnrolled
                     DevUnavailableCard(
                         title = "Analytics Report",
                         summary = state.summary,
-                        actionLabel = if (state.canSignInWithGoogle) "Sign In" else "Settings",
+                        actionLabel = when {
+                            enrolled && onTriggerSync != null -> "Run Cloud Sync"
+                            state.canSignInWithGoogle -> "Sign In"
+                            else -> "Settings"
+                        },
                         onAction = {
-                            if (state.canSignInWithGoogle) {
-                                onSignInWithGoogle { url -> context.openHttpsUrl(url) }
-                            } else {
-                                onOpenSettings()
+                            when {
+                                enrolled && onTriggerSync != null -> onTriggerSync()
+                                state.canSignInWithGoogle -> onSignInWithGoogle { url -> context.openHttpsUrl(url) }
+                                else -> onOpenSettings()
                             }
                         }
                     )

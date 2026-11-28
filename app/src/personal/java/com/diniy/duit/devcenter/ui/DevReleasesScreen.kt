@@ -108,7 +108,7 @@ fun DevReleasesScreen(
             }
         }
 
-        if (BuildConfig.PRIVATE_DEV_EDITION) {
+        if (BuildConfig.PUBLIC_EDITION || BuildConfig.PRIVATE_DEV_EDITION) {
             item(key = "rel_private_ota") {
                 com.diniy.duit.update.EditionUpdateSettingsCard()
             }

@@ -38,6 +38,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.diniy.duit.BuildConfig
 import com.diniy.duit.DuitContainer
 import com.diniy.duit.core.ui.components.SpatialGlassCard
 import com.diniy.duit.core.ui.components.SpatialGlassSection
@@ -53,6 +54,7 @@ import com.diniy.duit.security.BiometricAuthResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 internal class DevCenterRuntime(
     context: Context,
@@ -106,16 +108,46 @@ internal class DevCenterRuntime(
 }
 
 /**
- * Personal Edition compile-time entry point for the integrated Developer Center.
- * Excluded completely from beta and benchmark builds via source-set isolation.
+ * Unified Public Edition compile-time entry point for hidden Owner Mode Developer Center.
+ * Ordinary users never see Developer Center unless their device completes cryptographic backend enrollment.
  */
 object DeveloperCenterEntryPoint {
     const val isAvailable: Boolean = true
 
-    fun privacySummaryOrNull(fcmEnabled: Boolean): String = if (fcmEnabled) {
-        "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. duit. goes online for Firebase developer broadcasts, optional opt-in crash reports and anonymous usage analytics (both off by default, advertising IDs permanently disabled), feedback you submit, and inside your PIN-locked Developer Center."
-    } else {
-        "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. Firebase Analytics and public telemetry remain excluded; internet access is used only inside your PIN-locked Developer Center."
+    @Volatile
+    private var ownerEnrolledSnapshot: Boolean = false
+
+    fun isOwnerEnrolledFast(): Boolean = ownerEnrolledSnapshot
+
+    fun warmupOwnerState(context: Context) {
+        val appCtx = context.applicationContext
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            val vault = DevCenterVault(DataStoreDevCenterStorage(appCtx))
+            runCatching { vault.migrateLegacyPrivateEditionIfNeeded(appCtx) }
+            val state = runCatching { vault.getState() }.getOrNull() ?: return@launch
+            ownerEnrolledSnapshot = state.isBackendEnrolled
+        }
+    }
+
+    @Composable
+    fun rememberIsOwnerVisible(): Boolean {
+        val context = LocalContext.current
+        val storage = androidx.compose.runtime.remember(context) { DataStoreDevCenterStorage(context) }
+        val vaultState by storage.observe().collectAsStateWithLifecycle(initialValue = DevCenterVaultState())
+        val enrolled = vaultState.isBackendEnrolled
+        ownerEnrolledSnapshot = enrolled
+        return enrolled || (BuildConfig.DEBUG && vaultState.legacyManualBypass)
+    }
+
+    fun privacySummaryOrNull(fcmEnabled: Boolean): String? {
+        if (BuildConfig.PUBLIC_EDITION && !BuildConfig.PRIVATE_DEV_EDITION) {
+            return null
+        }
+        return if (fcmEnabled) {
+            "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. duit. goes online for Firebase developer broadcasts, optional opt-in crash reports and anonymous usage analytics (both off by default, advertising IDs permanently disabled), feedback you submit, and inside your PIN-locked Developer Center."
+        } else {
+            "Your wallets, transactions, plans and saved receipts are stored only on this phone with Android cloud backup disabled. Firebase Analytics and public telemetry remain excluded; internet access is used only inside your PIN-locked Developer Center."
+        }
     }
 
     @Volatile
@@ -270,12 +302,14 @@ object DeveloperCenterEntryPoint {
         }
 
         LaunchedEffect(Unit) {
+            rt.vault.migrateLegacyPrivateEditionIfNeeded(context)
             rt.authManager.onEnterDeveloperCenter()
         }
 
         LaunchedEffect(authState.stage, uiState.vault.isBackendEnrolled, uiState.vault.legacyManualBypass) {
+            ownerEnrolledSnapshot = uiState.vault.isBackendEnrolled
             if (authState.stage == DevLockStage.UNLOCKED &&
-                (uiState.vault.isBackendEnrolled || uiState.vault.legacyManualBypass)
+                (uiState.vault.isBackendEnrolled || (BuildConfig.DEBUG && uiState.vault.legacyManualBypass))
             ) {
                 rt.viewModel.refreshAll()
             }
@@ -315,6 +349,18 @@ object DeveloperCenterEntryPoint {
             }
         }
 
+        val allowDebugBypass = BuildConfig.DEBUG && uiState.vault.legacyManualBypass
+        if (!uiState.vault.isBackendEnrolled && !allowDebugBypass) {
+            com.diniy.duit.devcenter.ui.DevEnrollmentScreen(
+                uiState = uiState,
+                onEnroll = rt.viewModel::enrollDevice,
+                onUseManualMode = if (BuildConfig.DEBUG) rt.viewModel::enterLegacyManualMode else null,
+                onBack = onBack,
+                onLockNow = rt.authManager::lockNow
+            )
+            return
+        }
+
         if (authState.stage != DevLockStage.UNLOCKED) {
             DevCenterAuthScreen(
                 authState = authState,
@@ -323,17 +369,6 @@ object DeveloperCenterEntryPoint {
                 onSubmitPin = rt.authManager::verifyPinAndUnlock,
                 onTriggerBiometric = triggerBiometric,
                 onDismissError = rt.authManager::clearError
-            )
-            return
-        }
-
-        if (!uiState.vault.isBackendEnrolled && !uiState.vault.legacyManualBypass) {
-            com.diniy.duit.devcenter.ui.DevEnrollmentScreen(
-                uiState = uiState,
-                onEnroll = rt.viewModel::enrollDevice,
-                onUseManualMode = rt.viewModel::enterLegacyManualMode,
-                onBack = onBack,
-                onLockNow = rt.authManager::lockNow
             )
             return
         }

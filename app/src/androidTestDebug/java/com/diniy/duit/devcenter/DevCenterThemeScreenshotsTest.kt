@@ -21,6 +21,7 @@ import com.diniy.duit.core.ui.state.LocalPrivacySettings
 import com.diniy.duit.core.ui.state.PrivacySettings
 import com.diniy.duit.core.ui.theme.DuitTheme
 import com.diniy.duit.devcenter.ui.DevCenterAuthScreen
+import com.diniy.duit.devcenter.ui.DevEnrollmentScreen
 import com.diniy.duit.devcenter.ui.DeveloperCenterShell
 import com.diniy.duit.domain.model.AnimationIntensity
 import com.diniy.duit.domain.model.GlassIntensity
@@ -198,8 +199,15 @@ class DevCenterThemeScreenshotsTest {
             DevCenterVaultState(
                 isPinConfigured = true,
                 pinEnvelope = "dummy_env",
-                encryptedGithubPat = "test_sealed::public-demo-only-nonsecret",
-                githubPatHint = "••••Demo",
+                enrolledDeviceId = "dev_emulator_owner",
+                enrolledDeviceLabel = "Pixel Owner",
+                hardwareKeyAlias = "duit_dev_mc_ecdsa_p256_v1",
+                hardwareKeyBacked = true,
+                encryptedBackendAccessToken = "test_sealed::eyJ.mock.jwt",
+                backendAccessExpiresAtMs = System.currentTimeMillis() + 900_000L,
+                encryptedBackendRefreshToken = "test_sealed::drc_mock_refresh_token",
+                backendRefreshExpiresAtMs = System.currentTimeMillis() + 86_400_000L,
+                backendUrlOverride = "https://duit-mission-control.workers.dev",
                 customHistory = sampleHistory
             )
         )
@@ -236,7 +244,7 @@ class DevCenterThemeScreenshotsTest {
             vm.refreshAll()
         }
 
-        var showAuthGate by mutableStateOf(true)
+        var screenMode by mutableStateOf("enroll")
         var themeMode by mutableStateOf(ThemeMode.LIGHT)
         var visualTheme by mutableStateOf(VisualTheme.LIQUID_GLASS)
 
@@ -255,8 +263,15 @@ class DevCenterThemeScreenshotsTest {
                         hapticFeedbackEnabled = false
                     )
                 ) {
-                    if (showAuthGate) {
-                        DevCenterAuthScreen(
+                    when (screenMode) {
+                        "enroll" -> DevEnrollmentScreen(
+                            uiState = uiState,
+                            onEnroll = { _, _, _ -> },
+                            onUseManualMode = {},
+                            onBack = {},
+                            onLockNow = {}
+                        )
+                        "auth" -> DevCenterAuthScreen(
                             authState = DevAuthUiState(
                                 stage = DevLockStage.LOCKED,
                                 isBiometricEnabled = true,
@@ -268,8 +283,7 @@ class DevCenterThemeScreenshotsTest {
                             onTriggerBiometric = {},
                             onDismissError = {}
                         )
-                    } else {
-                        DeveloperCenterShell(
+                        else -> DeveloperCenterShell(
                             uiState = uiState,
                             authState = DevAuthUiState(
                                 stage = DevLockStage.UNLOCKED,
@@ -311,14 +325,24 @@ class DevCenterThemeScreenshotsTest {
             }
         }
 
+        // 0. Enrollment screen
+        screenMode = "enroll"
+        visualTheme = VisualTheme.LIQUID_GLASS
+        themeMode = ThemeMode.LIGHT
+        snap("00_enroll_liquid_light.png")
+
+        visualTheme = VisualTheme.CANDY_BUBBLE
+        themeMode = ThemeMode.DARK
+        snap("00b_enroll_candy_dark.png")
+
         // 1. Auth screen in Pure Liquid Glass Light
-        showAuthGate = true
+        screenMode = "auth"
         visualTheme = VisualTheme.LIQUID_GLASS
         themeMode = ThemeMode.LIGHT
         snap("01_auth_liquid_light.png")
 
         // 2-5. Overview across all 4 theme combinations
-        showAuthGate = false
+        screenMode = "shell"
         composeRule.waitUntil(5_000L) { vm.uiState.value.dashboard.releases.isNotEmpty() }
         vm.selectSection(DevCenterSection.OVERVIEW)
         visualTheme = VisualTheme.LIQUID_GLASS

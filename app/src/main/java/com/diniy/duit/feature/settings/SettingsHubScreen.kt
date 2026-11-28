@@ -208,7 +208,8 @@ fun SettingsHubContainerScreen(
             viewModel = viewModel
         )
         SettingsHubRoute.ABOUT -> AboutDuitScreen(
-            onBack = { onNavigateRoute(SettingsHubRoute.HUB) }
+            onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
+            onOpenOwnerMode = onOpenDeveloperCenter
         )
         SettingsHubRoute.HELP_CENTRE -> HelpCentreScreen(
             onBack = { onNavigateRoute(SettingsHubRoute.HUB) },
@@ -265,6 +266,8 @@ private fun SettingsHubOverviewScreen(
     if (showSupport) com.diniy.duit.support.SupportDuitScreen(onClose = { showSupport = false })
     val defaultWalletName = uiState.wallets.firstOrNull { it.id == app.defaultWalletId }?.name ?: "First liquid wallet"
     val visibleCount = DashboardSectionKey.entries.size - app.hiddenDashboardSections.size
+    val showOwnerSection = com.diniy.duit.devcenter.DeveloperCenterEntryPoint.isAvailable &&
+        com.diniy.duit.devcenter.DeveloperCenterEntryPoint.rememberIsOwnerVisible()
 
     SettingsPageScaffold(
         title = "Settings",
@@ -574,7 +577,7 @@ private fun SettingsHubOverviewScreen(
                 }
             }
         }
-        if (com.diniy.duit.devcenter.DeveloperCenterEntryPoint.isAvailable) {
+        if (showOwnerSection) {
             item(key = "group_developer") {
                 com.diniy.duit.devcenter.DeveloperCenterEntryPoint.SettingsDeveloperSection(
                     onOpenDeveloperCenter = onOpenDeveloperCenter
@@ -1012,13 +1015,14 @@ private fun FinancialPreferencesScreen(
 private enum class AboutPage { MAIN, PRIVACY, LICENSES }
 
 @Composable
-private fun AboutDuitScreen(onBack: () -> Unit) {
+internal fun AboutDuitScreen(onBack: () -> Unit, onOpenOwnerMode: () -> Unit = {}) {
     var page by rememberSaveable { mutableStateOf(AboutPage.MAIN) }
     when (page) {
         AboutPage.MAIN -> AboutMainPage(
             onBack = onBack,
             onOpenPrivacy = { page = AboutPage.PRIVACY },
-            onOpenLicenses = { page = AboutPage.LICENSES }
+            onOpenLicenses = { page = AboutPage.LICENSES },
+            onOpenOwnerMode = onOpenOwnerMode
         )
         AboutPage.PRIVACY -> AboutPrivacyPage(onBack = { page = AboutPage.MAIN })
         AboutPage.LICENSES -> AboutLicensesPage(onBack = { page = AboutPage.MAIN })
@@ -1026,7 +1030,12 @@ private fun AboutDuitScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun AboutMainPage(onBack: () -> Unit, onOpenPrivacy: () -> Unit, onOpenLicenses: () -> Unit) {
+private fun AboutMainPage(
+    onBack: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+    onOpenLicenses: () -> Unit,
+    onOpenOwnerMode: () -> Unit = {}
+) {
     val colors = com.diniy.duit.core.ui.theme.SpatialTheme.colors
     val typography = com.diniy.duit.core.ui.theme.SpatialTheme.typography
     val context = LocalContext.current
@@ -1034,6 +1043,8 @@ private fun AboutMainPage(onBack: () -> Unit, onOpenPrivacy: () -> Unit, onOpenL
     val versionName = remember(context) {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
     }
+    var logoTapCount by remember { mutableStateOf(0) }
+    var lastLogoTapMs by remember { mutableStateOf(0L) }
 
     SettingsPageScaffold(
         title = "About duit.",
@@ -1053,6 +1064,22 @@ private fun AboutMainPage(onBack: () -> Unit, onOpenPrivacy: () -> Unit, onOpenL
                     modifier = Modifier
                         .size(112.dp)
                         .clip(RoundedCornerShape(30.dp))
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            if (com.diniy.duit.devcenter.DeveloperCenterEntryPoint.isAvailable) {
+                                val now = android.os.SystemClock.elapsedRealtime()
+                                val nextCount = if (now - lastLogoTapMs <= 2_500L) logoTapCount + 1 else 1
+                                lastLogoTapMs = now
+                                if (nextCount >= 7) {
+                                    logoTapCount = 0
+                                    onOpenOwnerMode()
+                                } else {
+                                    logoTapCount = nextCount
+                                }
+                            }
+                        }
                 )
                 Spacer(Modifier.height(14.dp))
                 val isLiquidAbout = com.diniy.duit.core.ui.theme.LocalVisualTheme.current ==

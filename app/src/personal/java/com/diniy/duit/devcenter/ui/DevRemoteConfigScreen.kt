@@ -145,11 +145,12 @@ fun DevRemoteConfigScreen(
 
             is RemoteConfigSourceState.Unavailable -> {
                 item(key = "rc_unavailable") {
+                    val enrolled = uiState.vault.isBackendEnrolled
                     DevUnavailableCard(
                         title = "Remote Config Unavailable",
                         summary = state.reason,
-                        actionLabel = "Open Settings",
-                        onAction = onOpenSettings
+                        actionLabel = if (enrolled) "Run Cloud Sync" else "Open Settings",
+                        onAction = if (enrolled) viewModel::triggerBackendSync else onOpenSettings
                     )
                 }
             }

@@ -21,7 +21,12 @@ object DevApkIntegrityChecker {
         return runCatching {
             val info = pm.getPackageInfo(ctx.packageName, flags)
             val appInfo = pm.getApplicationInfo(ctx.packageName, PackageManager.GET_META_DATA)
-            val hasPrivateMeta = appInfo.metaData?.getBoolean("com.diniy.duit.PRIVATE_DEV_EDITION", false) == true
+            val isPrivateDevBuild = com.diniy.duit.BuildConfig.PRIVATE_DEV_EDITION
+            val hasPrivateMeta = if (isPrivateDevBuild) {
+                appInfo.metaData?.getBoolean("com.diniy.duit.PRIVATE_DEV_EDITION", false) == true
+            } else {
+                false
+            }
             val signers = info.signingInfo?.apkContentsSigners.orEmpty()
             val sha256 = signers.firstOrNull()?.toByteArray()?.let { bytes ->
                 MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
@@ -31,8 +36,12 @@ object DevApkIntegrityChecker {
             val summary = when {
                 ctx.packageName != EXPECTED_PACKAGE_ID -> "Non-beta package ID (${ctx.packageName})"
                 !certMatch -> "Signing certificate mismatch!"
-                !hasPrivateMeta -> "Missing PRIVATE_DEV_EDITION metadata"
-                else -> "Verified original duit-beta certificate & private manifest."
+                isPrivateDevBuild -> if (hasPrivateMeta) {
+                    "Verified original duit-beta certificate & private manifest."
+                } else {
+                    "Missing private metadata"
+                }
+                else -> "Verified original duit-beta certificate (Unified Public Edition)."
             }
             InstalledApkIntegrity(
                 packageName = ctx.packageName,

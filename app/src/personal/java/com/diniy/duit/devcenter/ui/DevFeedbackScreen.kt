@@ -203,25 +203,34 @@ fun DevFeedbackScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             DevSectionTitle(fb.sourceLabel)
-                            PrismaticButton(
-                                text = "Import CSV",
-                                onClick = launchCsvPicker,
-                                variant = PrismaticButtonVariant.Ghost
-                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                if (uiState.unreadFeedbackCount > 0) {
+                                    PrismaticButton(
+                                        text = "Mark Read",
+                                        onClick = viewModel::markAllFeedbackRead,
+                                        variant = PrismaticButtonVariant.Ghost
+                                    )
+                                }
+                                PrismaticButton(
+                                    text = "Import CSV",
+                                    onClick = launchCsvPicker,
+                                    variant = PrismaticButtonVariant.Ghost
+                                )
+                            }
                         }
                         Spacer(Modifier.height(6.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             DevMetricTile(
                                 title = "Unread",
                                 value = uiState.unreadFeedbackCount.toString(),
-                                sub = "${triaged.size} total items",
+                                sub = "${triaged.size} items, ${uiState.openFeatureRequestCount} features",
                                 accentTint = if (uiState.unreadFeedbackCount > 0) tokens.warningTint else null,
                                 modifier = Modifier.weight(1f)
                             )
                             DevMetricTile(
                                 title = "Open Bugs",
                                 value = uiState.openBugReportCount.toString(),
-                                sub = "$dupCount duplicate links",
+                                sub = "$dupCount similar, ${uiState.spamFeedbackCount} spam",
                                 accentTint = if (uiState.openBugReportCount > 0) tokens.dangerTint else tokens.healthyTint,
                                 modifier = Modifier.weight(1f)
                             )
@@ -478,7 +487,8 @@ private fun FeedbackDetailDialog(
                         PrismaticButton(
                             text = "Create Issue",
                             onClick = onCreateIssue,
-                            enabled = !uiState.vault.encryptedGithubPat.isNullOrBlank() && !uiState.isFeedbackMutating,
+                            enabled = (uiState.vault.isBackendEnrolled || !uiState.vault.encryptedGithubPat.isNullOrBlank()) &&
+                                !uiState.isFeedbackMutating,
                             variant = PrismaticButtonVariant.Secondary,
                             modifier = Modifier.weight(1f)
                         )

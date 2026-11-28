@@ -88,31 +88,42 @@ fun DevInfrastructureScreen(
 
         item(key = "infra_auth_expiry") {
             val v = uiState.vault
-            val now = System.currentTimeMillis()
-            val expiryStatus = when {
-                v.encryptedAnalyticsToken.isNullOrBlank() && v.encryptedAnalyticsRefreshToken.isNullOrBlank() -> "Not signed in"
-                infra.oauthExpiresAtMs <= 0L -> "Manual bearer"
-                infra.oauthExpiresAtMs <= now -> if (infra.oauthAutoRefreshReady) "Expired (auto-refresh ready)" else "Expired"
-                else -> "${((infra.oauthExpiresAtMs - now) / 60_000L).coerceAtLeast(1L)}m left"
-            }
             SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DevSectionTitle("Sign-In & Keys")
+                    DevSectionTitle(if (v.isBackendEnrolled) "Hardware Auth & Session" else "Sign-In & Keys")
                     PrismaticButton(
-                        text = "Sign In",
-                        onClick = onOpenSettings,
+                        text = if (v.isBackendEnrolled) "Sync Cloud" else "Settings",
+                        onClick = {
+                            if (v.isBackendEnrolled) viewModel.triggerBackendSync() else onOpenSettings()
+                        },
                         variant = PrismaticButtonVariant.Ghost
                     )
                 }
                 Spacer(Modifier.height(6.dp))
-                DevKeyValueRow(label = "GitHub PAT", value = v.githubPatHint)
-                DevKeyValueRow(label = "Google OAuth Token", value = expiryStatus)
-                DevKeyValueRow(label = "Silent Refresh", value = if (infra.oauthAutoRefreshReady) "Ready" else "Unavailable")
-                DevKeyValueRow(label = "Granted Scopes", value = "${v.googleGrantedScopes.size} scope(s)")
+                if (v.isBackendEnrolled) {
+                    DevKeyValueRow(label = "Device Label", value = v.enrolledDeviceLabel.ifBlank { "Owner Device" })
+                    DevKeyValueRow(
+                        label = "Hardware Key",
+                        value = if (v.hardwareKeyBacked) "AndroidKeyStore ECDSA P-256 (Hardware)" else "AndroidKeyStore ECDSA P-256"
+                    )
+                    DevKeyValueRow(label = "Session Renewal", value = "Auto JWT + Silent PoP Ready")
+                    DevKeyValueRow(label = "Worker Auth", value = "GitHub & WIF Server-Managed")
+                } else {
+                    val now = System.currentTimeMillis()
+                    val expiryStatus = when {
+                        v.encryptedAnalyticsToken.isNullOrBlank() && v.encryptedAnalyticsRefreshToken.isNullOrBlank() -> "Not signed in"
+                        infra.oauthExpiresAtMs <= 0L -> "Manual bearer"
+                        infra.oauthExpiresAtMs <= now -> if (infra.oauthAutoRefreshReady) "Expired (auto-refresh ready)" else "Expired"
+                        else -> "${((infra.oauthExpiresAtMs - now) / 60_000L).coerceAtLeast(1L)}m left"
+                    }
+                    DevKeyValueRow(label = "GitHub PAT", value = v.githubPatHint)
+                    DevKeyValueRow(label = "Google OAuth Token", value = expiryStatus)
+                    DevKeyValueRow(label = "Silent Refresh", value = if (infra.oauthAutoRefreshReady) "Ready" else "Unavailable")
+                }
             }
         }
 

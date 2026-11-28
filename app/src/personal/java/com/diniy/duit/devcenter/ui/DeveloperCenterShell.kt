@@ -408,6 +408,7 @@ fun DeveloperCenterShell(
                                 onSignInWithGoogle = { launchUrl ->
                                     viewModel.startAnalyticsGoogleSignIn(onLaunchBrowser = launchUrl)
                                 },
+                                onTriggerSync = viewModel::triggerBackendSync,
                                 onOpenSettings = { viewModel.selectSection(DevCenterSection.SETTINGS) },
                                 modifier = Modifier.fillMaxSize()
                             )

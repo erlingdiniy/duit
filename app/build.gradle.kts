@@ -181,7 +181,7 @@ android {
             buildConfigField("boolean", "OPTIONAL_COMMISSION", "true")
             buildConfigField("String", "FEEDBACK_URL", "\"$feedbackUrl\"")
             buildConfigField("boolean", "PUBLIC_EDITION", "true")
-            buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "false")
+            buildConfigField("boolean", "DEVELOPER_CENTER_ENABLED", "true")
             buildConfigField("boolean", "FCM_ENABLED", "true")
             buildConfigField("boolean", "PRIVATE_DEV_EDITION", "false")
             buildConfigField("boolean", "CRASHLYTICS_ENABLED", "true")
@@ -191,7 +191,8 @@ android {
             buildConfigField("boolean", "ANALYTICS_QA_TEST", analyticsQaTest.toString())
             // QA only: shows Support duit. with the placeholder before the real QR exists. Never set for releases.
             buildConfigField("boolean", "SUPPORT_PREVIEW", providers.gradleProperty("duitSupportPreview").orElse("false").get())
-            buildConfigField("String", "DEV_BACKEND_URL", "\"\"")
+            buildConfigField("String", "DEV_ANALYTICS_OAUTH_CLIENT_ID", "\"\"")
+            buildConfigField("String", "DEV_BACKEND_URL", "\"$devBackendUrl\"")
         }
         // Private developer-enabled build over com.diniy.duit.beta: exact public v1.2.0 experience + FCM + Developer Center,
         // with public in-app GitHub auto-updates disabled at compile time so public APKs cannot overwrite it.
@@ -242,7 +243,7 @@ android {
                 sourceSets.getByName(name).java.srcDir("src/personal/java")
             }
             "beta" -> {
-                sourceSets.getByName(name).java.srcDir("src/noDevCenter/java")
+                sourceSets.getByName(name).java.srcDir("src/personal/java")
             }
             else -> {
                 sourceSets.getByName(name).java.srcDir("src/noUpdater/java")
@@ -258,23 +259,23 @@ android {
         }
     }
 
-    // Fail configuration immediately if public/benchmark source sets ever pick up Private Developer Center artifacts.
+    // Fail configuration immediately if public or benchmark source sets ever pick up forbidden private artifacts.
     listOf("beta", "benchmark").forEach { publicType ->
         val srcSet = sourceSets.getByName(publicType)
         require(
             srcSet.java.srcDirs.none {
-                it.invariantSeparatorsPath.endsWith("src/personal/java") ||
-                    it.invariantSeparatorsPath.endsWith("src/betaDev/java")
+                it.invariantSeparatorsPath.endsWith("src/betaDev/java") ||
+                    (publicType == "benchmark" && it.invariantSeparatorsPath.endsWith("src/personal/java"))
             }
         ) {
-            "Public build type '$publicType' must never include src/personal/java or src/betaDev/java"
+            "Build type '$publicType' must never include forbidden source directories"
         }
         val manifestPath = srcSet.manifest.srcFile.invariantSeparatorsPath
         require(
-            !manifestPath.endsWith("src/personal/AndroidManifest.xml") &&
-                !manifestPath.endsWith("src/betaDev/AndroidManifest.xml")
+            !manifestPath.endsWith("src/betaDev/AndroidManifest.xml") &&
+                (publicType != "benchmark" || !manifestPath.endsWith("src/personal/AndroidManifest.xml"))
         ) {
-            "Public build type '$publicType' must never include private developer manifests"
+            "Build type '$publicType' must never include private developer manifests"
         }
     }
 
@@ -386,75 +387,32 @@ tasks.matching {
 
 val verifyBetaReleaseIsolation by tasks.registering {
     group = "verification"
-    description = "Verifies public beta/stable APKs and merged manifest exclude all Personal Developer Center artifacts and extra permissions."
+    description = "Verifies public unified beta/stable APKs exclude secrets, PrivateDev artifacts, cleartext traffic, and unexpected permissions."
     val betaApkDir = layout.buildDirectory.dir("outputs/apk/beta")
     val mergedManifestDir = layout.buildDirectory.dir("intermediates/merged_manifests/beta")
     doLast {
         val forbiddenMarkers = listOf(
-            "com/diniy/duit/devcenter",
-            "DevCenter",
-            "devcenter",
-            "DeveloperCenter",
-            "Developer Center",
-            "duit_dev_center_prefs",
-            "duit_dev_center_pat_v1",
-            "duit_dev_center_pin_v1",
-            "duit_dev_center_sheets_v1",
-            "custom-broadcast.yml",
-            "ENABLE_CUSTOM_FCM_DISPATCH",
-            "QA_FCM_TOKEN_COPY",
-            "Private developer build",
-            "Public in-app updates are disabled",
             "PRIVATE_DEV_EDITION",
             "PrivateDevUpdates",
             "PrivateDevUpdateModel",
             "PrivateDevInstallStatusReceiver",
-            "duit_private_dev_updates",
             "duit-dev-install",
-            "dev_private_update_repo",
-            "Private updates",
-            "Crash Monitoring",
-            "console.firebase.google.com/project/duit-beta/crashlytics",
+            "DevAnalyticsOAuthRedirectActivity",
             "duit_qa_crash",
             "Phase 20C isolated QA verification crash",
-            "DevCenterAnalyticsClient",
-            "DevAnalyticsScreen",
-            "analyticsdata.googleapis.com",
-            "dev_ga4_property_id",
-            "dev_analytics_token",
             "duit_qa_analytics",
-            "console.firebase.google.com/project/duit-beta/analytics",
-            "DevCenterAnalyticsOAuth",
-            "DevAnalyticsOAuthRedirectActivity",
-            "oauth2.googleapis.com",
-            "analytics.readonly",
-            "com.googleusercontent.apps.",
-            "oauth2redirect",
-            "remoteConfig:listVersions",
-            "remoteConfig:rollback",
-            "fcmdata.googleapis.com",
-            "fcm.googleapis.com/v1/projects",
-            "DevCenterRemoteConfigClient",
-            "DevCenterInfraMonitor",
-            "DevCenterGitHubManager",
-            "DevFeedbackTriageEngine",
-            "DevCenterSingleDeviceFcmClient",
-            "DevCenterThemeTokens",
-            "DevCrashReportsScreen",
-            "DevRemoteConfigScreen",
-            "DevGitHubScreen",
-            "DevInfrastructureScreen",
-            "DevAuditLogsScreen",
-            "duit_dev_alerts",
-            "https://www.googleapis.com/auth/firebase.remoteconfig",
-            "spreadsheets.readonly",
-            "DevBackendClient",
-            "DevDeviceKeyManager",
-            "DevEnrollmentScreen",
-            "/v1/admin/",
-            "/v1/auth/enroll",
-            "duit_dev_backend_jwt_v1",
-            "duit_dev_mc_ecdsa"
+            "BEGIN PRIVATE KEY",
+            "BEGIN RSA PRIVATE KEY",
+            "ADMIN_BOOTSTRAP_SECRET",
+            "SYNC_HMAC_SECRET",
+            "JWT_SIGNING_KEY",
+            "duit-beta.p12",
+            "github_pat" + "_11",
+            "ghp" + "_",
+            "gho" + "_",
+            "ghs" + "_",
+            "ya29" + ".",
+            "drc" + "_"
         )
         val allowedBetaPermissions = setOf(
             "android.permission.INTERNET",
@@ -488,6 +446,9 @@ val verifyBetaReleaseIsolation by tasks.registering {
             }
             if (!xml.contains("android:usesCleartextTraffic=\"false\"")) {
                 throw GradleException("verifyBetaReleaseIsolation: android:usesCleartextTraffic=\"false\" missing in ${manifest.absolutePath}")
+            }
+            if (xml.contains("networkSecurityConfig")) {
+                throw GradleException("verifyBetaReleaseIsolation: debug networkSecurityConfig leaked into ${manifest.absolutePath}")
             }
             val declaredPerms = Regex("""<uses-permission\b[^>]*android:name="([^"]+)"""")
                 .findAll(xml)

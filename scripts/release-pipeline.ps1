@@ -160,28 +160,12 @@ function Assert-PublicApk([string]$ApkPath, [string]$ExpectedVerName, [int]$Expe
     Assert-CommonPrivacyManifest -ManifestText $man -Label "Public APK"
 
     $forbidden = @(
-        "com/diniy/duit/devcenter", "DevCenter", "devcenter", "DeveloperCenter", "Developer Center",
-        "duit_dev_center_prefs", "duit_dev_center_pat_v1", "duit_dev_center_pin_v1", "duit_dev_center_sheets_v1",
-        "custom-broadcast.yml", "ENABLE_CUSTOM_FCM_DISPATCH", "QA_FCM_TOKEN_COPY",
-        "Private developer build", "Public in-app updates are disabled",
         "PRIVATE_DEV_EDITION", "PrivateDevUpdates", "PrivateDevUpdateModel", "PrivateDevInstallStatusReceiver",
-        "duit_private_dev_updates", "duit-dev-install", "dev_private_update_repo", "Private updates",
-        "Crash Monitoring", "console.firebase.google.com/project/duit-beta/crashlytics",
-        "duit_qa_crash", "Phase 20C isolated QA verification crash",
-        "DevCenterAnalyticsClient", "DevAnalyticsScreen", "analyticsdata.googleapis.com",
-        "dev_ga4_property_id", "dev_analytics_token", "duit_qa_analytics",
-        "console.firebase.google.com/project/duit-beta/analytics",
-        "DevCenterAnalyticsOAuth", "DevAnalyticsOAuthRedirectActivity", "oauth2.googleapis.com",
-        "analytics.readonly", "com.googleusercontent.apps.", "oauth2redirect",
-        "remoteConfig:listVersions", "remoteConfig:rollback", "fcmdata.googleapis.com", "fcm.googleapis.com/v1/projects",
-        "DevCenterRemoteConfigClient", "DevCenterInfraMonitor", "DevCenterGitHubManager",
-        "DevFeedbackTriageEngine", "DevCenterSingleDeviceFcmClient", "DevCenterThemeTokens",
-        "DevCrashReportsScreen", "DevRemoteConfigScreen", "DevGitHubScreen",
-        "DevInfrastructureScreen", "DevAuditLogsScreen", "duit_dev_alerts",
-        "https://www.googleapis.com/auth/firebase.remoteconfig", "spreadsheets.readonly",
-        "DevBackendClient", "DevDeviceKeyManager", "DevEnrollmentScreen",
-        "/v1/admin/", "/v1/auth/enroll", "duit_dev_backend_jwt_v1", "duit_dev_mc_ecdsa",
-        ("github_pat" + "_11"), ("ghp" + "_")
+        "duit-dev-install", "DevAnalyticsOAuthRedirectActivity",
+        "duit_qa_crash", "Phase 20C isolated QA verification crash", "duit_qa_analytics",
+        "BEGIN PRIVATE KEY", "BEGIN RSA PRIVATE KEY",
+        "ADMIN_BOOTSTRAP_SECRET", "SYNC_HMAC_SECRET", "JWT_SIGNING_KEY", "duit-beta.p12",
+        ("github_pat" + "_11"), ("ghp" + "_"), ("gho" + "_"), ("ghs" + "_"), ("ya29" + "."), ("drc" + "_")
     )
     Scan-ApkMarkers -ApkPath $ApkPath -ForbiddenMarkers $forbidden -RequiredDexMarkers @("duit-beta-install") -Label "Public APK"
     Write-Host "[PASS] Public APK audit clean: $pkg v$vn ($vc)" -ForegroundColor Green

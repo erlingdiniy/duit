@@ -60,7 +60,7 @@ fun DevAuditLogsScreen(
     var statusFilter by rememberSaveable { mutableStateOf(AuditStatusFilter.ALL) }
 
     val q = searchQuery.trim().lowercase()
-    val filtered = uiState.vault.auditLog.filter { entry ->
+    val filtered = uiState.combinedAuditLog.filter { entry ->
         val matchesCat = when (categoryFilter) {
             AuditCategoryFilter.ALL -> true
             AuditCategoryFilter.AUTH -> entry.action.startsWith("auth.") || entry.action.startsWith("google.") || entry.action.startsWith("analytics.token")
@@ -132,7 +132,7 @@ fun DevAuditLogsScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "${filtered.size} of ${uiState.vault.auditLog.size} recorded events",
+                    text = "${filtered.size} of ${uiState.combinedAuditLog.size} recorded events",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.secondaryText
                 )

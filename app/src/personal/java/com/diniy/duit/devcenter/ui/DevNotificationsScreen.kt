@@ -79,7 +79,8 @@ fun DevNotificationsScreen(
     val colors = SpatialTheme.colors
     val context = LocalContext.current
     val composer = uiState.composer
-    val hasPat = !uiState.vault.encryptedGithubPat.isNullOrBlank()
+    val isBackendEnrolled = uiState.vault.isBackendEnrolled
+    val hasPat = isBackendEnrolled || !uiState.vault.encryptedGithubPat.isNullOrBlank()
     val customKillEnabled = uiState.dashboard.killSwitches.customBroadcastEnabled
     val releaseKillEnabled = uiState.dashboard.killSwitches.releaseAutomationEnabled
 
@@ -87,6 +88,7 @@ fun DevNotificationsScreen(
     var previewMode by rememberSaveable { mutableStateOf(PreviewSurfaceMode.STANDARD) }
     var showSaveTemplateDialog by remember { mutableStateOf(false) }
     var showScheduleDialog by remember { mutableStateOf(false) }
+    var showCloudAutoScheduleDialog by remember { mutableStateOf(false) }
 
     // Ephemeral credentials for single-device test ONLY; never rememberSaveable or persisted.
     var testDeviceToken by remember { mutableStateOf("") }
@@ -119,6 +121,18 @@ fun DevNotificationsScreen(
             onSchedule = { mins ->
                 showScheduleDialog = false
                 viewModel.scheduleAnnouncement(mins)
+            }
+        )
+    }
+
+    if (showCloudAutoScheduleDialog) {
+        CloudAutoScheduleDialog(
+            audience = composer.audience,
+            title = composer.title,
+            onDismiss = { showCloudAutoScheduleDialog = false },
+            onSchedule = { mins, phrase, reason ->
+                showCloudAutoScheduleDialog = false
+                viewModel.scheduleAutoBroadcast(mins, phrase, reason)
             }
         )
     }
@@ -283,6 +297,15 @@ fun DevNotificationsScreen(
                                         showScheduleDialog = true
                                     }
                                 )
+                                if (isBackendEnrolled) {
+                                    DropdownMenuItem(
+                                        text = { Text("Auto-Schedule (Cloud Cron)") },
+                                        onClick = {
+                                            showComposeMenu = false
+                                            showCloudAutoScheduleDialog = true
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -598,12 +621,46 @@ fun DevNotificationsScreen(
             }
 
             NotificationsTab.HISTORY -> {
+                if (uiState.backendScheduledBroadcasts.isNotEmpty()) {
+                    item(key = "cloud_auto_scheduled_header") {
+                        DevSectionTitle("Cloud Auto-Scheduled Broadcasts (${uiState.backendScheduledBroadcasts.size})")
+                    }
+                    items(uiState.backendScheduledBroadcasts, key = { "auto-${it.id}" }) { sched ->
+                        SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(sched.title, style = MaterialTheme.typography.titleSmall, color = colors.primaryText, modifier = Modifier.weight(1f))
+                                DevToneBadge(label = sched.status, tone = if (sched.status == "dispatched") "ok" else if (sched.status == "cancelled") "paused" else "warning")
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(sched.body, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                            DevKeyValueRow(label = "Audience", value = sched.audience.label)
+                            if (sched.status == "scheduled") {
+                                Spacer(Modifier.height(6.dp))
+                                PrismaticButton(
+                                    text = "Cancel Scheduled",
+                                    onClick = { viewModel.cancelBackendScheduledBroadcast(sched.id) },
+                                    variant = PrismaticButtonVariant.Ghost,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+
                 item(key = "single_device_test") {
                     SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Elevated) {
                         DevSectionTitle("Single-Device FCM Test")
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "Targets one QA device registration token directly via FCM HTTP v1. Ephemeral OAuth bearer token is never saved.",
+                            text = if (isBackendEnrolled) {
+                                "Dispatches a single-device test to one QA token via keyless WIF workflow. Tokens are never saved on disk."
+                            } else {
+                                "Targets one QA device registration token directly via FCM HTTP v1. Ephemeral OAuth bearer token is never saved."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.secondaryText
                         )
@@ -616,15 +673,17 @@ fun DevNotificationsScreen(
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
                         )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = testEphemeralBearer,
-                            onValueChange = { testEphemeralBearer = it },
-                            label = { Text("Ephemeral Messaging Bearer Token") },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-                        )
+                        if (!isBackendEnrolled) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = testEphemeralBearer,
+                                onValueChange = { testEphemeralBearer = it },
+                                label = { Text("Ephemeral Messaging Bearer Token") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                            )
+                        }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PrismaticButton(
@@ -879,6 +938,66 @@ private fun ScheduleDelayDialog(onDismiss: () -> Unit, onSchedule: (Int) -> Unit
         confirmButton = {
             TextButton(onClick = { onSchedule(selectedMins) }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text("Schedule")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun CloudAutoScheduleDialog(
+    audience: BroadcastAudience,
+    title: String,
+    onDismiss: () -> Unit,
+    onSchedule: (minutes: Int, phrase: String, reason: String) -> Unit
+) {
+    val presets = listOf(15 to "15m", 60 to "1h", 180 to "3h", 1440 to "24h")
+    var selectedMins by remember { mutableStateOf(60) }
+    var phraseInput by remember { mutableStateOf("") }
+    var reasonInput by remember { mutableStateOf("") }
+    val ready = phraseInput.trim() == audience.confirmationPhrase &&
+        DevCenterValidators.cleanInputText(reasonInput, 240).length >= 5
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Schedule Cloud Broadcast") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Cloudflare Worker cron dispatches \"$title\" to ${audience.label} automatically at the scheduled time.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                DevChoiceChipRow(
+                    items = presets,
+                    selected = presets.first { it.first == selectedMins },
+                    labelOf = { it.second },
+                    onSelect = { selectedMins = it.first }
+                )
+                PrismaticTextField(
+                    value = phraseInput,
+                    onValueChange = { phraseInput = it },
+                    label = "Type ${audience.confirmationPhrase}",
+                    placeholder = audience.confirmationPhrase
+                )
+                PrismaticTextField(
+                    value = reasonInput,
+                    onValueChange = { reasonInput = it },
+                    label = "Operator reason",
+                    placeholder = "Timed release announcement"
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = ready,
+                onClick = { onSchedule(selectedMins, phraseInput, reasonInput) },
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Text("Schedule Auto-Send")
             }
         },
         dismissButton = {

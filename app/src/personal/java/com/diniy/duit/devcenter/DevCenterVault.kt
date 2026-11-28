@@ -71,7 +71,8 @@ data class DevCenterVaultState(
     val encryptedBackendAccessToken: String? = null,
     val backendAccessExpiresAtMs: Long = 0L,
     val encryptedBackendRefreshToken: String? = null,
-    val backendRefreshExpiresAtMs: Long = 0L
+    val backendRefreshExpiresAtMs: Long = 0L,
+    val unifiedMigrated: Boolean = false
 ) {
     val isBackendEnrolled: Boolean
         get() = enrolledDeviceId.isNotBlank() && !encryptedBackendRefreshToken.isNullOrBlank()
@@ -195,7 +196,8 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
             encryptedBackendAccessToken = prefs[KEY_BACKEND_ACCESS_TOKEN],
             backendAccessExpiresAtMs = prefs[KEY_BACKEND_ACCESS_EXPIRES_MS] ?: 0L,
             encryptedBackendRefreshToken = prefs[KEY_BACKEND_REFRESH_TOKEN],
-            backendRefreshExpiresAtMs = prefs[KEY_BACKEND_REFRESH_EXPIRES_MS] ?: 0L
+            backendRefreshExpiresAtMs = prefs[KEY_BACKEND_REFRESH_EXPIRES_MS] ?: 0L,
+            unifiedMigrated = prefs[KEY_UNIFIED_MIGRATED] ?: false
         )
     }
 
@@ -271,6 +273,7 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         if (next.backendAccessExpiresAtMs <= 0L) prefs.remove(KEY_BACKEND_ACCESS_EXPIRES_MS) else prefs[KEY_BACKEND_ACCESS_EXPIRES_MS] = next.backendAccessExpiresAtMs
         if (next.encryptedBackendRefreshToken.isNullOrBlank()) prefs.remove(KEY_BACKEND_REFRESH_TOKEN) else prefs[KEY_BACKEND_REFRESH_TOKEN] = next.encryptedBackendRefreshToken
         if (next.backendRefreshExpiresAtMs <= 0L) prefs.remove(KEY_BACKEND_REFRESH_EXPIRES_MS) else prefs[KEY_BACKEND_REFRESH_EXPIRES_MS] = next.backendRefreshExpiresAtMs
+        prefs[KEY_UNIFIED_MIGRATED] = next.unifiedMigrated
     }
 
     private fun encodeHistory(list: List<BroadcastHistoryEntry>): String {
@@ -563,6 +566,7 @@ class DataStoreDevCenterStorage(context: Context) : DevCenterStorage {
         private val KEY_BACKEND_ACCESS_EXPIRES_MS = longPreferencesKey("dev_backend_access_expires_ms")
         private val KEY_BACKEND_REFRESH_TOKEN = stringPreferencesKey("dev_backend_refresh_token_env")
         private val KEY_BACKEND_REFRESH_EXPIRES_MS = longPreferencesKey("dev_backend_refresh_expires_ms")
+        private val KEY_UNIFIED_MIGRATED = booleanPreferencesKey("dev_unified_migrated_v1")
     }
 }
 
@@ -1007,6 +1011,50 @@ class DevCenterVault(
                 next[item.entry.id] = item.triage
             }
             cur.copy(feedbackTriageMap = next)
+        }
+    }
+
+    /**
+     * One-time idempotent migration when updating from Private Developer Edition to Unified Public Edition.
+     * Cleans legacy private-only updater preferences and obsolete local PAT/OAuth/Sheets secrets while
+     * preserving Developer PIN, biometric preferences, Room financial database, and encrypted backups.
+     */
+    suspend fun migrateLegacyPrivateEditionIfNeeded(context: Context) {
+        val current = storage.read()
+        if (current.unifiedMigrated) return
+        val hasLegacySecrets = !current.encryptedGithubPat.isNullOrBlank() ||
+            !current.encryptedSheetsToken.isNullOrBlank() ||
+            !current.encryptedAnalyticsToken.isNullOrBlank() ||
+            !current.encryptedAnalyticsRefreshToken.isNullOrBlank()
+        runCatching { context.applicationContext.deleteSharedPreferences("duit_private_dev_updates") }
+        storage.update { cur ->
+            cur.copy(
+                unifiedMigrated = true,
+                encryptedGithubPat = null,
+                githubPatHint = "Not configured",
+                encryptedSheetsToken = null,
+                sheetsTokenHint = "Not configured",
+                analyticsAuthMode = "none",
+                encryptedAnalyticsToken = null,
+                analyticsTokenHint = "Not configured",
+                encryptedAnalyticsRefreshToken = null,
+                analyticsTokenExpiresAtMs = 0L,
+                googleGrantedScopes = emptySet(),
+                privateUpdateRepo = DEFAULT_PRIVATE_UPDATE_REPO
+            )
+        }
+        if (hasLegacySecrets || current.isPinConfigured) {
+            appendAuditEvent(
+                AuditLogEntry(
+                    id = "aud-${System.currentTimeMillis()}",
+                    timestampIso = java.time.Instant.now().toString(),
+                    actor = "migration",
+                    action = "migration.unified_public_edition",
+                    target = "dev_center_vault",
+                    status = "ok",
+                    summary = "Migrated cleanly to Unified Public Edition; legacy private updater & manual credentials cleaned."
+                )
+            )
         }
     }
 }

@@ -299,6 +299,9 @@ class DuitContainer(private val application: Application) {
                 }
         }
         applicationScope.launch(Dispatchers.IO) {
+            com.diniy.duit.devcenter.DeveloperCenterEntryPoint.warmupOwnerState(application)
+        }
+        applicationScope.launch(Dispatchers.IO) {
             userPreferencesRepository.observeAppSettings()
                 .map { it.crashReportingEnabled }
                 .distinctUntilChanged()

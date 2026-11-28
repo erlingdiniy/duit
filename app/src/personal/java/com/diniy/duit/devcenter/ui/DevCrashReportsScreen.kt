@@ -80,9 +80,14 @@ fun DevCrashReportsScreen(
 
         if (readySnap == null) {
             item(key = "crash_ga_unavailable") {
+                val enrolled = uiState.vault.isBackendEnrolled
                 DevUnavailableCard(
                     title = "Observed Exception Telemetry",
-                    summary = "Connect Google Analytics read-only access in Settings for crash-free metrics.",
+                    summary = if (enrolled) {
+                        "Awaiting first scheduled keyless WIF analytics sync for crash-free metrics."
+                    } else {
+                        "Connect Mission Control or Analytics access in Settings for crash-free metrics."
+                    },
                     actionLabel = "Settings",
                     onAction = onOpenSettings
                 )

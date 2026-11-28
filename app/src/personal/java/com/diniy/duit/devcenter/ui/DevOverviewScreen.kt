@@ -43,7 +43,9 @@ fun DevOverviewScreen(
     val dash = uiState.dashboard
     val health = dash.health
     val gaReady = (uiState.analyticsState as? AnalyticsSourceState.Ready)?.snapshot
-    val hasOAuth = !uiState.vault.encryptedAnalyticsToken.isNullOrBlank() ||
+    val isEnrolled = uiState.vault.isBackendEnrolled
+    val hasOAuth = isEnrolled ||
+        !uiState.vault.encryptedAnalyticsToken.isNullOrBlank() ||
         !uiState.vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
 
     LazyColumn(
@@ -64,14 +66,22 @@ fun DevOverviewScreen(
                 ) {
                     DevSectionTitle("Overview")
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        DevToneBadge(
-                            label = if (health.connected) "GitHub Live" else "GitHub Unset",
-                            tone = if (health.connected) "healthy" else "warning"
-                        )
-                        DevToneBadge(
-                            label = if (hasOAuth) "Google Linked" else "Google Unset",
-                            tone = if (hasOAuth) "healthy" else "warning"
-                        )
+                        if (isEnrolled) {
+                            DevToneBadge(
+                                label = if (health.connected) "Mission Control Live" else "Syncing",
+                                tone = if (health.connected) "healthy" else "cached"
+                            )
+                            DevToneBadge(label = "Hardware Key", tone = "healthy")
+                        } else {
+                            DevToneBadge(
+                                label = if (health.connected) "GitHub Live" else "GitHub Unset",
+                                tone = if (health.connected) "healthy" else "warning"
+                            )
+                            DevToneBadge(
+                                label = if (hasOAuth) "Google Linked" else "Google Unset",
+                                tone = if (hasOAuth) "healthy" else "warning"
+                            )
+                        }
                         if (gaReady?.isCached == true) {
                             DevToneBadge(label = "Cached", tone = "cached")
                         }
@@ -91,7 +101,7 @@ fun DevOverviewScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 PrismaticButton(
-                    text = if (!health.connected || !hasOAuth) "Sign In" else "Broadcast",
+                    text = if (!health.connected || !hasOAuth) "Open Settings" else "Broadcast",
                     onClick = {
                         onSelectSection(
                             if (!health.connected || !hasOAuth) DevCenterSection.SETTINGS
@@ -150,12 +160,13 @@ fun DevOverviewScreen(
                             onClickLabel = "Open Crash Reports"
                         )
                 )
-                val unread = uiState.unreadFeedbackCount
+                    val unread = uiState.unreadFeedbackCount
                 val openBugs = uiState.openBugReportCount
+                val openFeatures = uiState.openFeatureRequestCount
                 DevMetricTile(
                     title = "Unread Feedback",
                     value = unread.toString(),
-                    sub = if (openBugs == 1) "1 open bug" else "$openBugs open bugs",
+                    sub = "$openBugs open bugs, $openFeatures features",
                     accentTint = if (unread > 0) tokens.warningTint else null,
                     modifier = Modifier
                         .weight(1f)
@@ -210,7 +221,7 @@ fun DevOverviewScreen(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Connect Google Analytics in Settings.",
+                        text = if (isEnrolled) "Awaiting scheduled keyless WIF analytics sync." else "Connect Google Analytics in Settings.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.secondaryText
                     )
@@ -277,7 +288,7 @@ fun DevOverviewScreen(
             ) {
                 DevSectionTitle("Recent Activity")
                 Spacer(Modifier.height(6.dp))
-                val recents = uiState.vault.auditLog.take(4)
+                val recents = uiState.combinedAuditLog.take(4)
                 if (recents.isEmpty()) {
                     Text(
                         text = "No activity recorded yet.",

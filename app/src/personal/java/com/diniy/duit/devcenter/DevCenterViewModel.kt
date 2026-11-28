@@ -224,8 +224,6 @@ class DevCenterViewModel(
         _uiState.update { it.copy(statusBanner = null, errorBanner = null, enrollmentError = null) }
     }
 
-    // --- Zero-Configuration Enrollment & Device Lifecycle ---
-
     fun enrollDevice(backendUrl: String, code: String, label: String) {
         authManager.recordUserActivity()
         val client = backendClient
@@ -245,7 +243,9 @@ class DevCenterViewModel(
                         statusBanner = "Connected to Mission Control."
                     )
                 }
-                refreshAll()
+                if (authManager.uiState.value.stage == DevLockStage.UNLOCKED) {
+                    refreshAll()
+                }
             }.onFailure { err ->
                 _uiState.update {
                     it.copy(
@@ -266,13 +266,6 @@ class DevCenterViewModel(
         }
     }
 
-    fun exitLegacyManualMode() {
-        authManager.recordUserActivity()
-        scope.launch {
-            vault.setLegacyManualBypass(false)
-        }
-    }
-
     fun unenrollThisDevice() {
         authManager.recordUserActivity()
         val v = _uiState.value.vault
@@ -289,7 +282,7 @@ class DevCenterViewModel(
                     backendAuditLogs = emptyList(),
                     backendHistory = emptyList(),
                     backendScheduledBroadcasts = emptyList(),
-                    statusBanner = "Device disconnected and key cleared."
+                    statusBanner = "Device disconnected and hardware key cleared."
                 )
             }
         }
@@ -301,12 +294,8 @@ class DevCenterViewModel(
         if (!_uiState.value.vault.isBackendEnrolled) return
         scope.launch {
             runCatching { client.triggerSync() }
-                .onSuccess { msg ->
-                    _uiState.update { it.copy(statusBanner = msg, errorBanner = null) }
-                }
-                .onFailure { err ->
-                    _uiState.update { it.copy(errorBanner = err.message ?: "Cloud sync trigger failed.") }
-                }
+                .onSuccess { msg -> _uiState.update { it.copy(statusBanner = msg, errorBanner = null) } }
+                .onFailure { err -> _uiState.update { it.copy(errorBanner = err.message ?: "Cloud sync trigger failed.") } }
         }
     }
 
@@ -317,12 +306,8 @@ class DevCenterViewModel(
         _uiState.update { it.copy(isLoadingDevices = true) }
         scope.launch {
             runCatching { client.fetchEnrolledDevices() }
-                .onSuccess { (_, list) ->
-                    _uiState.update { it.copy(isLoadingDevices = false, enrolledDevices = list) }
-                }
-                .onFailure { err ->
-                    _uiState.update { it.copy(isLoadingDevices = false, errorBanner = err.message) }
-                }
+                .onSuccess { (_, list) -> _uiState.update { it.copy(isLoadingDevices = false, enrolledDevices = list) } }
+                .onFailure { err -> _uiState.update { it.copy(isLoadingDevices = false, errorBanner = err.message) } }
         }
     }
 
@@ -336,19 +321,14 @@ class DevCenterViewModel(
                     if (revokedSelf) {
                         runCatching { onClearHardwareKey() }
                         _uiState.update {
-                            it.copy(
-                                enrolledDevices = emptyList(),
-                                statusBanner = "Current device revoked and unlinked."
-                            )
+                            it.copy(enrolledDevices = emptyList(), statusBanner = "Current device revoked and unlinked.")
                         }
                     } else {
                         _uiState.update { it.copy(statusBanner = "Revoked device $targetDeviceId.") }
                         refreshEnrolledDevices()
                     }
                 }
-                .onFailure { err ->
-                    _uiState.update { it.copy(errorBanner = err.message ?: "Device revoke failed.") }
-                }
+                .onFailure { err -> _uiState.update { it.copy(errorBanner = err.message ?: "Device revoke failed.") } }
         }
     }
 
@@ -361,12 +341,10 @@ class DevCenterViewModel(
             val v = vault.getState()
             val syncIso = isoUtcNow(nowMs())
             val integrity = runCatching { apkIntegrityProvider() }.getOrNull()
-
             if (backendClient != null && v.isBackendEnrolled) {
                 refreshAllViaBackend(v, integrity, syncIso)
                 return@launch
             }
-
             val pat = vault.readGithubPat().orEmpty()
 
             coroutineScope {
@@ -661,55 +639,22 @@ class DevCenterViewModel(
         scope.launch {
             val v = vault.getState()
             if (backendClient != null && v.isBackendEnrolled) {
-                val mode = if (req.validateOnly) "dry_run" else "public_live"
-                val timestamp = isoUtcNow(nowMs())
-                runCatching { backendClient.dispatchBroadcast(mode = mode, req = req) }
-                    .onSuccess {
-                        val historyEntry = BroadcastHistoryEntry(
-                            id = "custom-${nowMs()}",
-                            kind = "custom",
-                            category = req.category.apiValue,
-                            broadcastId = req.broadcastId,
-                            title = req.title,
-                            body = req.body,
-                            audience = req.audience.apiValue,
-                            topics = req.audience.topics,
-                            route = req.route.apiValue,
-                            status = if (req.validateOnly) "validate_only" else "live_dispatched",
-                            statusLabel = if (req.validateOnly) "Dry-Run Dispatched" else "Live Dispatched",
-                            timestampIso = timestamp,
-                            note = "Dispatched via Zero-Config Worker WIF."
+                val integrity = runCatching { apkIntegrityProvider() }.getOrNull()
+                runCatching {
+                    clientCheckHealthAndInfra(integrity)
+                }.onSuccess { infra ->
+                    _uiState.update {
+                        it.copy(
+                            isRefreshing = false,
+                            infraSnapshot = infra,
+                            statusBanner = "Mission Control Worker & WIF services verified."
                         )
-                        vault.recordBroadcast(historyEntry, isLiveDispatch = !req.validateOnly, nowMs = nowMs())
-                        _uiState.update {
-                            it.copy(
-                                isDispatching = false,
-                                statusBanner = if (req.validateOnly) {
-                                    "Dry-run dispatched via Mission Control WIF."
-                                } else {
-                                    "Live broadcast dispatched via Mission Control WIF."
-                                },
-                                composer = it.composer.copy(broadcastId = DevCenterValidators.generateBroadcastId(nowMs()))
-                            )
-                        }
-                        delay(1_500L)
-                        runCatching { backendClient.fetchNotificationsState() }.getOrNull()?.let { notif ->
-                            _uiState.update { cur ->
-                                cur.copy(
-                                    backendHistory = notif.history,
-                                    latestCustomRun = notif.workflowRuns.firstOrNull() ?: cur.latestCustomRun
-                                )
-                            }
-                        }
                     }
-                    .onFailure { err ->
-                        _uiState.update {
-                            it.copy(
-                                isDispatching = false,
-                                errorBanner = DevCenterRedactor.redact(err.message ?: "Broadcast request failed.")
-                            )
-                        }
+                }.onFailure { err ->
+                    _uiState.update {
+                        it.copy(isRefreshing = false, errorBanner = DevCenterRedactor.redact(err.message ?: "Health check failed."))
                     }
+                }
                 return@launch
             }
             val pat = vault.readGithubPat().orEmpty()
@@ -747,6 +692,16 @@ class DevCenterViewModel(
                 )
             }
         }
+    }
+
+    private suspend fun clientCheckHealthAndInfra(integrity: InstalledApkIntegrity?): InfraMonitorSnapshot {
+        val client = requireNotNull(backendClient)
+        return client.fetchInfraSnapshot(
+            integrity = integrity,
+            fcmInitialized = BuildConfig.FCM_ENABLED,
+            crashlyticsOptedIn = CrashReporting.isCollectionEnabled(),
+            analyticsOptedIn = UsageAnalytics.isCollectionEnabled()
+        )
     }
 
     fun removeGithubPat() {
@@ -1113,29 +1068,29 @@ class DevCenterViewModel(
                     title = c.title.trim(),
                     body = c.body.trim(),
                     broadcastId = c.broadcastId,
-                    validateOnly = validateOnly,
+                    validateOnly = true,
                     confirmationPhrase = "",
-                    reason = "Single-device QA check"
+                    reason = "Single-device QA test"
                 )
-                runCatching { clientDispatchSingle(req, deviceToken.trim()) }
-                    .onSuccess { msg ->
-                        _uiState.update {
-                            it.copy(
-                                isDispatching = false,
-                                statusBanner = msg,
-                                errorBanner = null,
-                                composer = it.composer.copy(broadcastId = DevCenterValidators.generateBroadcastId(nowMs()))
-                            )
-                        }
+                runCatching {
+                    backendClient.dispatchBroadcast("single_device_test", req, deviceToken.trim())
+                }.onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            isDispatching = false,
+                            statusBanner = "Single-device test dispatched via keyless WIF workflow.",
+                            errorBanner = null,
+                            composer = it.composer.copy(broadcastId = DevCenterValidators.generateBroadcastId(nowMs()))
+                        )
                     }
-                    .onFailure { err ->
-                        _uiState.update {
-                            it.copy(
-                                isDispatching = false,
-                                errorBanner = DevCenterRedactor.redact(err.message ?: "Single-device dispatch failed.", secrets)
-                            )
-                        }
+                }.onFailure { err ->
+                    _uiState.update {
+                        it.copy(
+                            isDispatching = false,
+                            errorBanner = DevCenterRedactor.redact(err.message ?: "Single-device test failed.", secrets)
+                        )
                     }
+                }
                 return@launch
             }
             val res = singleDeviceFcmClient.sendSingleDeviceTest(
@@ -1381,55 +1336,15 @@ class DevCenterViewModel(
         scope.launch {
             val v = vault.getState()
             if (backendClient != null && v.isBackendEnrolled) {
-                val mode = if (req.validateOnly) "dry_run" else "public_live"
-                val timestamp = isoUtcNow(nowMs())
-                runCatching { backendClient.dispatchBroadcast(mode = mode, req = req) }
-                    .onSuccess {
-                        val historyEntry = BroadcastHistoryEntry(
-                            id = "custom-${nowMs()}",
-                            kind = "custom",
-                            category = req.category.apiValue,
-                            broadcastId = req.broadcastId,
-                            title = req.title,
-                            body = req.body,
-                            audience = req.audience.apiValue,
-                            topics = req.audience.topics,
-                            route = req.route.apiValue,
-                            status = if (req.validateOnly) "validate_only" else "live_dispatched",
-                            statusLabel = if (req.validateOnly) "Dry-Run Dispatched" else "Live Dispatched",
-                            timestampIso = timestamp,
-                            note = "Dispatched via Zero-Config Worker WIF."
+                runCatching { backendClient.fetchNotificationsState() }.getOrNull()?.let { notif ->
+                    _uiState.update {
+                        it.copy(
+                            latestCustomRun = notif.workflowRuns.firstOrNull(),
+                            backendHistory = notif.history,
+                            backendScheduledBroadcasts = notif.autoScheduled
                         )
-                        vault.recordBroadcast(historyEntry, isLiveDispatch = !req.validateOnly, nowMs = nowMs())
-                        _uiState.update {
-                            it.copy(
-                                isDispatching = false,
-                                statusBanner = if (req.validateOnly) {
-                                    "Dry-run dispatched via Mission Control WIF."
-                                } else {
-                                    "Live broadcast dispatched via Mission Control WIF."
-                                },
-                                composer = it.composer.copy(broadcastId = DevCenterValidators.generateBroadcastId(nowMs()))
-                            )
-                        }
-                        delay(1_500L)
-                        runCatching { backendClient.fetchNotificationsState() }.getOrNull()?.let { notif ->
-                            _uiState.update { cur ->
-                                cur.copy(
-                                    backendHistory = notif.history,
-                                    latestCustomRun = notif.workflowRuns.firstOrNull() ?: cur.latestCustomRun
-                                )
-                            }
-                        }
                     }
-                    .onFailure { err ->
-                        _uiState.update {
-                            it.copy(
-                                isDispatching = false,
-                                errorBanner = DevCenterRedactor.redact(err.message ?: "Broadcast request failed.")
-                            )
-                        }
-                    }
+                }
                 return@launch
             }
             val pat = vault.readGithubPat().orEmpty()
@@ -1469,52 +1384,21 @@ class DevCenterViewModel(
         scope.launch {
             val v = vault.getState()
             if (backendClient != null && v.isBackendEnrolled) {
-                val mode = if (req.validateOnly) "dry_run" else "public_live"
-                val timestamp = isoUtcNow(nowMs())
-                runCatching { backendClient.dispatchBroadcast(mode = mode, req = req) }
-                    .onSuccess {
-                        val historyEntry = BroadcastHistoryEntry(
-                            id = "custom-${nowMs()}",
-                            kind = "custom",
-                            category = req.category.apiValue,
-                            broadcastId = req.broadcastId,
-                            title = req.title,
-                            body = req.body,
-                            audience = req.audience.apiValue,
-                            topics = req.audience.topics,
-                            route = req.route.apiValue,
-                            status = if (req.validateOnly) "validate_only" else "live_dispatched",
-                            statusLabel = if (req.validateOnly) "Dry-Run Dispatched" else "Live Dispatched",
-                            timestampIso = timestamp,
-                            note = "Dispatched via Zero-Config Worker WIF."
-                        )
-                        vault.recordBroadcast(historyEntry, isLiveDispatch = !req.validateOnly, nowMs = nowMs())
-                        _uiState.update {
-                            it.copy(
-                                isDispatching = false,
-                                statusBanner = if (req.validateOnly) {
-                                    "Dry-run dispatched via Mission Control WIF."
-                                } else {
-                                    "Live broadcast dispatched via Mission Control WIF."
-                                },
-                                composer = it.composer.copy(broadcastId = DevCenterValidators.generateBroadcastId(nowMs()))
+                runCatching { backendClient.toggleKillSwitch(pending.target, pending.nextEnabled) }
+                    .onSuccess { nextKs ->
+                        _uiState.update { cur ->
+                            cur.copy(
+                                isUpdatingKillSwitch = false,
+                                dashboard = cur.dashboard.copy(killSwitches = nextKs),
+                                statusBanner = "${pending.target.label} set to ${if (pending.nextEnabled) "ENABLED" else "PAUSED"}."
                             )
-                        }
-                        delay(1_500L)
-                        runCatching { backendClient.fetchNotificationsState() }.getOrNull()?.let { notif ->
-                            _uiState.update { cur ->
-                                cur.copy(
-                                    backendHistory = notif.history,
-                                    latestCustomRun = notif.workflowRuns.firstOrNull() ?: cur.latestCustomRun
-                                )
-                            }
                         }
                     }
                     .onFailure { err ->
                         _uiState.update {
                             it.copy(
-                                isDispatching = false,
-                                errorBanner = DevCenterRedactor.redact(err.message ?: "Broadcast request failed.")
+                                isUpdatingKillSwitch = false,
+                                errorBanner = DevCenterRedactor.redact(err.message ?: "Kill switch update failed.")
                             )
                         }
                     }
@@ -1675,66 +1559,62 @@ class DevCenterViewModel(
         }
     }
 
+    fun markAllFeedbackRead() {
+        authManager.recordUserActivity()
+        val items = _uiState.value.triagedFeedback
+        if (items.isEmpty()) return
+        scope.launch {
+            val v = vault.getState()
+            val ts = isoUtcNow(nowMs())
+            for (item in items) {
+                if (!item.triage.isRead) {
+                    vault.saveFeedbackTriage(item.triage.copy(isRead = true, updatedAtIso = ts))
+                }
+            }
+            if (backendClient != null && v.isBackendEnrolled) {
+                runCatching { backendClient.markAllFeedbackRead() }
+            }
+            _uiState.update { it.copy(statusBanner = "Marked all feedback items read.") }
+        }
+    }
+
     fun createGitHubIssueFromFeedback(item: TriagedFeedbackItem, targetRepo: String? = null) {
         authManager.recordUserActivity()
         if (_uiState.value.isFeedbackMutating) return
         _uiState.update { it.copy(isFeedbackMutating = true, errorBanner = null) }
         scope.launch {
             val v = vault.getState()
+            val repo = targetRepo?.trim()?.takeIf { it.isNotBlank() } ?: v.sourceRepo
             if (backendClient != null && v.isBackendEnrolled) {
-                val mode = if (req.validateOnly) "dry_run" else "public_live"
-                val timestamp = isoUtcNow(nowMs())
-                runCatching { backendClient.dispatchBroadcast(mode = mode, req = req) }
-                    .onSuccess {
-                        val historyEntry = BroadcastHistoryEntry(
-                            id = "custom-${nowMs()}",
-                            kind = "custom",
-                            category = req.category.apiValue,
-                            broadcastId = req.broadcastId,
-                            title = req.title,
-                            body = req.body,
-                            audience = req.audience.apiValue,
-                            topics = req.audience.topics,
-                            route = req.route.apiValue,
-                            status = if (req.validateOnly) "validate_only" else "live_dispatched",
-                            statusLabel = if (req.validateOnly) "Dry-Run Dispatched" else "Live Dispatched",
-                            timestampIso = timestamp,
-                            note = "Dispatched via Zero-Config Worker WIF."
+                runCatching { backendClient.createIssueFromFeedback(item.entry.id, repo) }
+                    .onSuccess { (issueNum, issueUrl) ->
+                        vault.saveFeedbackTriage(
+                            item.triage.copy(
+                                isRead = true,
+                                status = if (item.triage.status == FeedbackTriageStatus.PENDING) FeedbackTriageStatus.IN_PROGRESS else item.triage.status,
+                                linkedIssueNumber = issueNum.takeIf { it > 0 },
+                                linkedIssueUrl = issueUrl.takeIf { it.isNotBlank() },
+                                updatedAtIso = isoUtcNow(nowMs())
+                            )
                         )
-                        vault.recordBroadcast(historyEntry, isLiveDispatch = !req.validateOnly, nowMs = nowMs())
                         _uiState.update {
                             it.copy(
-                                isDispatching = false,
-                                statusBanner = if (req.validateOnly) {
-                                    "Dry-run dispatched via Mission Control WIF."
-                                } else {
-                                    "Live broadcast dispatched via Mission Control WIF."
-                                },
-                                composer = it.composer.copy(broadcastId = DevCenterValidators.generateBroadcastId(nowMs()))
+                                isFeedbackMutating = false,
+                                statusBanner = "Created $repo #$issueNum (contact email excluded)."
                             )
-                        }
-                        delay(1_500L)
-                        runCatching { backendClient.fetchNotificationsState() }.getOrNull()?.let { notif ->
-                            _uiState.update { cur ->
-                                cur.copy(
-                                    backendHistory = notif.history,
-                                    latestCustomRun = notif.workflowRuns.firstOrNull() ?: cur.latestCustomRun
-                                )
-                            }
                         }
                     }
                     .onFailure { err ->
                         _uiState.update {
                             it.copy(
-                                isDispatching = false,
-                                errorBanner = DevCenterRedactor.redact(err.message ?: "Broadcast request failed.")
+                                isFeedbackMutating = false,
+                                errorBanner = DevCenterRedactor.redact(err.message ?: "Failed to create GitHub issue.")
                             )
                         }
                     }
                 return@launch
             }
             val pat = vault.readGithubPat().orEmpty()
-            val repo = targetRepo?.trim()?.takeIf { it.isNotBlank() } ?: v.sourceRepo
             val (title, body, labels) = DevFeedbackTriageEngine.buildSanitizedGitHubIssue(item)
             val res = githubManager.createIssue(pat, repo, title, body, labels)
             res.onSuccess { created ->
@@ -2171,9 +2051,10 @@ class DevCenterViewModel(
     }
 
     private suspend fun loadRemoteConfigInternal(v: DevCenterVaultState, syncIso: String): RemoteConfigSourceState {
-        if (backendClient != null && v.isBackendEnrolled) {
-            return runCatching { backendClient.fetchRemoteConfig() }
-                .getOrElse { err -> RemoteConfigSourceState.Error(DevCenterRedactor.redact(err.message ?: "Remote Config load failed."), syncIso) }
+        val client = backendClient
+        if (client != null && v.isBackendEnrolled) {
+            return runCatching { client.fetchRemoteConfig() }
+                .getOrElse { err -> RemoteConfigSourceState.Error(DevCenterRedactor.redact(err.message ?: "Remote Config failed."), syncIso) }
         }
         val clientId = effectiveOAuthClientId(v)
         return remoteConfigClient.fetchTemplateAndVersions(
@@ -2231,12 +2112,7 @@ class DevCenterViewModel(
             if (backendClient != null && v.isBackendEnrolled) {
                 runCatching { backendClient.publishRemoteConfig(ready.etag, nextParams) }
                     .onSuccess { msg ->
-                        _uiState.update {
-                            it.copy(
-                                isPublishingRemoteConfig = false,
-                                statusBanner = "$msg ($cleanDesc)"
-                            )
-                        }
+                        _uiState.update { it.copy(isPublishingRemoteConfig = false, statusBanner = "$msg ($cleanDesc)") }
                     }
                     .onFailure { err ->
                         _uiState.update {
@@ -2380,8 +2256,17 @@ class DevCenterViewModel(
         authManager.recordUserActivity()
         _uiState.update { it.copy(isGitHubMutating = true) }
         scope.launch {
-            val pat = vault.readGithubPat().orEmpty()
+            val v = vault.getState()
             val repo = _uiState.value.selectedGitHubRepo
+            if (backendClient != null && v.isBackendEnrolled) {
+                val snap = runCatching { backendClient.fetchGitHubOverview(repo) }
+                    .getOrElse { err ->
+                        GitHubRepoSnapshot(repoSlug = repo, error = DevCenterRedactor.redact(err.message ?: "GitHub load failed."))
+                    }
+                _uiState.update { it.copy(isGitHubMutating = false, gitHubRepoSnapshot = snap) }
+                return@launch
+            }
+            val pat = vault.readGithubPat().orEmpty()
             val snap = githubManager.fetchRepoSnapshot(pat, repo)
             _uiState.update {
                 it.copy(isGitHubMutating = false, gitHubRepoSnapshot = snap)
@@ -2392,6 +2277,15 @@ class DevCenterViewModel(
     fun inspectWorkflowJobs(repoSlug: String, runId: String) {
         authManager.recordUserActivity()
         scope.launch {
+            val v = vault.getState()
+            if (backendClient != null && v.isBackendEnrolled) {
+                runCatching { backendClient.fetchWorkflowRunJobs(repoSlug, runId) }
+                    .onSuccess { jobs ->
+                        _uiState.update { it.copy(inspectedWorkflowJobs = it.inspectedWorkflowJobs + (runId to jobs)) }
+                    }
+                    .onFailure { err -> _uiState.update { it.copy(errorBanner = err.message) } }
+                return@launch
+            }
             val pat = vault.readGithubPat().orEmpty()
             val res = githubManager.fetchWorkflowJobs(pat, repoSlug, runId)
             res.onSuccess { jobs ->
@@ -2409,6 +2303,16 @@ class DevCenterViewModel(
         if (_uiState.value.isGitHubMutating) return
         _uiState.update { it.copy(isGitHubMutating = true, errorBanner = null) }
         scope.launch {
+            val v = vault.getState()
+            if (backendClient != null && v.isBackendEnrolled) {
+                runCatching { backendClient.createGitHubIssue(repoSlug, title, body) }
+                    .onSuccess { num ->
+                        _uiState.update { it.copy(isGitHubMutating = false, statusBanner = "Created $repoSlug #$num.") }
+                        refreshGitHubRepo()
+                    }
+                    .onFailure { err -> _uiState.update { it.copy(isGitHubMutating = false, errorBanner = err.message) } }
+                return@launch
+            }
             val pat = vault.readGithubPat().orEmpty()
             val res = githubManager.createIssue(pat, repoSlug, title, body, labels)
             res.onSuccess { created ->
@@ -2441,6 +2345,21 @@ class DevCenterViewModel(
         if (_uiState.value.isGitHubMutating) return
         _uiState.update { it.copy(isGitHubMutating = true, errorBanner = null) }
         scope.launch {
+            val v = vault.getState()
+            if (backendClient != null && v.isBackendEnrolled) {
+                runCatching { backendClient.updateGitHubIssueState(repoSlug, issueNumber, open) }
+                    .onSuccess {
+                        _uiState.update {
+                            it.copy(
+                                isGitHubMutating = false,
+                                statusBanner = "Issue #$issueNumber ${if (open) "reopened" else "closed"}."
+                            )
+                        }
+                        refreshGitHubRepo()
+                    }
+                    .onFailure { err -> _uiState.update { it.copy(isGitHubMutating = false, errorBanner = err.message) } }
+                return@launch
+            }
             val pat = vault.readGithubPat().orEmpty()
             val res = githubManager.updateIssueState(pat, repoSlug, issueNumber, open)
             res.onSuccess { updated ->
@@ -2473,6 +2392,18 @@ class DevCenterViewModel(
         if (_uiState.value.isGitHubMutating) return
         _uiState.update { it.copy(isGitHubMutating = true, errorBanner = null) }
         scope.launch {
+            val v = vault.getState()
+            if (backendClient != null && v.isBackendEnrolled) {
+                runCatching { backendClient.commentOnGitHubIssue(repoSlug, issueNumber, commentBody) }
+                    .onSuccess {
+                        _uiState.update {
+                            it.copy(isGitHubMutating = false, statusBanner = "Added comment to $repoSlug #$issueNumber.")
+                        }
+                        refreshGitHubRepo()
+                    }
+                    .onFailure { err -> _uiState.update { it.copy(isGitHubMutating = false, errorBanner = err.message) } }
+                return@launch
+            }
             val pat = vault.readGithubPat().orEmpty()
             val res = githubManager.addIssueComment(pat, repoSlug, issueNumber, commentBody)
             res.onSuccess {

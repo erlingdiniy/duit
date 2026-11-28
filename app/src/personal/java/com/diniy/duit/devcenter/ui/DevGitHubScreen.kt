@@ -119,7 +119,7 @@ fun DevGitHubScreen(
                     DevSectionTitle("Repository Access")
                     Spacer(Modifier.height(4.dp))
                     Text(err, style = MaterialTheme.typography.bodySmall, color = colors.error)
-                    if (uiState.vault.encryptedGithubPat.isNullOrBlank()) {
+                    if (!uiState.vault.isBackendEnrolled && uiState.vault.encryptedGithubPat.isNullOrBlank()) {
                         Spacer(Modifier.height(8.dp))
                         PrismaticButton(
                             text = "Open Settings",

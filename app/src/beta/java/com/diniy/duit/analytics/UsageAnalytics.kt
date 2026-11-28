@@ -34,6 +34,10 @@ object UsageAnalytics {
         applyConsent(context, enabled)
     }
 
+    private fun isOwnerInternalAnalytics(): Boolean =
+        BuildConfig.PRIVATE_DEV_EDITION ||
+            com.diniy.duit.devcenter.DeveloperCenterEntryPoint.isOwnerEnrolledFast()
+
     fun applyConsent(context: Context, enabled: Boolean) {
         val ctx = context.applicationContext
         appContext = ctx
@@ -43,6 +47,7 @@ object UsageAnalytics {
                 FirebaseApp.initializeApp(ctx) ?: return
             }
             val analytics = FirebaseAnalytics.getInstance(ctx)
+            val isOwnerDevice = isOwnerInternalAnalytics()
             // Ad IDs, ad storage, and personalization remain permanently denied regardless of analytics opt-in.
             analytics.setConsent(
                 mapOf(
@@ -61,18 +66,18 @@ object UsageAnalytics {
             }
             val defaultParams = UsageAnalyticsPolicy.buildDefaultEventParams(
                 versionName = BuildConfig.VERSION_NAME,
-                isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+                isPrivateDev = isOwnerDevice,
                 isQaTest = BuildConfig.ANALYTICS_QA_TEST
             )
             analytics.setDefaultEventParameters(defaultParams.toBundle())
             analytics.setAnalyticsCollectionEnabled(true)
             analytics.setUserProperty(
                 "release_channel",
-                UsageAnalyticsPolicy.resolveReleaseChannel(BuildConfig.VERSION_NAME, BuildConfig.PRIVATE_DEV_EDITION)
+                UsageAnalyticsPolicy.resolveReleaseChannel(BuildConfig.VERSION_NAME, isOwnerDevice)
             )
             analytics.setUserProperty(
                 "edition_type",
-                UsageAnalyticsPolicy.resolveEditionType(BuildConfig.PRIVATE_DEV_EDITION)
+                UsageAnalyticsPolicy.resolveEditionType(isOwnerDevice)
             )
             checkAndLogAppUpdatedIfNeeded(ctx, analytics)
         }
@@ -86,7 +91,7 @@ object UsageAnalytics {
         val params = UsageAnalyticsPolicy.buildFeatureUsedParams(
             feature = feature,
             versionName = BuildConfig.VERSION_NAME,
-            isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+            isPrivateDev = isOwnerInternalAnalytics(),
             isQaTest = BuildConfig.ANALYTICS_QA_TEST
         )
         dispatchEvent(AnalyticsEventName.FEATURE_USED, params)
@@ -97,7 +102,7 @@ object UsageAnalytics {
         val params = UsageAnalyticsPolicy.buildOnboardingCompletedParams(
             skipped = skipped,
             versionName = BuildConfig.VERSION_NAME,
-            isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+            isPrivateDev = isOwnerInternalAnalytics(),
             isQaTest = BuildConfig.ANALYTICS_QA_TEST
         )
         dispatchEvent(AnalyticsEventName.ONBOARDING_COMPLETED, params)
@@ -108,7 +113,7 @@ object UsageAnalytics {
         val params = UsageAnalyticsPolicy.buildUpdatePromptActionParams(
             result = result,
             versionName = BuildConfig.VERSION_NAME,
-            isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+            isPrivateDev = isOwnerInternalAnalytics(),
             isQaTest = BuildConfig.ANALYTICS_QA_TEST
         )
         if (params.containsKey("result")) {
@@ -121,7 +126,7 @@ object UsageAnalytics {
         val params = UsageAnalyticsPolicy.buildThemeSelectedParams(
             themeKey = themeKey,
             versionName = BuildConfig.VERSION_NAME,
-            isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+            isPrivateDev = isOwnerInternalAnalytics(),
             isQaTest = BuildConfig.ANALYTICS_QA_TEST
         )
         val validTheme = params["theme"] ?: return
@@ -146,7 +151,7 @@ object UsageAnalytics {
             AnalyticsEventName.APP_UPDATED,
             UsageAnalyticsPolicy.buildAppUpdatedParams(
                 versionName = BuildConfig.VERSION_NAME,
-                isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+                isPrivateDev = isOwnerInternalAnalytics(),
                 isQaTest = true
             )
         )
@@ -159,7 +164,7 @@ object UsageAnalytics {
         if (prevCode in 1L until currentCode) {
             val params = UsageAnalyticsPolicy.buildAppUpdatedParams(
                 versionName = BuildConfig.VERSION_NAME,
-                isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+                isPrivateDev = isOwnerInternalAnalytics(),
                 isQaTest = BuildConfig.ANALYTICS_QA_TEST
             )
             analytics.logEvent(AnalyticsEventName.APP_UPDATED.wireName, params.toBundle())

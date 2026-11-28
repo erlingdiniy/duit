@@ -101,6 +101,9 @@ fun DevSettingsScreen(
     var googleExpanded by remember { mutableStateOf(false) }
     var showManualAnalyticsToken by remember { mutableStateOf(false) }
     var feedbackExpanded by remember { mutableStateOf(false) }
+    var showAdvancedTroubleshooting by remember { mutableStateOf(false) }
+    var showUnenrollDialog by remember { mutableStateOf(false) }
+    var revokeTargetId by remember { mutableStateOf<String?>(null) }
     var showChangePinDialog by remember { mutableStateOf(false) }
     var showWipeCredsDialog by remember { mutableStateOf(false) }
 
@@ -148,13 +151,210 @@ fun DevSettingsScreen(
         )
     }
 
+    if (showUnenrollDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnenrollDialog = false },
+            title = { Text("Disconnect Owner Device?") },
+            text = {
+                Text(
+                    "Revokes this phone on Cloudflare Worker and deletes local hardware session keys. Settings will hide Developer Center until re-enrolled. Financial data stays untouched.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showUnenrollDialog = false
+                        viewModel.unenrollThisDevice()
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Disconnect", color = colors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnenrollDialog = false }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    revokeTargetId?.let { targetId ->
+        AlertDialog(
+            onDismissRequest = { revokeTargetId = null },
+            title = { Text("Revoke Device Access?") },
+            text = {
+                Text(
+                    "Immediately invalidates all active and refresh sessions for device $targetId using a fresh hardware key signature.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        revokeTargetId = null
+                        viewModel.revokeEnrolledDevice(targetId)
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Revoke", color = colors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { revokeTargetId = null }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     val hasPat = !vault.encryptedGithubPat.isNullOrBlank()
+    val effectiveBackend = vault.backendUrlOverride.ifBlank { BuildConfig.DEV_BACKEND_URL }.ifBlank { "Not set" }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item(key = "zero_config_mission_control") {
+            SpatialGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                tier = SpatialGlassTier.Elevated,
+                accentTint = if (vault.isBackendEnrolled) colors.success else colors.warning
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DevSectionTitle("Automatic Connection")
+                    DevToneBadge(
+                        label = if (vault.isBackendEnrolled) "Enrolled" else "Manual",
+                        tone = if (vault.isBackendEnrolled) "healthy" else "warning"
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                DevKeyValueRow(label = "Device", value = vault.enrolledDeviceLabel.ifBlank { "Unenrolled" })
+                DevKeyValueRow(
+                    label = "Key Protection",
+                    value = if (vault.hardwareKeyBacked) "Hardware Keystore (Backed)" else "Hardware Keystore"
+                )
+                DevKeyValueRow(label = "Worker Endpoint", value = effectiveBackend)
+                if (vault.isBackendEnrolled) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PrismaticButton(
+                            text = "Refresh Now",
+                            onClick = viewModel::triggerBackendSync,
+                            variant = PrismaticButtonVariant.Primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        PrismaticButton(
+                            text = "Disconnect",
+                            onClick = { showUnenrollDialog = true },
+                            variant = PrismaticButtonVariant.Ghost,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (vault.isBackendEnrolled) {
+            item(key = "enrolled_devices") {
+                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DevSectionTitle("Enrolled Owner Devices (${uiState.enrolledDevices.size})")
+                        PrismaticButton(
+                            text = "Refresh",
+                            onClick = viewModel::refreshEnrolledDevices,
+                            enabled = !uiState.isLoadingDevices,
+                            variant = PrismaticButtonVariant.Ghost
+                        )
+                    }
+                    if (uiState.enrolledDevices.isEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text("No device list loaded yet.", style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                    } else {
+                        Spacer(Modifier.height(6.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            uiState.enrolledDevices.forEach { dev ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Text(
+                                            text = if (dev.isCurrentDevice) "${dev.label} (This phone)" else dev.label,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = colors.primaryText
+                                        )
+                                        Text(
+                                            text = "${dev.keyAlgorithm}, ${if (dev.revokedAtMs != null) "Revoked" else "Active"}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (dev.revokedAtMs != null) colors.error else colors.secondaryText
+                                        )
+                                    }
+                                    if (dev.revokedAtMs == null) {
+                                        PrismaticButton(
+                                            text = "Revoke",
+                                            onClick = { revokeTargetId = dev.deviceId },
+                                            variant = PrismaticButtonVariant.Secondary
+                                        )
+                                    } else {
+                                        DevToneBadge(label = "Revoked", tone = "error")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item(key = "advanced_troubleshooting_toggle") {
+            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .candyPressable(
+                            onClick = { showAdvancedTroubleshooting = !showAdvancedTroubleshooting },
+                            onClickLabel = "Toggle advanced manual troubleshooting"
+                        )
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        DevSectionTitle("Advanced Troubleshooting")
+                        Text(
+                            text = if (vault.isBackendEnrolled) {
+                                "Optional manual overrides (not needed for daily Zero-Config use)"
+                            } else {
+                                "Manual GitHub PAT, OAuth & Sheets configuration"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.secondaryText
+                        )
+                    }
+                    Icon(
+                        imageVector = if (showAdvancedTroubleshooting) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = colors.secondaryText
+                    )
+                }
+            }
+        }
+
+        if (showAdvancedTroubleshooting) {
         item(key = "google_mission_oauth") {
             val hasGoogleAuth = !vault.encryptedAnalyticsToken.isNullOrBlank() ||
                 !vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
@@ -289,7 +489,7 @@ fun DevSettingsScreen(
                                     value = analyticsTokenInput,
                                     onValueChange = { analyticsTokenInput = it },
                                     label = "Read-Only Access Key",
-                                    placeholder = "Optional ya29... token"
+                                    placeholder = "Optional Google OAuth token"
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 PrismaticButton(
@@ -523,6 +723,7 @@ fun DevSettingsScreen(
                 }
             }
         }
+        }
 
         item(key = "kill_switches") {
             SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
@@ -532,7 +733,7 @@ fun DevSettingsScreen(
                     title = "Custom Broadcasts",
                     variableName = KillSwitchTarget.CUSTOM_BROADCAST.variableName,
                     enabled = ks.customBroadcastEnabled,
-                    canMutate = hasPat && !uiState.isUpdatingKillSwitch,
+                    canMutate = (vault.isBackendEnrolled || hasPat) && !uiState.isUpdatingKillSwitch,
                     onToggleRequest = { next ->
                         viewModel.requestKillSwitchToggle(KillSwitchTarget.CUSTOM_BROADCAST, next)
                     }
@@ -542,7 +743,7 @@ fun DevSettingsScreen(
                     title = "Release Automation",
                     variableName = KillSwitchTarget.RELEASE_AUTOMATION.variableName,
                     enabled = ks.releaseAutomationEnabled,
-                    canMutate = hasPat && !uiState.isUpdatingKillSwitch,
+                    canMutate = (vault.isBackendEnrolled || hasPat) && !uiState.isUpdatingKillSwitch,
                     onToggleRequest = { next ->
                         viewModel.requestKillSwitchToggle(KillSwitchTarget.RELEASE_AUTOMATION, next)
                     }
@@ -598,24 +799,31 @@ fun DevSettingsScreen(
                 )
 
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrismaticButton(
-                        text = "Change PIN",
-                        onClick = { showChangePinDialog = true },
-                        variant = PrismaticButtonVariant.Secondary,
-                        modifier = Modifier.weight(1f)
-                    )
+                PrismaticButton(
+                    text = "Change PIN",
+                    onClick = { showChangePinDialog = true },
+                    variant = PrismaticButtonVariant.Secondary,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        if (showAdvancedTroubleshooting) {
+            item(key = "wipe_local_keys_card") {
+                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                    DevSectionTitle("Reset Local Credentials")
+                    Spacer(Modifier.height(6.dp))
                     PrismaticButton(
                         text = "Wipe Keys",
                         onClick = { showWipeCredsDialog = true },
                         variant = PrismaticButtonVariant.Ghost,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
         }
 
-        if (BuildConfig.PRIVATE_DEV_EDITION) {
+        if (BuildConfig.PUBLIC_EDITION || BuildConfig.PRIVATE_DEV_EDITION) {
             item(key = "dev_private_updates_shortcut") {
                 com.diniy.duit.update.EditionUpdateSettingsCard()
             }

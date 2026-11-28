@@ -10,6 +10,13 @@ import com.diniy.duit.DuitContainer
 object DeveloperCenterEntryPoint {
     const val isAvailable: Boolean = false
 
+    fun isOwnerEnrolledFast(): Boolean = false
+
+    fun warmupOwnerState(context: android.content.Context) = Unit
+
+    @Composable
+    fun rememberIsOwnerVisible(): Boolean = false
+
     fun privacySummaryOrNull(fcmEnabled: Boolean): String? = null
 
     fun onAppBackgrounded() = Unit
