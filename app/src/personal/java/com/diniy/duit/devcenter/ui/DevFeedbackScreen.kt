@@ -139,20 +139,20 @@ fun DevFeedbackScreen(
                         tier = SpatialGlassTier.Elevated,
                         accentTint = colors.skyBlue
                     ) {
-                        DevSectionTitle("Feedback Setup")
+                        DevSectionTitle("Feedback Inbox")
                         Spacer(Modifier.height(6.dp))
                         Text(fb.guideMessage, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             PrismaticButton(
-                                text = "Import CSV",
-                                onClick = launchCsvPicker,
+                                text = "Refresh",
+                                onClick = viewModel::refreshAll,
                                 variant = PrismaticButtonVariant.Primary,
                                 modifier = Modifier.weight(1f)
                             )
                             PrismaticButton(
-                                text = "Open Settings",
-                                onClick = onOpenSettings,
+                                text = "Import CSV",
+                                onClick = launchCsvPicker,
                                 variant = PrismaticButtonVariant.Secondary,
                                 modifier = Modifier.weight(1f)
                             )

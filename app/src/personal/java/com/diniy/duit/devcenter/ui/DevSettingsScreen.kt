@@ -125,7 +125,7 @@ fun DevSettingsScreen(
             title = { Text("Clear Credentials") },
             text = {
                 Text(
-                    "Removes saved GitHub key, Google OAuth tokens, and Sheets access from Developer Center storage. Financial records stay untouched.",
+                    "Removes saved Mission Control session tokens and optional troubleshooting overrides from Developer Center storage. Financial records stay untouched.",
                     style = MaterialTheme.typography.bodySmall
                 )
             },
@@ -339,7 +339,7 @@ fun DevSettingsScreen(
                             text = if (vault.isBackendEnrolled) {
                                 "Optional manual overrides (not needed for daily Zero-Config use)"
                             } else {
-                                "Manual GitHub PAT, OAuth & Sheets configuration"
+                                "Optional fallback overrides (not needed after Owner enrollment)"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.secondaryText
@@ -648,9 +648,9 @@ fun DevSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        DevSectionTitle("Feedback Source")
+                        DevSectionTitle("Legacy Feedback Override")
                         Text(
-                            text = if (vault.feedbackSheetId.isBlank()) "CSV import or Google Sheets OAuth" else vault.sheetsTokenHint,
+                            text = if (vault.feedbackSheetId.isBlank()) "Optional CSV or legacy Sheet override (not needed with Mission Control)" else vault.sheetsTokenHint,
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.secondaryText
                         )

@@ -78,9 +78,9 @@ class DevCenterFeedbackClient(
         }
 
         val guide = if (cleanSheetId.isNotEmpty()) {
-            "Sheet ID saved. Sign in with Google in Settings (or add a Sheets token / CSV export)."
+            "Legacy Sheet ID saved under Advanced Troubleshooting. Refresh Mission Control or import a CSV export."
         } else {
-            "Feedback is stored in your private Google Sheet via Apps Script. Import a CSV export or configure Sheet ID + Google Sign-In in Settings."
+            "Feedback syncs automatically through Mission Control once this device is enrolled. Tap Refresh or import a CSV export."
         }
         return FeedbackSourceState.Unconfigured(guide)
     }

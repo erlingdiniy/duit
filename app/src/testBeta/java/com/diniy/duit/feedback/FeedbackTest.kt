@@ -126,4 +126,18 @@ class FeedbackTest {
         model.submit(FeedbackCategory.GENERAL, "[TEST] offline check", "")
         assertFalse((model.state.value as FeedbackUiState.Error).canRetry)
     }
+
+    @Test
+    fun workerFeedbackEndpointAndHostValidation_preferHttpsWorkerAndRejectSpoofs() {
+        val worker = "https://duit-mission-control.erling.workers.dev"
+        val legacy = "https://script.google.com/macros/s/abc/exec"
+        assertEquals("$worker/v1/public/feedback" to true, resolveFeedbackEndpoint(worker, legacy))
+        assertEquals(legacy to false, resolveFeedbackEndpoint("", legacy))
+        assertEquals(legacy to false, resolveFeedbackEndpoint("http://127.0.0.1:8787", legacy))
+
+        assertTrue(isAllowedMissionFeedbackHost(URI("$worker/v1/public/feedback"), worker))
+        assertFalse(isAllowedMissionFeedbackHost(URI("http://duit-mission-control.erling.workers.dev/v1/public/feedback"), worker))
+        assertFalse(isAllowedMissionFeedbackHost(URI("https://evil.example/v1/public/feedback"), worker))
+        assertFalse(isAllowedMissionFeedbackHost(URI("https://user@duit-mission-control.erling.workers.dev/v1/public/feedback"), worker))
+    }
 }

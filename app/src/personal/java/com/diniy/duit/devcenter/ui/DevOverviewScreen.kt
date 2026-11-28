@@ -134,7 +134,8 @@ fun DevOverviewScreen(
                 DevMetricTile(
                     title = "New Users",
                     value = gaReady?.newUsers?.toString() ?: "—",
-                    sub = gaReady?.let { "${it.returningRatePercent}% returning" } ?: "Awaiting Google sign-in",
+                    sub = gaReady?.let { "${it.returningRatePercent}% returning" }
+                        ?: if (isEnrolled) "Awaiting analytics sync" else "Enroll owner device",
                     modifier = Modifier.weight(1f)
                 )
             }

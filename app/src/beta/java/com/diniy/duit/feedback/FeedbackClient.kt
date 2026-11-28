@@ -79,6 +79,25 @@ internal fun isAllowedFeedbackHost(uri: URI, first: Boolean): Boolean {
     return if (first) host == "script.google.com" else host == "script.googleusercontent.com"
 }
 
+/** Validates a Mission Control Worker endpoint host (HTTPS only, exact configured host). */
+internal fun isAllowedMissionFeedbackHost(uri: URI, configuredBackendUrl: String): Boolean {
+    if (uri.scheme != "https" || uri.userInfo != null || uri.port !in listOf(-1, 443)) return false
+    val expectedHost = runCatching { URI(configuredBackendUrl.trim()).host }.getOrNull() ?: return false
+    return uri.host.equals(expectedHost, ignoreCase = true)
+}
+
+internal fun resolveFeedbackEndpoint(
+    devBackendUrl: String = BuildConfig.DEV_BACKEND_URL,
+    legacyFeedbackUrl: String = BuildConfig.FEEDBACK_URL
+): Pair<String, Boolean> {
+    val cleanWorker = devBackendUrl.trim().trimEnd('/')
+    return if (cleanWorker.startsWith("https://")) {
+        "$cleanWorker/v1/public/feedback" to true
+    } else {
+        legacyFeedbackUrl to false
+    }
+}
+
 internal interface FeedbackSender {
     suspend fun send(category: FeedbackCategory, message: String, email: String): FeedbackResult
 }
@@ -87,13 +106,14 @@ internal class AppsScriptFeedbackSender(private val context: Context) : Feedback
 
     override suspend fun send(category: FeedbackCategory, message: String, email: String): FeedbackResult =
         withContext(Dispatchers.IO) {
-            val endpoint = BuildConfig.FEEDBACK_URL
+            val (endpoint, isWorker) = resolveFeedbackEndpoint()
             if (endpoint.isEmpty()) return@withContext FeedbackResult.Failed(offline = false)
             val payload = buildFeedbackPayload(category, message, email, appVersion(), installId(context))
                 .toByteArray(Charsets.UTF_8)
             if (payload.size > MAX_REQUEST_BYTES) return@withContext FeedbackResult.Rejected("PAYLOAD_TOO_LARGE")
             try {
-                parseFeedbackResponse(post(URI(endpoint), payload))
+                val raw = if (isWorker) postWorkerJson(URI(endpoint), payload) else post(URI(endpoint), payload)
+                parseFeedbackResponse(raw)
             } catch (error: IOException) {
                 FeedbackResult.Failed(
                     offline = error is java.net.UnknownHostException || error is java.net.ConnectException,
@@ -101,6 +121,32 @@ internal class AppsScriptFeedbackSender(private val context: Context) : Feedback
                 )
             }
         }
+
+    private fun postWorkerJson(endpoint: URI, payload: ByteArray): String {
+        if (!isAllowedMissionFeedbackHost(endpoint, BuildConfig.DEV_BACKEND_URL)) {
+            throw IOException("Unexpected Mission Control feedback host")
+        }
+        val connection = endpoint.toURL().openConnection() as HttpsURLConnection
+        try {
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setFixedLengthStreamingMode(payload.size)
+            connection.outputStream.use { it.write(payload) }
+            val code = connection.responseCode
+            val stream = if (code >= 400) connection.errorStream else connection.inputStream
+            if (stream != null && code in listOf(200, 400, 413, 429)) {
+                return readStreamCapped(stream)
+            }
+            throw IOException("Mission Control feedback failed (HTTP $code)")
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     private fun post(endpoint: URI, payload: ByteArray): String {
         if (!isAllowedFeedbackHost(endpoint, first = true)) throw IOException("Unexpected feedback server")
@@ -141,11 +187,14 @@ internal class AppsScriptFeedbackSender(private val context: Context) : Feedback
         }
     }
 
-    private fun readCapped(connection: HttpsURLConnection): String = connection.inputStream.use { input ->
+    private fun readCapped(connection: HttpsURLConnection): String =
+        readStreamCapped(connection.inputStream)
+
+    private fun readStreamCapped(input: java.io.InputStream): String = input.use { stream ->
         val out = ByteArrayOutputStream()
         val buffer = ByteArray(4096)
         while (true) {
-            val count = input.read(buffer)
+            val count = stream.read(buffer)
             if (count < 0) break
             if (out.size() + count > MAX_RESPONSE_BYTES) throw IOException("Feedback response too large")
             out.write(buffer, 0, count)
