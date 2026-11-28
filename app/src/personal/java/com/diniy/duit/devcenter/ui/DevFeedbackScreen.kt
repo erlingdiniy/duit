@@ -3,13 +3,15 @@ package com.diniy.duit.devcenter.ui
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,11 +20,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.MarkEmailUnread
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -55,7 +66,18 @@ import com.diniy.duit.devcenter.FeedbackSourceState
 import com.diniy.duit.devcenter.FeedbackTriageStatus
 import com.diniy.duit.devcenter.TriagedFeedbackItem
 
-private val FEEDBACK_CATEGORIES = listOf("All", "Bug Report", "Feature Request", "General Feedback")
+private data class InboxCategoryTab(
+    val filterValue: String,
+    val label: String
+)
+
+private val INBOX_TABS = listOf(
+    InboxCategoryTab("All", "All"),
+    InboxCategoryTab("Bug Report", "Bugs"),
+    InboxCategoryTab("Feature Request", "Features"),
+    InboxCategoryTab("General Feedback", "General")
+)
+
 private const val MAX_CSV_BYTES = 2 * 1024 * 1024L
 
 @Composable
@@ -69,6 +91,7 @@ fun DevFeedbackScreen(
     val tokens = rememberDevThemeTokens()
     val context = LocalContext.current
     var selectedItemId by remember { mutableStateOf<String?>(null) }
+    var showMoreFilters by remember { mutableStateOf(false) }
 
     val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         viewModel.authManager.clearPickerBackgroundSuppression()
@@ -128,7 +151,7 @@ fun DevFeedbackScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         when (val fb = uiState.feedbackState) {
@@ -163,30 +186,14 @@ fun DevFeedbackScreen(
 
             is FeedbackSourceState.Error -> {
                 item(key = "fb_error") {
-                    SpatialGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        tier = SpatialGlassTier.Elevated,
-                        accentTint = colors.error
-                    ) {
-                        DevSectionTitle("Feedback Unavailable")
-                        Spacer(Modifier.height(6.dp))
-                        Text(fb.message, style = MaterialTheme.typography.bodySmall, color = colors.error)
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            PrismaticButton(
-                                text = "Import CSV",
-                                onClick = launchCsvPicker,
-                                variant = PrismaticButtonVariant.Primary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrismaticButton(
-                                text = "Open Settings",
-                                onClick = onOpenSettings,
-                                variant = PrismaticButtonVariant.Secondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+                    DevErrorStateCard(
+                        title = "Inbox Unavailable",
+                        message = fb.message,
+                        primaryLabel = "Import CSV",
+                        onPrimary = launchCsvPicker,
+                        secondaryLabel = "Settings",
+                        onSecondary = onOpenSettings
+                    )
                 }
             }
 
@@ -194,126 +201,204 @@ fun DevFeedbackScreen(
                 val triaged = uiState.triagedFeedback
                 val filtered = uiState.filteredFeedback
                 val dupCount = triaged.count { it.duplicateOfIds.isNotEmpty() }
+                val activeTab = INBOX_TABS.firstOrNull { it.filterValue == uiState.feedbackCategoryFilter } ?: INBOX_TABS.first()
+
+                item(key = "fb_category_tabs") {
+                    DevSegmentedBar(
+                        items = INBOX_TABS,
+                        selected = activeTab,
+                        labelOf = { it.label },
+                        badgeCountOf = { tab ->
+                            when (tab.filterValue) {
+                                "All" -> uiState.unreadFeedbackCount
+                                else -> triaged.count { it.entry.category == tab.filterValue && it.isUnread }
+                            }
+                        },
+                        onSelect = { viewModel.updateFeedbackCategoryFilter(it.filterValue) }
+                    )
+                }
 
                 item(key = "fb_inbox_summary") {
-                    SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Elevated) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            DevSectionTitle(fb.sourceLabel)
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                if (uiState.unreadFeedbackCount > 0) {
-                                    PrismaticButton(
-                                        text = "Mark Read",
-                                        onClick = viewModel::markAllFeedbackRead,
-                                        variant = PrismaticButtonVariant.Ghost
-                                    )
-                                }
-                                PrismaticButton(
-                                    text = "Import CSV",
-                                    onClick = launchCsvPicker,
-                                    variant = PrismaticButtonVariant.Ghost
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             DevMetricTile(
                                 title = "Unread",
                                 value = uiState.unreadFeedbackCount.toString(),
-                                sub = "${triaged.size} items, ${uiState.openFeatureRequestCount} features",
+                                sub = "${triaged.size} total, ${uiState.openFeatureRequestCount} ideas",
                                 accentTint = if (uiState.unreadFeedbackCount > 0) tokens.warningTint else null,
-                                modifier = Modifier.weight(1f)
+                                icon = Icons.Rounded.MarkEmailUnread,
+                                modifier = Modifier.weight(1f).fillMaxHeight()
                             )
                             DevMetricTile(
                                 title = "Open Bugs",
                                 value = uiState.openBugReportCount.toString(),
                                 sub = "$dupCount similar, ${uiState.spamFeedbackCount} spam",
                                 accentTint = if (uiState.openBugReportCount > 0) tokens.dangerTint else tokens.healthyTint,
-                                modifier = Modifier.weight(1f)
+                                icon = Icons.Rounded.BugReport,
+                                modifier = Modifier.weight(1f).fillMaxHeight()
                             )
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 48.dp)
-                                .toggleable(
-                                    value = uiState.vault.feedbackAlertsEnabled,
-                                    role = Role.Switch,
-                                    onValueChange = viewModel::setFeedbackAlertsEnabled
-                                ),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Background New-Feedback Alerts (6h)", style = MaterialTheme.typography.bodyMedium, color = colors.primaryText)
-                            Switch(checked = uiState.vault.feedbackAlertsEnabled, onCheckedChange = null)
-                        }
-                    }
-                }
-
-                item(key = "fb_filters") {
-                    SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                        PrismaticTextField(
-                            value = uiState.feedbackSearchQuery,
-                            onValueChange = viewModel::updateFeedbackSearch,
-                            label = "Search feedback",
-                            placeholder = "Keyword, version, priority or issue"
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        DevChoiceChipRow(
-                            items = FEEDBACK_CATEGORIES,
-                            selected = uiState.feedbackCategoryFilter,
-                            labelOf = { it },
-                            onSelect = viewModel::updateFeedbackCategoryFilter
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        val statusOptions: List<FeedbackTriageStatus?> = listOf(null) + FeedbackTriageStatus.entries
-                        DevChoiceChipRow(
-                            items = statusOptions,
-                            selected = uiState.feedbackStatusFilter,
-                            labelOf = { it?.label ?: "All Status" },
-                            onSelect = viewModel::updateFeedbackStatusFilter
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Row(
+                        SpatialGlassCard(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            tier = SpatialGlassTier.Standard
                         ) {
-                            FilterChip(
-                                selected = uiState.feedbackUnreadOnly,
-                                onClick = { viewModel.toggleFeedbackUnreadOnly(!uiState.feedbackUnreadOnly) },
-                                label = { Text("Unread Only") },
-                                modifier = Modifier.heightIn(min = 48.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Source",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colors.secondaryText
+                                )
+                                Text(
+                                    text = fb.sourceLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colors.primaryText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(start = 12.dp)
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (uiState.unreadFeedbackCount > 0) {
+                                    PrismaticButton(
+                                        text = "Mark Read",
+                                        onClick = viewModel::markAllFeedbackRead,
+                                        variant = PrismaticButtonVariant.Ghost,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                PrismaticButton(
+                                    text = "Import CSV",
+                                    onClick = launchCsvPicker,
+                                    variant = PrismaticButtonVariant.Secondary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            DevSearchField(
+                                value = uiState.feedbackSearchQuery,
+                                onValueChange = viewModel::updateFeedbackSearch,
+                                placeholder = "Search messages, versions or issues"
                             )
-                            Text(
-                                text = "Showing ${filtered.size} of ${triaged.size}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.secondaryText
-                            )
+                            Spacer(Modifier.height(8.dp))
+                            val extraActiveCount = (if (uiState.feedbackStatusFilter != null) 1 else 0) +
+                                (if (uiState.feedbackSortOrder != FeedbackSortOrder.NEWEST) 1 else 0)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FilterChip(
+                                    selected = uiState.feedbackUnreadOnly,
+                                    onClick = { viewModel.toggleFeedbackUnreadOnly(!uiState.feedbackUnreadOnly) },
+                                    label = { Text("Unread", maxLines = 1) },
+                                    modifier = Modifier.heightIn(min = 48.dp)
+                                )
+                                FilterChip(
+                                    selected = showMoreFilters || extraActiveCount > 0,
+                                    onClick = { showMoreFilters = !showMoreFilters },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Tune,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = if (extraActiveCount > 0) "Filters ($extraActiveCount)" else "Filters",
+                                            maxLines = 1
+                                        )
+                                    },
+                                    modifier = Modifier.heightIn(min = 48.dp)
+                                )
+                                Spacer(Modifier.weight(1f))
+                                Text(
+                                    text = "${filtered.size} items",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colors.secondaryText,
+                                    maxLines = 1
+                                )
+                            }
+                            AnimatedVisibility(visible = showMoreFilters) {
+                                Column {
+                                    Spacer(Modifier.height(8.dp))
+                                    HorizontalDivider(color = colors.divider.copy(alpha = 0.65f))
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("Triage Status", style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
+                                    Spacer(Modifier.height(4.dp))
+                                    val statusOptions: List<FeedbackTriageStatus?> = listOf(null) + FeedbackTriageStatus.entries
+                                    DevChoiceChipRow(
+                                        items = statusOptions,
+                                        selected = uiState.feedbackStatusFilter,
+                                        labelOf = { it?.label ?: "All Status" },
+                                        onSelect = viewModel::updateFeedbackStatusFilter
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text("Sort By", style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
+                                    Spacer(Modifier.height(4.dp))
+                                    DevChoiceChipRow(
+                                        items = FeedbackSortOrder.entries,
+                                        selected = uiState.feedbackSortOrder,
+                                        labelOf = { it.label },
+                                        onSelect = viewModel::updateFeedbackSortOrder
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 48.dp)
+                                            .toggleable(
+                                                value = uiState.vault.feedbackAlertsEnabled,
+                                                role = Role.Switch,
+                                                onValueChange = viewModel::setFeedbackAlertsEnabled
+                                            ),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Background Alerts (6h)",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = colors.primaryText
+                                        )
+                                        Switch(checked = uiState.vault.feedbackAlertsEnabled, onCheckedChange = null)
+                                    }
+                                }
+                            }
                         }
-                        Spacer(Modifier.height(6.dp))
-                        DevChoiceChipRow(
-                            items = FeedbackSortOrder.entries,
-                            selected = uiState.feedbackSortOrder,
-                            labelOf = { it.label },
-                            onSelect = viewModel::updateFeedbackSortOrder
-                        )
                     }
                 }
 
                 if (filtered.isEmpty()) {
                     item(key = "fb_empty") {
-                        SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                            Text(
-                                text = "No feedback entries match your filter.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = colors.secondaryText
-                            )
-                        }
+                        DevEmptyStateCard(
+                            icon = Icons.Rounded.Inbox,
+                            title = if (triaged.isEmpty()) "Inbox Empty" else "No Matching Items",
+                            subtitle = if (triaged.isEmpty()) {
+                                "User feedback, bug reports and ideas appear here once synced."
+                            } else {
+                                "Adjust your category tab, search text or status filter."
+                            },
+                            actionLabel = if (triaged.isNotEmpty()) "Clear Filters" else null,
+                            onAction = if (triaged.isNotEmpty()) {
+                                {
+                                    viewModel.updateFeedbackSearch("")
+                                    viewModel.updateFeedbackCategoryFilter("All")
+                                    viewModel.updateFeedbackStatusFilter(null)
+                                    viewModel.toggleFeedbackUnreadOnly(false)
+                                }
+                            } else null
+                        )
                     }
                 } else {
                     items(filtered, key = { it.entry.id }) { item ->
@@ -322,7 +407,7 @@ fun DevFeedbackScreen(
                         SpatialGlassCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(24.dp))
+                                .clip(RoundedCornerShape(tokens.cardCornerDp.dp))
                                 .candyPressable(
                                     onClick = { selectedItemId = entry.id },
                                     onClickLabel = "Inspect feedback item"
@@ -336,6 +421,7 @@ fun DevFeedbackScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
@@ -350,7 +436,9 @@ fun DevFeedbackScreen(
                                     Text(
                                         text = entry.category,
                                         style = MaterialTheme.typography.labelLarge,
-                                        color = colors.primaryText
+                                        color = colors.primaryText,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     if (triage.priority != FeedbackPriority.NORMAL) {
                                         DevToneBadge(label = triage.priority.label, tone = triage.priority.name)
@@ -375,7 +463,10 @@ fun DevFeedbackScreen(
                                 Text(
                                     text = "v${entry.appVersion}, ${formatIsoShort(entry.timestampIso)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = colors.secondaryText
+                                    color = colors.secondaryText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f).padding(end = 6.dp)
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     if (item.duplicateOfIds.isNotEmpty()) {
@@ -425,7 +516,10 @@ private fun FeedbackDetailDialog(
         onDismissRequest = onDismiss,
         title = { Text("${entry.category} (v${entry.appVersion})") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(entry.message, style = MaterialTheme.typography.bodyMedium)
                 Text(
                     text = "Submitted: ${formatIsoShort(entry.timestampIso)}",

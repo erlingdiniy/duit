@@ -1,10 +1,10 @@
 package com.diniy.duit.devcenter.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,9 +18,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -40,13 +45,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.diniy.duit.core.ui.components.PrismaticButton
 import com.diniy.duit.core.ui.components.PrismaticButtonVariant
 import com.diniy.duit.core.ui.components.PrismaticTextField
 import com.diniy.duit.core.ui.components.SpatialGlassCard
 import com.diniy.duit.core.ui.components.SpatialGlassTier
+import com.diniy.duit.core.ui.components.candyPressable
 import com.diniy.duit.core.ui.theme.SpatialTheme
 import com.diniy.duit.devcenter.ANDROID_BROADCAST_CHANNEL_ID
 import com.diniy.duit.devcenter.BroadcastAudience
@@ -60,8 +68,9 @@ import com.diniy.duit.devcenter.KillSwitchTarget
 
 private enum class NotificationsTab(val label: String) {
     COMPOSE("Compose"),
-    LIBRARY("Templates & Drafts"),
-    HISTORY("History & Test")
+    SCHEDULED("Scheduled"),
+    LIBRARY("Library"),
+    HISTORY("History")
 }
 
 private enum class PreviewSurfaceMode(val label: String) {
@@ -86,6 +95,8 @@ fun DevNotificationsScreen(
 
     var activeTab by rememberSaveable { mutableStateOf(NotificationsTab.COMPOSE) }
     var previewMode by rememberSaveable { mutableStateOf(PreviewSurfaceMode.STANDARD) }
+    var showSingleDeviceTest by rememberSaveable { mutableStateOf(false) }
+    var showEmergencySwitches by rememberSaveable { mutableStateOf(false) }
     var showSaveTemplateDialog by remember { mutableStateOf(false) }
     var showScheduleDialog by remember { mutableStateOf(false) }
     var showCloudAutoScheduleDialog by remember { mutableStateOf(false) }
@@ -139,14 +150,19 @@ fun DevNotificationsScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "notif_tabs") {
-            DevChoiceChipRow(
+            val scheduledCount = uiState.backendScheduledBroadcasts.count { it.status == "scheduled" } +
+                uiState.vault.scheduledBroadcasts.count { it.status == "scheduled" }
+            DevSegmentedBar(
                 items = NotificationsTab.entries,
                 selected = activeTab,
                 labelOf = { it.label },
+                badgeCountOf = { tab ->
+                    if (tab == NotificationsTab.SCHEDULED) scheduledCount else 0
+                },
                 onSelect = { activeTab = it }
             )
         }
@@ -160,20 +176,26 @@ fun DevNotificationsScreen(
                             tier = SpatialGlassTier.Elevated,
                             accentTint = colors.warning
                         ) {
-                            DevSectionTitle("GitHub PAT Required")
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "Connect a fine-grained GitHub PAT in Settings to trigger public relay workflows.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.secondaryText
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            PrismaticButton(
-                                text = "Open Settings",
-                                onClick = onOpenSettings,
-                                variant = PrismaticButtonVariant.Primary,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    DevSectionTitle("Connection Required")
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "Enroll or add a PAT in Settings to broadcast.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colors.secondaryText
+                                    )
+                                }
+                                PrismaticButton(
+                                    text = "Settings",
+                                    onClick = onOpenSettings,
+                                    variant = PrismaticButtonVariant.Primary
+                                )
+                            }
                         }
                     }
                 }
@@ -187,7 +209,7 @@ fun DevNotificationsScreen(
                         ) {
                             DevSectionTitle("Compose Broadcast")
                             val badgeLabel = when (customKillEnabled) {
-                                true -> "Live Enabled"
+                                true -> "Live Ready"
                                 false -> "Live Paused"
                                 null -> "Dry-Run Ready"
                             }
@@ -198,6 +220,21 @@ fun DevNotificationsScreen(
                             }
                             DevToneBadge(label = badgeLabel, tone = badgeTone)
                         }
+                        Spacer(Modifier.height(10.dp))
+                        PrismaticTextField(
+                            value = composer.title,
+                            onValueChange = viewModel::updateComposerTitle,
+                            label = "Title (${composer.title.length}/100)",
+                            placeholder = "Maintenance or release update"
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        PrismaticTextField(
+                            value = composer.body,
+                            onValueChange = viewModel::updateComposerBody,
+                            label = "Message (${composer.body.length}/220)",
+                            placeholder = "Offline budgets & receipts stay available locally.",
+                            singleLine = false
+                        )
                         Spacer(Modifier.height(10.dp))
                         Text("Category", style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
                         Spacer(Modifier.height(4.dp))
@@ -217,57 +254,82 @@ fun DevNotificationsScreen(
                             onSelect = viewModel::updateComposerAudience
                         )
                         Spacer(Modifier.height(10.dp))
-                        Text("Tap Destination", style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
-                        Spacer(Modifier.height(4.dp))
-                        DevChoiceChipRow(
-                            items = BroadcastDestination.entries,
-                            selected = composer.route,
-                            labelOf = { it.label },
-                            onSelect = viewModel::updateComposerRoute
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        PrismaticTextField(
-                            value = composer.title,
-                            onValueChange = viewModel::updateComposerTitle,
-                            label = "Title (${composer.title.length}/100)",
-                            placeholder = "Maintenance or release update"
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        PrismaticTextField(
-                            value = composer.body,
-                            onValueChange = viewModel::updateComposerBody,
-                            label = "Message (${composer.body.length}/220)",
-                            placeholder = "Offline budgets & receipts stay available locally.",
-                            singleLine = false
-                        )
-                        Spacer(Modifier.height(10.dp))
+                        var showDeliveryOptions by rememberSaveable { mutableStateOf(false) }
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .candyPressable(
+                                    onClick = { showDeliveryOptions = !showDeliveryOptions },
+                                    onClickLabel = "Toggle delivery options"
+                                )
+                                .padding(vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            PrismaticTextField(
-                                value = composer.broadcastId,
-                                onValueChange = viewModel::updateComposerBroadcastId,
-                                label = "Broadcast ID",
-                                modifier = Modifier.weight(1f)
+                            Text(
+                                text = "Delivery Options",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = colors.secondaryText
                             )
-                            IconButton(
-                                onClick = viewModel::regenerateBroadcastId,
-                                modifier = Modifier.size(48.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                DevToneBadge(label = composer.route.label, tone = "neutral")
                                 Icon(
-                                    imageVector = Icons.Rounded.Refresh,
-                                    contentDescription = "Generate new ID",
-                                    tint = colors.primaryAction
+                                    imageVector = if (showDeliveryOptions) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                    contentDescription = null,
+                                    tint = colors.secondaryText
                                 )
+                            }
+                        }
+                        AnimatedVisibility(visible = showDeliveryOptions) {
+                            Column {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "Tap Destination",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = colors.secondaryText
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                DevChoiceChipRow(
+                                    items = BroadcastDestination.entries,
+                                    selected = composer.route,
+                                    labelOf = { it.label },
+                                    onSelect = viewModel::updateComposerRoute
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    PrismaticTextField(
+                                        value = composer.broadcastId,
+                                        onValueChange = viewModel::updateComposerBroadcastId,
+                                        label = "Broadcast ID",
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(
+                                        onClick = viewModel::regenerateBroadcastId,
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Refresh,
+                                            contentDescription = "Generate new ID",
+                                            tint = colors.primaryAction
+                                        )
+                                    }
+                                }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
                         var showComposeMenu by remember { mutableStateOf(false) }
                         Box(modifier = Modifier.fillMaxWidth()) {
                             PrismaticButton(
-                                text = "Save Options",
+                                text = "Options",
                                 onClick = { showComposeMenu = true },
                                 variant = PrismaticButtonVariant.Ghost,
                                 modifier = Modifier.fillMaxWidth()
@@ -317,21 +379,15 @@ fun DevNotificationsScreen(
                         tier = SpatialGlassTier.Elevated,
                         accentTint = colors.aqua
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            DevSectionTitle("Notification Preview")
-                            DevChoiceChipRow(
-                                items = PreviewSurfaceMode.entries,
-                                selected = previewMode,
-                                labelOf = { it.label },
-                                onSelect = { previewMode = it },
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
-                        }
+                        DevSectionTitle("Notification Preview")
                         Spacer(Modifier.height(8.dp))
+                        DevSegmentedBar(
+                            items = PreviewSurfaceMode.entries,
+                            selected = previewMode,
+                            labelOf = { it.label },
+                            onSelect = { previewMode = it }
+                        )
+                        Spacer(Modifier.height(10.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -352,7 +408,7 @@ fun DevNotificationsScreen(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
-                                            text = "duit., Lockscreen (VISIBILITY_PRIVATE)",
+                                            text = "duit., Lockscreen",
                                             style = MaterialTheme.typography.labelMedium,
                                             color = colors.secondaryText
                                         )
@@ -406,16 +462,16 @@ fun DevNotificationsScreen(
                                     )
                                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         DevToneBadge(label = composer.audience.topics.joinToString("+"), tone = "neutral")
-                                        DevToneBadge(label = "Opens: ${composer.route.label}", tone = "neutral")
+                                        DevToneBadge(label = "Opens ${composer.route.label}", tone = "neutral")
                                     }
                                 }
                             }
                         }
                         Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = "Channel: $ANDROID_BROADCAST_CHANNEL_ID",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.secondaryText
+                        DevKeyValueRow(
+                            label = "Channel",
+                            value = ANDROID_BROADCAST_CHANNEL_ID,
+                            monospaced = true
                         )
                     }
                 }
@@ -458,66 +514,142 @@ fun DevNotificationsScreen(
 
                 item(key = "notif_kill_switches") {
                     SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                        DevSectionTitle("Emergency Kill Switches")
-                        Spacer(Modifier.height(8.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .candyPressable(
+                                    onClick = { showEmergencySwitches = !showEmergencySwitches },
+                                    onClickLabel = "Toggle emergency switches"
+                                )
+                                .padding(vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                Text("Custom Broadcasts", style = MaterialTheme.typography.titleSmall, color = colors.primaryText)
-                                Text(KillSwitchTarget.CUSTOM_BROADCAST.variableName, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                            DevSectionTitle("Emergency Switches", modifier = Modifier.weight(1f).padding(end = 8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                DevToneBadge(
+                                    label = if (customKillEnabled == true && releaseKillEnabled == true) "Armed" else "Check",
+                                    tone = if (customKillEnabled == true && releaseKillEnabled == true) "enabled" else "warning"
+                                )
+                                Icon(
+                                    imageVector = if (showEmergencySwitches) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                    contentDescription = null,
+                                    tint = colors.secondaryText
+                                )
                             }
-                            PrismaticButton(
-                                text = if (customKillEnabled == true) "Pause" else "Enable",
-                                onClick = {
-                                    viewModel.requestKillSwitchToggle(
-                                        KillSwitchTarget.CUSTOM_BROADCAST,
-                                        customKillEnabled != true
-                                    )
-                                },
-                                enabled = hasPat && customKillEnabled != null && !uiState.isUpdatingKillSwitch,
-                                variant = PrismaticButtonVariant.Secondary
-                            )
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                Text("Release Automation", style = MaterialTheme.typography.titleSmall, color = colors.primaryText)
-                                Text(KillSwitchTarget.RELEASE_AUTOMATION.variableName, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                        AnimatedVisibility(visible = showEmergencySwitches) {
+                            Column {
+                                Spacer(Modifier.height(8.dp))
+                                NotifyKillSwitchRow(
+                                    title = "Custom Broadcasts",
+                                    variableName = KillSwitchTarget.CUSTOM_BROADCAST.variableName,
+                                    enabled = customKillEnabled,
+                                    canMutate = hasPat && customKillEnabled != null && !uiState.isUpdatingKillSwitch,
+                                    onClick = {
+                                        viewModel.requestKillSwitchToggle(
+                                            KillSwitchTarget.CUSTOM_BROADCAST,
+                                            customKillEnabled != true
+                                        )
+                                    }
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                NotifyKillSwitchRow(
+                                    title = "Release Automation",
+                                    variableName = KillSwitchTarget.RELEASE_AUTOMATION.variableName,
+                                    enabled = releaseKillEnabled,
+                                    canMutate = hasPat && releaseKillEnabled != null && !uiState.isUpdatingKillSwitch,
+                                    onClick = {
+                                        viewModel.requestKillSwitchToggle(
+                                            KillSwitchTarget.RELEASE_AUTOMATION,
+                                            releaseKillEnabled != true
+                                        )
+                                    }
+                                )
                             }
-                            PrismaticButton(
-                                text = if (releaseKillEnabled == true) "Pause" else "Enable",
-                                onClick = {
-                                    viewModel.requestKillSwitchToggle(
-                                        KillSwitchTarget.RELEASE_AUTOMATION,
-                                        releaseKillEnabled != true
-                                    )
-                                },
-                                enabled = hasPat && releaseKillEnabled != null && !uiState.isUpdatingKillSwitch,
-                                variant = PrismaticButtonVariant.Secondary
-                            )
                         }
                     }
                 }
             }
 
-            NotificationsTab.LIBRARY -> {
-                item(key = "lib_scheduled_header") {
-                    DevSectionTitle("Scheduled Reminders (${uiState.vault.scheduledBroadcasts.size})")
-                }
-                if (uiState.vault.scheduledBroadcasts.isEmpty()) {
-                    item(key = "lib_sched_empty") {
-                        SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                            Text("No scheduled announcements. Reminders never send live pushes automatically.", style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+            NotificationsTab.SCHEDULED -> {
+                item(key = "sched_actions") {
+                    SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                        DevSectionTitle("Schedule From Composer")
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PrismaticButton(
+                                text = "Local Reminder",
+                                onClick = { showScheduleDialog = true },
+                                variant = PrismaticButtonVariant.Secondary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (isBackendEnrolled) {
+                                PrismaticButton(
+                                    text = "Cloud Cron",
+                                    onClick = { showCloudAutoScheduleDialog = true },
+                                    variant = PrismaticButtonVariant.Primary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
-                } else {
+                }
+
+                if (uiState.backendScheduledBroadcasts.isNotEmpty()) {
+                    item(key = "cloud_auto_scheduled_header") {
+                        DevSectionTitle("Cloud Auto-Scheduled (${uiState.backendScheduledBroadcasts.size})")
+                    }
+                    items(uiState.backendScheduledBroadcasts, key = { "auto-${it.id}" }) { sched ->
+                        SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(sched.title, style = MaterialTheme.typography.titleSmall, color = colors.primaryText, modifier = Modifier.weight(1f))
+                                DevToneBadge(
+                                    label = sched.status,
+                                    tone = when (sched.status) {
+                                        "dispatched" -> "ok"
+                                        "cancelled" -> "paused"
+                                        else -> "warning"
+                                    }
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(sched.body, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                            DevKeyValueRow(label = "Audience", value = sched.audience.label)
+                            if (sched.status == "scheduled") {
+                                Spacer(Modifier.height(6.dp))
+                                PrismaticButton(
+                                    text = "Cancel Scheduled",
+                                    onClick = { viewModel.cancelBackendScheduledBroadcast(sched.id) },
+                                    variant = PrismaticButtonVariant.Ghost,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item(key = "lib_scheduled_header") {
+                    DevSectionTitle("Local Reminders (${uiState.vault.scheduledBroadcasts.size})")
+                }
+                if (uiState.vault.scheduledBroadcasts.isEmpty() && uiState.backendScheduledBroadcasts.isEmpty()) {
+                    item(key = "sched_empty") {
+                        DevEmptyStateCard(
+                            icon = Icons.Rounded.Schedule,
+                            title = "No Scheduled Broadcasts",
+                            subtitle = "Local reminders and Worker cron sends appear here."
+                        )
+                    }
+                } else if (uiState.vault.scheduledBroadcasts.isNotEmpty()) {
                     items(uiState.vault.scheduledBroadcasts, key = { it.id }) { sched ->
                         SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
                             Row(
@@ -553,159 +685,190 @@ fun DevNotificationsScreen(
                         }
                     }
                 }
+            }
 
-                item(key = "lib_drafts_header") {
-                    DevSectionTitle("Saved Drafts (${uiState.vault.broadcastDrafts.size})")
-                }
-                items(uiState.vault.broadcastDrafts, key = { it.id }) { draft ->
-                    SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                        Text(draft.title.ifBlank { "(Untitled)" }, style = MaterialTheme.typography.titleSmall, color = colors.primaryText)
-                        Text(draft.body, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
-                        Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PrismaticButton(
-                                text = "Load Draft",
-                                onClick = {
-                                    viewModel.loadDraftIntoComposer(draft)
-                                    activeTab = NotificationsTab.COMPOSE
-                                },
-                                variant = PrismaticButtonVariant.Secondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrismaticButton(
-                                text = "Delete",
-                                onClick = { viewModel.deleteDraft(draft.id) },
-                                variant = PrismaticButtonVariant.Ghost,
-                                modifier = Modifier.weight(1f)
-                            )
+            NotificationsTab.LIBRARY -> {
+                val noDraftsAndTemplates = uiState.vault.broadcastDrafts.isEmpty() &&
+                    uiState.vault.broadcastTemplates.isEmpty()
+
+                if (noDraftsAndTemplates) {
+                    item(key = "library_empty") {
+                        DevEmptyStateCard(
+                            icon = Icons.Rounded.BookmarkBorder,
+                            title = "Library Empty",
+                            subtitle = "Save drafts or reusable broadcast templates from Compose."
+                        )
+                    }
+                } else {
+                    item(key = "lib_drafts_header") {
+                        DevSectionTitle("Saved Drafts (${uiState.vault.broadcastDrafts.size})")
+                    }
+                    if (uiState.vault.broadcastDrafts.isEmpty()) {
+                        item(key = "lib_drafts_empty") {
+                            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                                Text("No saved drafts.", style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                            }
+                        }
+                    } else {
+                        items(uiState.vault.broadcastDrafts, key = { it.id }) { draft ->
+                            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                                Text(draft.title.ifBlank { "(Untitled)" }, style = MaterialTheme.typography.titleSmall, color = colors.primaryText)
+                                Text(draft.body, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                                Spacer(Modifier.height(6.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    PrismaticButton(
+                                        text = "Load Draft",
+                                        onClick = {
+                                            viewModel.loadDraftIntoComposer(draft)
+                                            activeTab = NotificationsTab.COMPOSE
+                                        },
+                                        variant = PrismaticButtonVariant.Secondary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    PrismaticButton(
+                                        text = "Delete",
+                                        onClick = { viewModel.deleteDraft(draft.id) },
+                                        variant = PrismaticButtonVariant.Ghost,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
                         }
                     }
-                }
 
-                item(key = "lib_templates_header") {
-                    DevSectionTitle("Templates (${uiState.vault.broadcastTemplates.size})")
-                }
-                items(uiState.vault.broadcastTemplates, key = { it.id }) { tpl ->
-                    SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(tpl.name, style = MaterialTheme.typography.titleSmall, color = colors.primaryText)
-                            DevToneBadge(label = tpl.audience.label, tone = "neutral")
+                    item(key = "lib_templates_header") {
+                        DevSectionTitle("Templates (${uiState.vault.broadcastTemplates.size})")
+                    }
+                    if (uiState.vault.broadcastTemplates.isEmpty()) {
+                        item(key = "lib_tpl_empty") {
+                            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                                Text("No saved templates.", style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                            }
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(tpl.title, style = MaterialTheme.typography.bodyMedium, color = colors.primaryText)
-                        Text(tpl.body, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
-                        Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PrismaticButton(
-                                text = "Use Template",
-                                onClick = {
-                                    viewModel.applyBroadcastTemplate(tpl)
-                                    activeTab = NotificationsTab.COMPOSE
-                                },
-                                variant = PrismaticButtonVariant.Secondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrismaticButton(
-                                text = "Delete",
-                                onClick = { viewModel.deleteTemplate(tpl.id) },
-                                variant = PrismaticButtonVariant.Ghost,
-                                modifier = Modifier.weight(1f)
-                            )
+                    } else {
+                        items(uiState.vault.broadcastTemplates, key = { it.id }) { tpl ->
+                            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(tpl.name, style = MaterialTheme.typography.titleSmall, color = colors.primaryText)
+                                    DevToneBadge(label = tpl.audience.label, tone = "neutral")
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(tpl.title, style = MaterialTheme.typography.bodyMedium, color = colors.primaryText)
+                                Text(tpl.body, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                                Spacer(Modifier.height(6.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    PrismaticButton(
+                                        text = "Use Template",
+                                        onClick = {
+                                            viewModel.applyBroadcastTemplate(tpl)
+                                            activeTab = NotificationsTab.COMPOSE
+                                        },
+                                        variant = PrismaticButtonVariant.Secondary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    PrismaticButton(
+                                        text = "Delete",
+                                        onClick = { viewModel.deleteTemplate(tpl.id) },
+                                        variant = PrismaticButtonVariant.Ghost,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
             NotificationsTab.HISTORY -> {
-                if (uiState.backendScheduledBroadcasts.isNotEmpty()) {
-                    item(key = "cloud_auto_scheduled_header") {
-                        DevSectionTitle("Cloud Auto-Scheduled Broadcasts (${uiState.backendScheduledBroadcasts.size})")
-                    }
-                    items(uiState.backendScheduledBroadcasts, key = { "auto-${it.id}" }) { sched ->
-                        SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(sched.title, style = MaterialTheme.typography.titleSmall, color = colors.primaryText, modifier = Modifier.weight(1f))
-                                DevToneBadge(label = sched.status, tone = if (sched.status == "dispatched") "ok" else if (sched.status == "cancelled") "paused" else "warning")
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text(sched.body, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
-                            DevKeyValueRow(label = "Audience", value = sched.audience.label)
-                            if (sched.status == "scheduled") {
-                                Spacer(Modifier.height(6.dp))
-                                PrismaticButton(
-                                    text = "Cancel Scheduled",
-                                    onClick = { viewModel.cancelBackendScheduledBroadcast(sched.id) },
-                                    variant = PrismaticButtonVariant.Ghost,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    }
-                }
-
                 item(key = "single_device_test") {
                     SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Elevated) {
-                        DevSectionTitle("Single-Device FCM Test")
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = if (isBackendEnrolled) {
-                                "Dispatches a single-device test to one QA token via keyless WIF workflow. Tokens are never saved on disk."
-                            } else {
-                                "Targets one QA device registration token directly via FCM HTTP v1. Ephemeral OAuth bearer token is never saved."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.secondaryText
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = testDeviceToken,
-                            onValueChange = { testDeviceToken = it },
-                            label = { Text("Device FCM Token") },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-                        )
-                        if (!isBackendEnrolled) {
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = testEphemeralBearer,
-                                onValueChange = { testEphemeralBearer = it },
-                                label = { Text("Ephemeral Messaging Bearer Token") },
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .candyPressable(
+                                    onClick = { showSingleDeviceTest = !showSingleDeviceTest },
+                                    onClickLabel = "Toggle single-device FCM test"
+                                )
+                                .padding(vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                DevSectionTitle("Single-Device Test")
+                                Text(
+                                    text = "Send QA push to one device token",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.secondaryText
+                                )
+                            }
+                            Icon(
+                                imageVector = if (showSingleDeviceTest) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = null,
+                                tint = colors.secondaryText
                             )
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PrismaticButton(
-                                text = "Dry-Run Device",
-                                onClick = {
-                                    viewModel.sendSingleDeviceTest(testDeviceToken, testEphemeralBearer, validateOnly = true)
-                                    testEphemeralBearer = ""
-                                },
-                                enabled = !uiState.isDispatching,
-                                variant = PrismaticButtonVariant.Secondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrismaticButton(
-                                text = "Send Device",
-                                onClick = {
-                                    viewModel.sendSingleDeviceTest(testDeviceToken, testEphemeralBearer, validateOnly = false)
-                                    testEphemeralBearer = ""
-                                },
-                                enabled = !uiState.isDispatching,
-                                variant = PrismaticButtonVariant.Primary,
-                                modifier = Modifier.weight(1f)
-                            )
+                        AnimatedVisibility(visible = showSingleDeviceTest) {
+                            Column {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = if (isBackendEnrolled) {
+                                        "Dispatches a single-device test via keyless WIF workflow. Tokens are never saved on disk."
+                                    } else {
+                                        "Targets one QA token directly via FCM HTTP v1. Ephemeral bearer tokens are never saved."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.secondaryText
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = testDeviceToken,
+                                    onValueChange = { testDeviceToken = it },
+                                    label = { Text("Device FCM Token") },
+                                    singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                                )
+                                if (!isBackendEnrolled) {
+                                    Spacer(Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = testEphemeralBearer,
+                                        onValueChange = { testEphemeralBearer = it },
+                                        label = { Text("Ephemeral Messaging Bearer Token") },
+                                        singleLine = true,
+                                        visualTransformation = PasswordVisualTransformation(),
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    PrismaticButton(
+                                        text = "Dry-Run Device",
+                                        onClick = {
+                                            viewModel.sendSingleDeviceTest(testDeviceToken, testEphemeralBearer, validateOnly = true)
+                                            testEphemeralBearer = ""
+                                        },
+                                        enabled = !uiState.isDispatching,
+                                        variant = PrismaticButtonVariant.Secondary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    PrismaticButton(
+                                        text = "Send Device",
+                                        onClick = {
+                                            viewModel.sendSingleDeviceTest(testDeviceToken, testEphemeralBearer, validateOnly = false)
+                                            testEphemeralBearer = ""
+                                        },
+                                        enabled = !uiState.isDispatching,
+                                        variant = PrismaticButtonVariant.Primary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -755,7 +918,7 @@ fun DevNotificationsScreen(
 
                 item(key = "hist_filter") {
                     val bFilters = listOf(HistoryFilter.ALL, HistoryFilter.CUSTOM, HistoryFilter.RELEASES)
-                    DevChoiceChipRow(
+                    DevSegmentedBar(
                         items = bFilters,
                         selected = if (uiState.historyFilter == HistoryFilter.AUDIT) HistoryFilter.ALL else uiState.historyFilter,
                         labelOf = { it.label },
@@ -770,9 +933,11 @@ fun DevNotificationsScreen(
                 }
                 if (entries.isEmpty()) {
                     item(key = "hist_empty") {
-                        SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                            Text("No broadcast history recorded.", style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
-                        }
+                        DevEmptyStateCard(
+                            icon = Icons.Rounded.History,
+                            title = "No Broadcast History",
+                            subtitle = "Dry-run and live notification dispatches appear here."
+                        )
                     }
                 } else {
                     items(entries, key = { it.id }) { item ->
@@ -792,9 +957,9 @@ fun DevNotificationsScreen(
                             Text(item.title, style = MaterialTheme.typography.titleSmall, color = colors.primaryText)
                             Text(item.body, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
                             Spacer(Modifier.height(6.dp))
-                            DevKeyValueRow(label = "ID", value = item.broadcastId)
-                            DevKeyValueRow(label = "Route / Topics", value = "${item.route} (${item.topics.joinToString(", ")})")
-                            DevKeyValueRow(label = "Time", value = formatIsoShort(item.timestampIso))
+                            DevKeyValueRow(label = "Broadcast ID", value = item.broadcastId, monospaced = true)
+                            DevKeyValueRow(label = "Route", value = "${item.route} (${item.topics.joinToString(", ")})")
+                            DevKeyValueRow(label = "Sent", value = formatIsoShort(item.timestampIso))
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 PrismaticButton(
@@ -825,6 +990,65 @@ fun DevNotificationsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NotifyKillSwitchRow(
+    title: String,
+    variableName: String,
+    enabled: Boolean?,
+    canMutate: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = SpatialTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.primaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                DevToneBadge(
+                    label = when (enabled) {
+                        true -> "Enabled"
+                        false -> "Paused"
+                        null -> "Unknown"
+                    },
+                    tone = when (enabled) {
+                        true -> "enabled"
+                        false -> "paused"
+                        null -> "warning"
+                    }
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = variableName,
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                color = colors.secondaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        PrismaticButton(
+            text = if (enabled == true) "Pause" else "Enable",
+            onClick = onClick,
+            enabled = canMutate,
+            variant = PrismaticButtonVariant.Secondary
+        )
     }
 }
 

@@ -106,7 +106,7 @@ fun DevRemoteConfigScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "rc_safety_guard") {
@@ -125,7 +125,7 @@ fun DevRemoteConfigScreen(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "Only safe display flags can change here.",
+                    text = "Only allowlisted display flags can change here.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.secondaryText
                 )
@@ -135,11 +135,7 @@ fun DevRemoteConfigScreen(
         when (val state = uiState.remoteConfigState) {
             RemoteConfigSourceState.Loading -> {
                 item(key = "rc_loading") {
-                    SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                        DevSectionTitle("Loading Remote Config")
-                        Spacer(Modifier.height(8.dp))
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
+                    DevLoadingSkeletonCard(lines = 4)
                 }
             }
 
@@ -157,30 +153,14 @@ fun DevRemoteConfigScreen(
 
             is RemoteConfigSourceState.Error -> {
                 item(key = "rc_error") {
-                    SpatialGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        tier = SpatialGlassTier.Standard,
-                        accentTint = colors.error
-                    ) {
-                        DevSectionTitle("Remote Config Error")
-                        Spacer(Modifier.height(6.dp))
-                        Text(state.message, style = MaterialTheme.typography.bodySmall, color = colors.error)
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PrismaticButton(
-                                text = "Retry",
-                                onClick = viewModel::refreshRemoteConfig,
-                                variant = PrismaticButtonVariant.Primary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrismaticButton(
-                                text = "Open Settings",
-                                onClick = onOpenSettings,
-                                variant = PrismaticButtonVariant.Secondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+                    DevErrorStateCard(
+                        title = "Remote Config Error",
+                        message = state.message,
+                        primaryLabel = "Retry",
+                        onPrimary = viewModel::refreshRemoteConfig,
+                        secondaryLabel = "Settings",
+                        onSecondary = onOpenSettings
+                    )
                 }
             }
 
@@ -204,7 +184,7 @@ fun DevRemoteConfigScreen(
                     SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Elevated) {
                         DevSectionTitle("Template v${state.versionNumber.ifBlank { "1" }}")
                         Spacer(Modifier.height(4.dp))
-                        DevKeyValueRow(label = "ETag", value = state.etag.take(22))
+                        DevKeyValueRow(label = "ETag", value = state.etag.take(22), monospaced = true)
                         DevKeyValueRow(label = "Updated", value = formatIsoShort(state.syncedAtIso))
                     }
                 }

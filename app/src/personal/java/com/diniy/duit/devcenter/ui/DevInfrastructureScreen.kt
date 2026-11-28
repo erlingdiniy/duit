@@ -1,10 +1,11 @@
 package com.diniy.duit.devcenter.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,7 +43,7 @@ fun DevInfrastructureScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "infra_summary") {
@@ -56,7 +57,7 @@ fun DevInfrastructureScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DevSectionTitle("System Health")
+                    DevSectionTitle("System Health", modifier = Modifier.weight(1f).padding(end = 8.dp))
                     PrismaticButton(
                         text = "Run Checks",
                         onClick = viewModel::runConnectionHealthCheck,
@@ -67,20 +68,20 @@ fun DevInfrastructureScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     DevMetricTile(
                         title = "Healthy Services",
                         value = "$healthyCount / ${services.size}",
                         sub = if (issueCount == 0) "No active alerts" else "$issueCount attention needed",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                     DevMetricTile(
                         title = "Last Full Sync",
-                        value = formatIsoShort(infra.lastSyncIso ?: uiState.vault.lastFullSyncIso),
+                        value = formatIsoCompact(infra.lastSyncIso ?: uiState.vault.lastFullSyncIso),
                         sub = "${services.count { it.probeKind == InfraProbeKind.VERIFIED_REMOTE }} remote verified",
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                 }
             }

@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -93,20 +95,22 @@ fun DevGitHubScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "gh_repo_switcher") {
-            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                DevSectionTitle("Repositories")
-                Spacer(Modifier.height(6.dp))
-                DevChoiceChipRow(
-                    items = repos,
-                    selected = uiState.selectedGitHubRepo,
-                    labelOf = { it.substringAfter('/') },
-                    onSelect = viewModel::selectGitHubRepo
-                )
-            }
+            DevSegmentedBar(
+                items = repos,
+                selected = uiState.selectedGitHubRepo,
+                labelOf = { repo ->
+                    val name = repo.substringAfter('/')
+                    when (name) {
+                        "duit-developer-console" -> "console"
+                        else -> name
+                    }
+                },
+                onSelect = viewModel::selectGitHubRepo
+            )
         }
 
         snap.error?.let { err ->
@@ -215,7 +219,7 @@ fun DevGitHubScreen(
         }
 
         item(key = "gh_sub_tabs") {
-            DevChoiceChipRow(
+            DevSegmentedBar(
                 items = GitHubModuleTab.entries,
                 selected = activeTab,
                 labelOf = { it.label },
@@ -256,9 +260,11 @@ fun DevGitHubScreen(
                 }
                 if (filteredIssues.isEmpty()) {
                     item(key = "gh_issues_empty") {
-                        SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                            Text("No issues matching filter.", style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
-                        }
+                        DevEmptyStateCard(
+                            icon = Icons.Rounded.Code,
+                            title = "No Issues Found",
+                            subtitle = "No issues in ${snap.repoSlug.substringAfter('/')} match this filter."
+                        )
                     }
                 } else {
                     items(filteredIssues, key = { "iss-${it.number}" }) { issue ->

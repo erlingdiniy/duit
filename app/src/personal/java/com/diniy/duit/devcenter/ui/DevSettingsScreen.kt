@@ -39,8 +39,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.diniy.duit.BuildConfig
 import com.diniy.duit.core.ui.components.PrismaticButton
@@ -102,6 +104,7 @@ fun DevSettingsScreen(
     var showManualAnalyticsToken by remember { mutableStateOf(false) }
     var feedbackExpanded by remember { mutableStateOf(false) }
     var showAdvancedTroubleshooting by remember { mutableStateOf(false) }
+    var showEmergencySwitches by remember { mutableStateOf(false) }
     var showUnenrollDialog by remember { mutableStateOf(false) }
     var revokeTargetId by remember { mutableStateOf<String?>(null) }
     var showChangePinDialog by remember { mutableStateOf(false) }
@@ -214,7 +217,7 @@ fun DevSettingsScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "zero_config_mission_control") {
@@ -228,7 +231,7 @@ fun DevSettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DevSectionTitle("Automatic Connection")
+                    DevSectionTitle("Automatic Connection", modifier = Modifier.weight(1f).padding(end = 8.dp))
                     DevToneBadge(
                         label = if (vault.isBackendEnrolled) "Enrolled" else "Manual",
                         tone = if (vault.isBackendEnrolled) "healthy" else "warning"
@@ -240,7 +243,12 @@ fun DevSettingsScreen(
                     label = "Key Protection",
                     value = if (vault.hardwareKeyBacked) "Hardware Keystore (Backed)" else "Hardware Keystore"
                 )
-                DevKeyValueRow(label = "Worker Endpoint", value = effectiveBackend)
+                DevKeyValueRow(
+                    label = "Worker Endpoint",
+                    value = effectiveBackend,
+                    monospaced = true,
+                    stacked = true
+                )
                 if (vault.isBackendEnrolled) {
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -727,27 +735,59 @@ fun DevSettingsScreen(
 
         item(key = "kill_switches") {
             SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                DevSectionTitle("Emergency Switches")
-                Spacer(Modifier.height(8.dp))
-                KillSwitchRow(
-                    title = "Custom Broadcasts",
-                    variableName = KillSwitchTarget.CUSTOM_BROADCAST.variableName,
-                    enabled = ks.customBroadcastEnabled,
-                    canMutate = (vault.isBackendEnrolled || hasPat) && !uiState.isUpdatingKillSwitch,
-                    onToggleRequest = { next ->
-                        viewModel.requestKillSwitchToggle(KillSwitchTarget.CUSTOM_BROADCAST, next)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .candyPressable(
+                            onClick = { showEmergencySwitches = !showEmergencySwitches },
+                            onClickLabel = "Toggle emergency switches"
+                        )
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DevSectionTitle("Emergency Switches", modifier = Modifier.weight(1f).padding(end = 8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        DevToneBadge(
+                            label = if (ks.customBroadcastEnabled == true && ks.releaseAutomationEnabled == true) "Armed" else "Check",
+                            tone = if (ks.customBroadcastEnabled == true && ks.releaseAutomationEnabled == true) "enabled" else "warning"
+                        )
+                        Icon(
+                            imageVector = if (showEmergencySwitches) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = colors.secondaryText
+                        )
                     }
-                )
-                Spacer(Modifier.height(10.dp))
-                KillSwitchRow(
-                    title = "Release Automation",
-                    variableName = KillSwitchTarget.RELEASE_AUTOMATION.variableName,
-                    enabled = ks.releaseAutomationEnabled,
-                    canMutate = (vault.isBackendEnrolled || hasPat) && !uiState.isUpdatingKillSwitch,
-                    onToggleRequest = { next ->
-                        viewModel.requestKillSwitchToggle(KillSwitchTarget.RELEASE_AUTOMATION, next)
+                }
+                AnimatedVisibility(visible = showEmergencySwitches) {
+                    Column {
+                        Spacer(Modifier.height(8.dp))
+                        KillSwitchRow(
+                            title = "Custom Broadcasts",
+                            variableName = KillSwitchTarget.CUSTOM_BROADCAST.variableName,
+                            enabled = ks.customBroadcastEnabled,
+                            canMutate = (vault.isBackendEnrolled || hasPat) && !uiState.isUpdatingKillSwitch,
+                            onToggleRequest = { next ->
+                                viewModel.requestKillSwitchToggle(KillSwitchTarget.CUSTOM_BROADCAST, next)
+                            }
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        KillSwitchRow(
+                            title = "Release Automation",
+                            variableName = KillSwitchTarget.RELEASE_AUTOMATION.variableName,
+                            enabled = ks.releaseAutomationEnabled,
+                            canMutate = (vault.isBackendEnrolled || hasPat) && !uiState.isUpdatingKillSwitch,
+                            onToggleRequest = { next ->
+                                viewModel.requestKillSwitchToggle(KillSwitchTarget.RELEASE_AUTOMATION, next)
+                            }
+                        )
                     }
-                )
+                }
             }
         }
 
@@ -840,29 +880,46 @@ private fun KillSwitchRow(
     onToggleRequest: (Boolean) -> Unit
 ) {
     val colors = SpatialTheme.colors
+    val label = when (enabled) {
+        true -> "Enabled"
+        false -> "Paused"
+        null -> "Unknown"
+    }
+    val tone = when (enabled) {
+        true -> "enabled"
+        false -> "paused"
+        null -> "warning"
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp),
+            .heightIn(min = 52.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = colors.primaryText)
-            Text(variableName, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+        Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.primaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                DevToneBadge(label = label, tone = tone)
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = variableName,
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                color = colors.secondaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        val label = when (enabled) {
-            true -> "Enabled"
-            false -> "Paused"
-            null -> "Unknown"
-        }
-        val tone = when (enabled) {
-            true -> "enabled"
-            false -> "paused"
-            null -> "warning"
-        }
-        DevToneBadge(label = label, tone = tone)
-        Spacer(Modifier.padding(horizontal = 4.dp))
         PrismaticButton(
             text = if (enabled == true) "Pause" else "Enable",
             onClick = { onToggleRequest(enabled != true) },

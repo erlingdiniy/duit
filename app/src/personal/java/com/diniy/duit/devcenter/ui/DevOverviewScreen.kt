@@ -1,16 +1,33 @@
 package com.diniy.duit.devcenter.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material.icons.rounded.MarkEmailUnread
+import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.NewReleases
+import androidx.compose.material.icons.rounded.People
+import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.QueryStats
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,11 +48,13 @@ import com.diniy.duit.devcenter.DevCenterSection
 import com.diniy.duit.devcenter.DevCenterUiState
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DevOverviewScreen(
     uiState: DevCenterUiState,
     onSelectSection: (DevCenterSection) -> Unit,
     onSelectDateRange: (AnalyticsDateRange) -> Unit,
+    onTriggerSync: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = SpatialTheme.colors
@@ -48,9 +67,28 @@ fun DevOverviewScreen(
         !uiState.vault.encryptedAnalyticsToken.isNullOrBlank() ||
         !uiState.vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
 
+    val services = uiState.infraSnapshot.services
+    val healthyCount = services.count { it.state == "healthy" }
+    val issueCount = services.count { it.state == "error" || it.state == "warning" }
+
+    val statusTitle = when {
+        uiState.isRefreshing -> "Syncing Telemetry"
+        health.connected && isEnrolled -> "Mission Control Live"
+        health.connected -> "GitHub Connected"
+        gaReady?.isCached == true -> "Cached Snapshot"
+        isEnrolled -> "Worker Offline"
+        else -> "Setup Required"
+    }
+    val statusDotColor = when {
+        uiState.errorBanner != null -> tokens.dangerTint
+        uiState.isRefreshing || gaReady?.isCached == true -> tokens.warningTint
+        health.connected -> tokens.healthyTint
+        else -> tokens.warningTint
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "ov_sync_status") {
@@ -59,73 +97,84 @@ fun DevOverviewScreen(
                 tier = SpatialGlassTier.Elevated,
                 accentTint = if (health.connected) tokens.healthyTint else tokens.warningTint
             ) {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically
                 ) {
-                    DevSectionTitle("Overview")
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (isEnrolled) {
-                            DevToneBadge(
-                                label = if (health.connected) "Mission Control Live" else "Syncing",
-                                tone = if (health.connected) "healthy" else "cached"
-                            )
-                            DevToneBadge(label = "Hardware Key", tone = "healthy")
-                        } else {
-                            DevToneBadge(
-                                label = if (health.connected) "GitHub Live" else "GitHub Unset",
-                                tone = if (health.connected) "healthy" else "warning"
-                            )
-                            DevToneBadge(
-                                label = if (hasOAuth) "Google Linked" else "Google Unset",
-                                tone = if (hasOAuth) "healthy" else "warning"
-                            )
-                        }
-                        if (gaReady?.isCached == true) {
-                            DevToneBadge(label = "Cached", tone = "cached")
-                        }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(statusDotColor)
+                        )
+                        Text(
+                            text = statusTitle,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = colors.primaryText
+                        )
+                    }
+                    if (isEnrolled) {
+                        DevToneBadge(label = "Hardware Key", tone = "healthy")
+                    }
+                    if (gaReady?.isCached == true) {
+                        DevToneBadge(label = "Cached", tone = "cached")
                     }
                 }
                 Spacer(Modifier.height(6.dp))
                 DevKeyValueRow(
-                    label = "Updated",
+                    label = "Last Sync",
                     value = formatIsoShort(uiState.vault.lastFullSyncIso ?: health.checkedAtIso)
                 )
-                Spacer(Modifier.height(6.dp))
-                DevChoiceChipRow(
+                Spacer(Modifier.height(8.dp))
+                DevSegmentedBar(
                     items = AnalyticsDateRange.entries,
                     selected = uiState.analyticsDateRange,
                     labelOf = { it.label },
                     onSelect = onSelectDateRange
                 )
-                Spacer(Modifier.height(8.dp))
-                PrismaticButton(
-                    text = if (!health.connected || !hasOAuth) "Open Settings" else "Broadcast",
-                    onClick = {
-                        onSelectSection(
-                            if (!health.connected || !hasOAuth) DevCenterSection.SETTINGS
-                            else DevCenterSection.NOTIFICATIONS
+                if (!health.connected || !hasOAuth) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PrismaticButton(
+                            text = "Retry Sync",
+                            onClick = onTriggerSync,
+                            enabled = !uiState.isRefreshing,
+                            variant = PrismaticButtonVariant.Secondary,
+                            modifier = Modifier.weight(1f)
                         )
-                    },
-                    variant = PrismaticButtonVariant.Primary,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                        if (!hasOAuth) {
+                            PrismaticButton(
+                                text = "Settings",
+                                onClick = { onSelectSection(DevCenterSection.SETTINGS) },
+                                variant = PrismaticButtonVariant.Primary,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
             }
         }
 
         item(key = "ov_users_kpis") {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 DevMetricTile(
                     title = "Observed Users",
                     value = gaReady?.totalUsers?.toString() ?: "—",
-                    sub = gaReady?.let { "Daily ${it.dau}, Weekly ${it.wau}, Monthly ${it.mau}" } ?: "Opted-in analytics",
+                    sub = gaReady?.let { "DAU ${it.dau}, WAU ${it.wau}" } ?: "Opted-in telemetry",
+                    icon = Icons.Rounded.People,
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(24.dp))
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(tokens.cardCornerDp.dp))
                         .candyPressable(
                             onClick = { onSelectSection(DevCenterSection.ANALYTICS) },
                             onClickLabel = "Open Analytics"
@@ -135,96 +184,169 @@ fun DevOverviewScreen(
                     title = "New Users",
                     value = gaReady?.newUsers?.toString() ?: "—",
                     sub = gaReady?.let { "${it.returningRatePercent}% returning" }
-                        ?: if (isEnrolled) "Awaiting analytics sync" else "Enroll owner device",
-                    modifier = Modifier.weight(1f)
+                        ?: if (isEnrolled) "Awaiting cloud sync" else "Enroll owner device",
+                    icon = Icons.Rounded.PersonAdd,
+                    accentTint = tokens.secondaryAccent,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(tokens.cardCornerDp.dp))
+                        .candyPressable(
+                            onClick = { onSelectSection(DevCenterSection.ANALYTICS) },
+                            onClickLabel = "Open Analytics"
+                        )
                 )
             }
         }
 
         item(key = "ov_quality_kpis") {
+            val unread = uiState.unreadFeedbackCount
+            val openBugs = uiState.openBugReportCount
+            val openFeatures = uiState.openFeatureRequestCount
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 DevMetricTile(
-                    title = "Crash-Free Users",
+                    title = "Crash-Free",
                     value = gaReady?.crashFreeUsersPercent?.let {
                         String.format(Locale.US, "%.2f%%", it)
                     } ?: "—",
                     sub = gaReady?.let { "${it.crashAffectedUsers} affected" } ?: "Not measured yet",
                     accentTint = tokens.healthyTint,
+                    icon = Icons.Rounded.VerifiedUser,
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(24.dp))
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(tokens.cardCornerDp.dp))
                         .candyPressable(
                             onClick = { onSelectSection(DevCenterSection.CRASH_REPORTS) },
                             onClickLabel = "Open Crash Reports"
                         )
                 )
-                    val unread = uiState.unreadFeedbackCount
-                val openBugs = uiState.openBugReportCount
-                val openFeatures = uiState.openFeatureRequestCount
                 DevMetricTile(
-                    title = "Unread Feedback",
+                    title = "Unread Inbox",
                     value = unread.toString(),
-                    sub = "$openBugs open bugs, $openFeatures features",
+                    sub = "$openBugs bugs, $openFeatures ideas",
                     accentTint = if (unread > 0) tokens.warningTint else null,
+                    icon = Icons.Rounded.MarkEmailUnread,
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(24.dp))
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(tokens.cardCornerDp.dp))
                         .candyPressable(
                             onClick = { onSelectSection(DevCenterSection.FEEDBACK) },
-                            onClickLabel = "Open Feedback"
+                            onClickLabel = "Open Inbox"
                         )
                 )
             }
         }
 
         item(key = "ov_growth_chart") {
-            if (gaReady != null && gaReady.growthTrend.isNotEmpty()) {
-                SpatialGlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .candyPressable(
-                            onClick = { onSelectSection(DevCenterSection.ANALYTICS) },
-                            onClickLabel = "Open Analytics"
-                        ),
-                    tier = SpatialGlassTier.Standard
-                ) {
-                    DevSectionTitle("User Growth (${gaReady.dateRange.label})")
-                    Spacer(Modifier.height(6.dp))
-                    DevSparklineChart(
-                        labels = gaReady.growthTrend.map { it.dateLabel },
-                        values = gaReady.growthTrend.map { it.activeUsers.toFloat() },
-                        unitSuffix = " users"
+            when (val aState = uiState.analyticsState) {
+                AnalyticsSourceState.Loading -> {
+                    DevLoadingSkeletonCard(lines = 3)
+                }
+                is AnalyticsSourceState.Error -> {
+                    DevErrorStateCard(
+                        title = "Activity Unavailable",
+                        message = aState.message,
+                        primaryLabel = "Retry",
+                        onPrimary = onTriggerSync,
+                        secondaryLabel = "Analytics",
+                        onSecondary = { onSelectSection(DevCenterSection.ANALYTICS) }
                     )
                 }
-            } else {
-                SpatialGlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .candyPressable(
-                            onClick = { onSelectSection(DevCenterSection.ANALYTICS) },
-                            onClickLabel = "Open Analytics"
-                        ),
-                    tier = SpatialGlassTier.Standard,
-                    accentTint = colors.warning
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                is AnalyticsSourceState.Ready if aState.snapshot.growthTrend.isNotEmpty() -> {
+                    SpatialGlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(tokens.cardCornerDp.dp))
+                            .candyPressable(
+                                onClick = { onSelectSection(DevCenterSection.ANALYTICS) },
+                                onClickLabel = "Open Analytics"
+                            ),
+                        tier = SpatialGlassTier.Standard
                     ) {
-                        DevSectionTitle("User Growth")
-                        DevToneBadge(label = "Unavailable", tone = "warning")
+                        DevSectionHeader(
+                            title = "User Activity (${aState.snapshot.dateRange.label})",
+                            trailingLabel = "Analytics",
+                            onTrailingClick = { onSelectSection(DevCenterSection.ANALYTICS) }
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        DevSparklineChart(
+                            labels = aState.snapshot.growthTrend.map { it.dateLabel },
+                            values = aState.snapshot.growthTrend.map { it.activeUsers.toFloat() },
+                            unitSuffix = " users"
+                        )
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = if (isEnrolled) "Awaiting scheduled keyless WIF analytics sync." else "Connect Google Analytics in Settings.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.secondaryText
+                }
+                else -> {
+                    DevEmptyStateCard(
+                        icon = Icons.Rounded.QueryStats,
+                        title = "No Activity Trend Yet",
+                        subtitle = if (isEnrolled) {
+                            "Awaiting scheduled keyless WIF analytics sync."
+                        } else {
+                            "Connect Google Analytics in Settings."
+                        },
+                        actionLabel = if (isEnrolled) "Sync Cloud" else "Open Settings",
+                        onAction = {
+                            if (isEnrolled) onTriggerSync() else onSelectSection(DevCenterSection.SETTINGS)
+                        }
+                    )
+                }
+            }
+        }
+
+        item(key = "ov_quick_actions") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DevSectionTitle(
+                    title = "Quick Access",
+                    modifier = Modifier.padding(horizontal = 2.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    DevQuickActionTile(
+                        icon = Icons.Rounded.Campaign,
+                        label = "Broadcast",
+                        subtitle = "Send or schedule",
+                        accentTint = tokens.primaryAccent,
+                        onClick = { onSelectSection(DevCenterSection.NOTIFICATIONS) },
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    )
+                    DevQuickActionTile(
+                        icon = Icons.Rounded.NewReleases,
+                        label = "Releases",
+                        subtitle = dash.latestStable?.version?.let { "Stable $it" }
+                            ?: dash.latestBeta?.version?.let { "Beta $it" }
+                            ?: "Build ledger",
+                        accentTint = tokens.secondaryAccent,
+                        onClick = { onSelectSection(DevCenterSection.RELEASES) },
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    DevQuickActionTile(
+                        icon = Icons.Rounded.MonitorHeart,
+                        label = "System Health",
+                        subtitle = if (services.isNotEmpty()) "$healthyCount/${services.size} healthy" else "Run checks",
+                        accentTint = if (issueCount == 0) tokens.healthyTint else tokens.warningTint,
+                        onClick = { onSelectSection(DevCenterSection.INFRASTRUCTURE) },
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    )
+                    DevQuickActionTile(
+                        icon = Icons.Rounded.Sync,
+                        label = "Sync Cloud",
+                        subtitle = if (uiState.isRefreshing) "Refreshing..." else "Update snapshot",
+                        accentTint = tokens.healthyTint,
+                        onClick = onTriggerSync,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                 }
             }
@@ -234,45 +356,28 @@ fun DevOverviewScreen(
             SpatialGlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(tokens.cardCornerDp.dp))
                     .candyPressable(
                         onClick = { onSelectSection(DevCenterSection.RELEASES) },
                         onClickLabel = "Open Releases"
                     ),
                 tier = SpatialGlassTier.Standard
             ) {
-                DevSectionTitle("Releases")
-                Spacer(Modifier.height(6.dp))
+                DevSectionHeader(
+                    title = "Releases",
+                    trailingLabel = "View All",
+                    onTrailingClick = { onSelectSection(DevCenterSection.RELEASES) }
+                )
+                Spacer(Modifier.height(4.dp))
                 DevKeyValueRow(label = "Latest Stable", value = dash.latestStable?.version ?: "—")
                 DevKeyValueRow(label = "Latest Beta", value = dash.latestBeta?.version ?: "—")
                 DevKeyValueRow(label = "Private Build", value = dash.latestPrivateDev?.version ?: "—")
-                DevKeyValueRow(label = "App Downloads", value = dash.totalApkDownloads.toString())
+                DevKeyValueRow(label = "Total Downloads", value = dash.totalApkDownloads.toString())
                 val topVer = gaReady?.appVersions?.firstOrNull()
                 if (topVer != null && gaReady.totalUsers > 0L) {
                     val share = ((topVer.users * 100L) / gaReady.totalUsers).coerceIn(0L, 100L)
-                    DevKeyValueRow(label = "Top Version Share", value = "${topVer.label} ($share%)")
+                    DevKeyValueRow(label = "Top Version", value = "v${topVer.label} ($share%)")
                 }
-            }
-        }
-
-        item(key = "ov_infra_summary") {
-            val services = uiState.infraSnapshot.services
-            val healthy = services.count { it.state == "healthy" }
-            val warnOrErr = services.count { it.state == "warning" || it.state == "error" }
-            SpatialGlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .candyPressable(
-                        onClick = { onSelectSection(DevCenterSection.INFRASTRUCTURE) },
-                        onClickLabel = "Open Infrastructure"
-                    ),
-                tier = SpatialGlassTier.Standard
-            ) {
-                DevSectionTitle("Service Status")
-                Spacer(Modifier.height(4.dp))
-                DevKeyValueRow(label = "Healthy Checks", value = "$healthy / ${services.size}")
-                DevKeyValueRow(label = "Alerts", value = warnOrErr.toString())
             }
         }
 
@@ -280,19 +385,23 @@ fun DevOverviewScreen(
             SpatialGlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(tokens.cardCornerDp.dp))
                     .candyPressable(
                         onClick = { onSelectSection(DevCenterSection.AUDIT_LOGS) },
                         onClickLabel = "Open Audit Logs"
                     ),
                 tier = SpatialGlassTier.Standard
             ) {
-                DevSectionTitle("Recent Activity")
+                DevSectionHeader(
+                    title = "Recent Activity",
+                    trailingLabel = "Audit Logs",
+                    onTrailingClick = { onSelectSection(DevCenterSection.AUDIT_LOGS) }
+                )
                 Spacer(Modifier.height(6.dp))
                 val recents = uiState.combinedAuditLog.take(4)
                 if (recents.isEmpty()) {
                     Text(
-                        text = "No activity recorded yet.",
+                        text = "No developer actions recorded yet.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.secondaryText
                     )

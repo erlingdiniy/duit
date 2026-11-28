@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,7 +26,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.diniy.duit.core.ui.components.PrismaticButton
 import com.diniy.duit.core.ui.components.PrismaticButtonVariant
-import com.diniy.duit.core.ui.components.PrismaticTextField
 import com.diniy.duit.core.ui.components.SpatialGlassCard
 import com.diniy.duit.core.ui.components.SpatialGlassTier
 import com.diniy.duit.core.ui.theme.SpatialTheme
@@ -86,7 +87,7 @@ fun DevAuditLogsScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "audit_filters") {
@@ -96,7 +97,7 @@ fun DevAuditLogsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DevSectionTitle("Security & Action Logs")
+                    DevSectionTitle("Security & Action Logs", modifier = Modifier.weight(1f).padding(end = 8.dp))
                     PrismaticButton(
                         text = "Copy Logs",
                         onClick = {
@@ -110,10 +111,9 @@ fun DevAuditLogsScreen(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                PrismaticTextField(
+                DevSearchField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = "Search logs",
                     placeholder = "Action, target, actor or summary"
                 )
                 Spacer(Modifier.height(8.dp))
@@ -141,13 +141,11 @@ fun DevAuditLogsScreen(
 
         if (filtered.isEmpty()) {
             item(key = "audit_empty") {
-                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                    Text(
-                        text = "No audit events match this filter.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.secondaryText
-                    )
-                }
+                DevEmptyStateCard(
+                    icon = Icons.Rounded.History,
+                    title = "No Audit Events",
+                    subtitle = "No recorded security or administrative events match this filter."
+                )
             }
         } else {
             items(filtered, key = { it.id }) { event ->
@@ -177,7 +175,9 @@ fun DevAuditLogsScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "${event.actor}, ${event.target}, ${formatIsoShort(event.timestampIso)}",
+                        text = listOf(event.actor, event.target, formatIsoShort(event.timestampIso))
+                            .filter { it.isNotBlank() && it != "—" }
+                            .joinToString(", "),
                         style = MaterialTheme.typography.labelMedium,
                         color = colors.secondaryText
                     )

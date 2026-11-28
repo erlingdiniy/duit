@@ -1,16 +1,20 @@
 package com.diniy.duit.devcenter.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Analytics
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,7 +27,6 @@ import com.diniy.duit.core.ui.components.PrismaticButton
 import com.diniy.duit.core.ui.components.PrismaticButtonVariant
 import com.diniy.duit.core.ui.components.SpatialGlassCard
 import com.diniy.duit.core.ui.components.SpatialGlassTier
-import com.diniy.duit.core.ui.theme.SpatialTheme
 import com.diniy.duit.devcenter.AnalyticsDateRange
 import com.diniy.duit.devcenter.AnalyticsSourceState
 import com.diniy.duit.devcenter.DevCenterUiState
@@ -38,7 +41,6 @@ fun DevAnalyticsScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colors = SpatialTheme.colors
     val tokens = rememberDevThemeTokens()
     val context = LocalContext.current
     val optInEnabled = UsageAnalytics.isCollectionEnabled()
@@ -50,9 +52,18 @@ fun DevAnalyticsScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item(key = "an_filters") {
+            DevSegmentedBar(
+                items = AnalyticsDateRange.entries,
+                selected = uiState.analyticsDateRange,
+                labelOf = { it.label },
+                onSelect = onSelectDateRange
+            )
+        }
+
         item(key = "an_scope_card") {
             SpatialGlassCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -71,7 +82,7 @@ fun DevAnalyticsScreen(
                     )
                 }
                 Spacer(Modifier.height(6.dp))
-                DevKeyValueRow(label = "Scope", value = "Opted-in users only (internal excluded)")
+                DevKeyValueRow(label = "Scope", value = "Opted-in users only")
                 DevKeyValueRow(label = "App Downloads", value = uiState.dashboard.totalApkDownloads.toString())
                 DevKeyValueRow(label = "Channel", value = "$channel, ${trafficType ?: "public"}")
                 DevKeyValueRow(label = "Ad Tracking", value = "Disabled")
@@ -85,27 +96,10 @@ fun DevAnalyticsScreen(
             }
         }
 
-        item(key = "an_filters") {
-            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                DevSectionTitle("Date Range")
-                Spacer(Modifier.height(6.dp))
-                DevChoiceChipRow(
-                    items = AnalyticsDateRange.entries,
-                    selected = uiState.analyticsDateRange,
-                    labelOf = { it.label },
-                    onSelect = onSelectDateRange
-                )
-            }
-        }
-
         when (val state = uiState.analyticsState) {
             AnalyticsSourceState.Loading -> {
                 item(key = "an_loading") {
-                    SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                        DevSectionTitle("Loading Analytics")
-                        Spacer(Modifier.height(8.dp))
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
+                    DevLoadingSkeletonCard(lines = 4)
                 }
             }
 
@@ -133,44 +127,26 @@ fun DevAnalyticsScreen(
 
             is AnalyticsSourceState.Empty -> {
                 item(key = "an_empty") {
-                    SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                        DevSectionTitle("No Observed Events")
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = "No events in last ${state.dateRange.days} days.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.secondaryText
-                        )
-                    }
+                    DevEmptyStateCard(
+                        icon = Icons.Rounded.Analytics,
+                        title = "No Observed Events",
+                        subtitle = "No analytics activity recorded in the last ${state.dateRange.days} days.",
+                        actionLabel = "Refresh",
+                        onAction = onRefresh
+                    )
                 }
             }
 
             is AnalyticsSourceState.Error -> {
                 item(key = "an_error") {
-                    SpatialGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        tier = SpatialGlassTier.Standard,
-                        accentTint = colors.error
-                    ) {
-                        DevSectionTitle("Analytics Error")
-                        Spacer(Modifier.height(6.dp))
-                        Text(state.message, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PrismaticButton(
-                                text = "Retry",
-                                onClick = onRefresh,
-                                variant = PrismaticButtonVariant.Primary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrismaticButton(
-                                text = "Settings",
-                                onClick = onOpenSettings,
-                                variant = PrismaticButtonVariant.Secondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+                    DevErrorStateCard(
+                        title = "Analytics Error",
+                        message = state.message,
+                        primaryLabel = "Retry",
+                        onPrimary = onRefresh,
+                        secondaryLabel = "Settings",
+                        onSecondary = onOpenSettings
+                    )
                 }
             }
 
@@ -202,35 +178,47 @@ fun DevAnalyticsScreen(
                 }
 
                 item(key = "an_kpi_1") {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         DevMetricTile(
                             title = "Total Observed",
                             value = snap.totalUsers.toString(),
                             sub = "${snap.sessions} visits",
-                            modifier = Modifier.weight(1f)
+                            icon = Icons.Rounded.Group,
+                            modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                         DevMetricTile(
                             title = "New / Returning",
                             value = "${snap.newUsers} / ${snap.returningUsers}",
                             sub = "${snap.returningRatePercent}% returning",
-                            modifier = Modifier.weight(1f)
+                            icon = Icons.Rounded.PersonAdd,
+                            accentTint = tokens.secondaryAccent,
+                            modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
                 }
 
                 item(key = "an_kpi_2") {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         DevMetricTile(
                             title = "DAU / WAU / MAU",
                             value = "${snap.dau} / ${snap.wau} / ${snap.mau}",
                             sub = "Retention ${snap.dauPerMauPercent}%",
-                            modifier = Modifier.weight(1f)
+                            icon = Icons.Rounded.Timeline,
+                            accentTint = tokens.healthyTint,
+                            modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                         DevMetricTile(
                             title = "Avg Visit",
                             value = "${snap.avgEngagementSeconds}s",
                             sub = "Updates ${snap.updateAdoptions}",
-                            modifier = Modifier.weight(1f)
+                            icon = Icons.Rounded.Schedule,
+                            modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
                 }
@@ -292,7 +280,7 @@ fun DevAnalyticsScreen(
                         if (snap.releaseChannels.isNotEmpty()) {
                             Spacer(Modifier.height(10.dp))
                             DevRankedBarList(
-                                rows = snap.releaseChannels.map { Triple("Channel: ${it.label}", it.users, "${it.users} users") },
+                                rows = snap.releaseChannels.map { Triple("Channel ${it.label}", it.users, "${it.users} users") },
                                 accent = tokens.healthyTint
                             )
                         }

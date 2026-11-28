@@ -1,13 +1,19 @@
 package com.diniy.duit.devcenter.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.CheckCircleOutline
+import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,9 +38,9 @@ import com.diniy.duit.diagnostics.CrashReporting
 import java.util.Locale
 
 private enum class CrashBreakdownTab(val label: String) {
-    APP_VERSION("App Version"),
+    APP_VERSION("Version"),
     ANDROID_VERSION("Android"),
-    DEVICE("Device Model")
+    DEVICE("Device")
 }
 
 private enum class CrashConsoleTarget(val label: String, val query: String) {
@@ -62,27 +68,27 @@ fun DevCrashReportsScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "crash_period") {
-            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                DevSectionTitle("Crash Metrics Window")
-                Spacer(Modifier.height(6.dp))
-                DevChoiceChipRow(
-                    items = AnalyticsDateRange.entries,
-                    selected = uiState.analyticsDateRange,
-                    labelOf = { it.label },
-                    onSelect = onSelectDateRange
-                )
-            }
+            DevSegmentedBar(
+                items = AnalyticsDateRange.entries,
+                selected = uiState.analyticsDateRange,
+                labelOf = { it.label },
+                onSelect = onSelectDateRange
+            )
         }
 
-        if (readySnap == null) {
+        if (uiState.analyticsState is AnalyticsSourceState.Loading) {
+            item(key = "crash_loading") {
+                DevLoadingSkeletonCard(lines = 3)
+            }
+        } else if (readySnap == null) {
             item(key = "crash_ga_unavailable") {
                 val enrolled = uiState.vault.isBackendEnrolled
                 DevUnavailableCard(
-                    title = "Observed Exception Telemetry",
+                    title = "Exception Telemetry",
                     summary = if (enrolled) {
                         "Awaiting first scheduled keyless WIF analytics sync for crash-free metrics."
                     } else {
@@ -95,7 +101,7 @@ fun DevCrashReportsScreen(
         } else {
             item(key = "crash_kpis_1") {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     DevMetricTile(
@@ -105,7 +111,8 @@ fun DevCrashReportsScreen(
                         } ?: "—",
                         sub = "${readySnap.activeUsers} observed users",
                         accentTint = tokens.healthyTint,
-                        modifier = Modifier.weight(1f)
+                        icon = Icons.Rounded.VerifiedUser,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                     DevMetricTile(
                         title = "Crash-Free Visits",
@@ -114,14 +121,15 @@ fun DevCrashReportsScreen(
                         } ?: "—",
                         sub = "${readySnap.sessions} visits",
                         accentTint = tokens.secondaryAccent,
-                        modifier = Modifier.weight(1f)
+                        icon = Icons.Rounded.CheckCircleOutline,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                 }
             }
 
             item(key = "crash_kpis_2") {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     DevMetricTile(
@@ -129,13 +137,15 @@ fun DevCrashReportsScreen(
                         value = readySnap.crashAffectedUsers.toString(),
                         sub = "Opted-in app_exception",
                         accentTint = if (readySnap.crashAffectedUsers > 0L) tokens.warningTint else tokens.healthyTint,
-                        modifier = Modifier.weight(1f)
+                        icon = Icons.Rounded.WarningAmber,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                     DevMetricTile(
                         title = "Exception Events",
                         value = readySnap.crashEventCount.toString(),
                         sub = if (readySnap.isCached) "Cached snapshot" else "Live signal",
-                        modifier = Modifier.weight(1f)
+                        icon = Icons.Rounded.BugReport,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                 }
             }
@@ -143,14 +153,14 @@ fun DevCrashReportsScreen(
             item(key = "crash_breakdowns") {
                 SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
                     DevSectionTitle("Exception Breakdown")
-                    Spacer(Modifier.height(6.dp))
-                    DevChoiceChipRow(
+                    Spacer(Modifier.height(8.dp))
+                    DevSegmentedBar(
                         items = CrashBreakdownTab.entries,
                         selected = breakdownTab,
                         labelOf = { it.label },
                         onSelect = { breakdownTab = it }
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
                     val rows = when (breakdownTab) {
                         CrashBreakdownTab.APP_VERSION -> readySnap.crashesByAppVersion
                         CrashBreakdownTab.ANDROID_VERSION -> readySnap.crashesByOsVersion
@@ -198,7 +208,7 @@ fun DevCrashReportsScreen(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "Stack traces, non-fatals, and ANRs open directly in Firebase Console on the free plan.",
+                    text = "Stack traces, non-fatals, and ANRs open in Firebase Console on the free plan.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.secondaryText
                 )

@@ -2,15 +2,21 @@ package com.diniy.duit.devcenter.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.NewReleases
+import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +46,7 @@ fun DevReleasesScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = SpatialTheme.colors
+    val tokens = rememberDevThemeTokens()
     val context = LocalContext.current
     val dash = uiState.dashboard
     val gaSnap = (uiState.analyticsState as? AnalyticsSourceState.Ready)?.snapshot
@@ -54,22 +61,28 @@ fun DevReleasesScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
+        contentPadding = devListContentPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "rel_summary") {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 DevMetricTile(
                     title = "Stable",
                     value = dash.latestStable?.version ?: "—",
                     sub = "${dash.latestStable?.downloadCount ?: 0} downloads",
-                    modifier = Modifier.weight(1f)
+                    icon = Icons.Rounded.Verified,
+                    accentTint = tokens.healthyTint,
+                    modifier = Modifier.weight(1f).fillMaxHeight()
                 )
                 DevMetricTile(
                     title = "Private Dev",
                     value = dash.latestPrivateDev?.version ?: "—",
                     sub = "${dash.latestBeta?.version ?: "No beta"} beta",
-                    modifier = Modifier.weight(1f)
+                    icon = Icons.Rounded.Code,
+                    modifier = Modifier.weight(1f).fillMaxHeight()
                 )
             }
         }
@@ -86,17 +99,17 @@ fun DevReleasesScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DevSectionTitle("Installed APK Integrity")
+                        DevSectionTitle("Installed APK Integrity", modifier = Modifier.weight(1f).padding(end = 8.dp))
                         DevToneBadge(
                             label = if (integrity.matchesOriginalCert) "Verified" else "Mismatch",
                             tone = if (integrity.matchesOriginalCert) "verified" else "mismatch"
                         )
                     }
                     Spacer(Modifier.height(6.dp))
-                    DevKeyValueRow(label = "Package", value = integrity.packageName)
+                    DevKeyValueRow(label = "Package", value = integrity.packageName, monospaced = true)
                     DevKeyValueRow(label = "Version", value = "v${integrity.versionName} (${integrity.versionCode})")
                     DevKeyValueRow(label = "Private Meta", value = if (integrity.hasPrivateDevMeta) "Present" else "Absent")
-                    DevKeyValueRow(label = "Signer SHA-256", value = "${integrity.signerSha256.take(16)}...")
+                    DevKeyValueRow(label = "Signer SHA-256", value = "${integrity.signerSha256.take(16)}...", monospaced = true)
                     Spacer(Modifier.height(6.dp))
                     PrismaticButton(
                         text = "Copy Cert",
@@ -115,23 +128,25 @@ fun DevReleasesScreen(
         }
 
         item(key = "release_filter_chips") {
-            DevChoiceChipRow(
+            DevSegmentedBar(
                 items = ReleaseChannelFilter.entries,
                 selected = uiState.releaseFilter,
-                labelOf = { it.label },
+                labelOf = { filter ->
+                    if (filter == ReleaseChannelFilter.PRIVATE_DEV) "Private" else filter.label
+                },
                 onSelect = onSelectFilter
             )
         }
 
         if (releases.isEmpty()) {
             item(key = "releases_empty") {
-                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                    Text(
-                        text = "No releases found. Tap refresh to query GitHub.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.secondaryText
-                    )
-                }
+                DevEmptyStateCard(
+                    icon = Icons.Rounded.NewReleases,
+                    title = "No Matching Releases",
+                    subtitle = "Switch channel filter or tap refresh to query GitHub.",
+                    actionLabel = "Refresh",
+                    onAction = viewModel::refreshAll
+                )
             }
         } else {
             items(releases, key = { "${it.repoSlug}-${it.tag}" }) { release ->
@@ -166,13 +181,13 @@ fun DevReleasesScreen(
                         DevToneBadge(label = channelBadge.first, tone = channelBadge.second)
                     }
                     Spacer(Modifier.height(8.dp))
-                    DevKeyValueRow(label = "Repository", value = release.repoSlug)
-                    DevKeyValueRow(label = "APK File", value = release.assetName ?: "No APK attached")
+                    DevKeyValueRow(label = "Repository", value = release.repoSlug, monospaced = true)
+                    DevKeyValueRow(label = "APK File", value = release.assetName ?: "No APK attached", monospaced = true)
                     DevKeyValueRow(label = "APK Size", value = formatApkSizeMb(release.assetSizeBytes))
                     DevKeyValueRow(label = "Downloads", value = release.downloadCount.toString())
                     DevKeyValueRow(label = "GA4 Adoption", value = adoptionText)
                     release.versionCode?.let { DevKeyValueRow(label = "Version Code", value = it.toString()) }
-                    release.sha256?.let { DevKeyValueRow(label = "SHA-256", value = "${it.take(16)}...") }
+                    release.sha256?.let { DevKeyValueRow(label = "SHA-256", value = "${it.take(16)}...", monospaced = true) }
                     DevKeyValueRow(label = "Broadcast Ledger", value = release.notificationStatus)
 
                     if (release.changelogBullets.isNotEmpty() || release.rawBody.isNotBlank()) {
@@ -180,7 +195,7 @@ fun DevReleasesScreen(
                         val bulletsToShow = if (isNotesExpanded) release.changelogBullets else release.changelogBullets.take(3)
                         bulletsToShow.forEach { bullet ->
                             Text(
-                                text = "- $bullet",
+                                text = "• $bullet",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.secondaryText
                             )
