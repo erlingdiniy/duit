@@ -18,5 +18,7 @@ object UsageAnalytics {
 
     fun logUpdatePromptAction(result: String) = Unit
 
+    fun logThemeSelected(themeKey: String) = Unit
+
     fun logQaVerificationBatch(context: Context) = Unit
 }

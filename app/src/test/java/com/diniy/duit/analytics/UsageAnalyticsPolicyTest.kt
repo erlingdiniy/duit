@@ -96,6 +96,21 @@ class UsageAnalyticsPolicyTest {
             mapOf("feature" to "x".repeat(45))
         )
         assertTrue(oversized.isEmpty())
+
+        val validTheme = UsageAnalyticsPolicy.buildThemeSelectedParams(
+            themeKey = "liquid_glass",
+            versionName = "1.3.0",
+            isPrivateDev = false,
+            isQaTest = false
+        )
+        assertEquals(mapOf("theme" to "liquid_glass", "release_channel" to "stable"), validTheme)
+        val invalidTheme = UsageAnalyticsPolicy.buildThemeSelectedParams(
+            themeKey = "RM_SECRET_THEME",
+            versionName = "1.3.0",
+            isPrivateDev = true,
+            isQaTest = false
+        )
+        assertFalse(invalidTheme.containsKey("theme"))
     }
 
     @Test

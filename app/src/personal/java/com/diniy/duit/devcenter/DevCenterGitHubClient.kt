@@ -98,7 +98,8 @@ class DevCenterGitHubClient(
     suspend fun fetchDashboardSnapshot(
         pat: String,
         distributionRepo: String,
-        consoleRepo: String
+        consoleRepo: String,
+        privateUpdateRepo: String = DEFAULT_PRIVATE_UPDATE_REPO
     ): DashboardSnapshot = coroutineScope {
         val cleanPat = pat.trim()
         val relDeferred = async {
@@ -109,6 +110,16 @@ class DevCenterGitHubClient(
                     authHeaders(cleanPat)
                 )
             }
+        }
+        val privRelDeferred = async {
+            if (cleanPat.isEmpty() || privateUpdateRepo.isBlank() || privateUpdateRepo == distributionRepo) null
+            else runCatching {
+                transport.request(
+                    "GET",
+                    "https://api.github.com/repos/$privateUpdateRepo/releases?per_page=15",
+                    authHeaders(cleanPat)
+                )
+            }.getOrNull()
         }
         val ledgerDeferred = async {
             runCatching {
@@ -162,6 +173,7 @@ class DevCenterGitHubClient(
         }
 
         val relRes = relDeferred.await().getOrNull()
+        val privRelRes = privRelDeferred.await()
         val ledgerRes = ledgerDeferred.await().getOrNull()
         val distRunsRes = distRunsDeferred.await().getOrNull()
         val consoleRunsRes = consoleRunsDeferred.await().getOrNull()
@@ -177,12 +189,25 @@ class DevCenterGitHubClient(
             null
         }
 
-        val releases = if (relRes?.isSuccess == true) {
-            parseReleases(relRes.body, ledgerJson)
+        val publicReleases = if (relRes?.isSuccess == true) {
+            parseReleases(relRes.body, ledgerJson).map {
+                it.copy(repoSlug = distributionRepo, isPrivate = false)
+            }
         } else {
             notices += "Releases unavailable (${relRes?.statusCode ?: "offline"})."
             emptyList()
         }
+        val privateReleases = if (privRelRes?.isSuccess == true) {
+            parseReleases(privRelRes.body, null).map {
+                it.copy(
+                    channel = "private_dev",
+                    notificationStatus = "private_only",
+                    repoSlug = privateUpdateRepo,
+                    isPrivate = true
+                )
+            }
+        } else emptyList()
+        val releases = (publicReleases + privateReleases).sortedByDescending { it.publishedAt.orEmpty() }
 
         val distRuns = if (distRunsRes?.isSuccess == true) {
             parseWorkflowRuns(distRunsRes.body, distributionRepo)
@@ -399,7 +424,8 @@ class DevCenterGitHubClient(
                         assetDownloadUrl = apkObj?.optString("browser_download_url")?.takeIf { it.isNotBlank() },
                         sha256 = sha256,
                         notificationStatus = entry?.optString("status")?.takeIf { it.isNotBlank() } ?: "unrecorded",
-                        changelogBullets = changelog
+                        changelogBullets = changelog,
+                        rawBody = r.optString("body").take(3000)
                     )
                 )
             }

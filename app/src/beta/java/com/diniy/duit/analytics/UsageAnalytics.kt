@@ -116,6 +116,23 @@ object UsageAnalytics {
         }
     }
 
+    fun logThemeSelected(themeKey: String) {
+        if (!collectionEnabled) return
+        val params = UsageAnalyticsPolicy.buildThemeSelectedParams(
+            themeKey = themeKey,
+            versionName = BuildConfig.VERSION_NAME,
+            isPrivateDev = BuildConfig.PRIVATE_DEV_EDITION,
+            isQaTest = BuildConfig.ANALYTICS_QA_TEST
+        )
+        val validTheme = params["theme"] ?: return
+        appContext?.let { ctx ->
+            runCatching {
+                FirebaseAnalytics.getInstance(ctx).setUserProperty("visual_theme", validTheme)
+            }
+        }
+        dispatchEvent(AnalyticsEventName.THEME_SELECTED, params)
+    }
+
     /** Only invoked behind BuildConfig.ANALYTICS_QA_TEST during isolated emulator QA verification. */
     fun logQaVerificationBatch(context: Context) {
         appContext = context.applicationContext

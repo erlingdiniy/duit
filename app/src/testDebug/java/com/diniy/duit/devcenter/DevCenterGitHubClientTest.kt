@@ -50,7 +50,7 @@ class DevCenterGitHubClientTest {
         val transport = RecordingTransport { method, url, body ->
             when {
                 url.endsWith("/user") -> DevHttpResponse(200, """{"login":"erlingdiniy"}""", mapOf("x-ratelimit-remaining" to "4980"))
-                url.contains("/releases") -> DevHttpResponse(
+                url.contains("/duit-beta/releases") -> DevHttpResponse(
                     200,
                     """
                     [
@@ -86,6 +86,7 @@ class DevCenterGitHubClientTest {
                     ]
                     """.trimIndent()
                 )
+                url.contains("/duit-developer-console/releases") -> DevHttpResponse(200, "[]")
                 url.contains("release-notifications.json") -> DevHttpResponse(
                     200,
                     """

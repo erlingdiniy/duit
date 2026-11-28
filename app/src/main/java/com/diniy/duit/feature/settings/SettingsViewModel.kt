@@ -120,7 +120,14 @@ class SettingsViewModel(
     }
 
     fun setVisualTheme(theme: com.diniy.duit.domain.model.VisualTheme) {
-        viewModelScope.launch { userPreferencesRepository.setVisualTheme(theme) }
+        viewModelScope.launch {
+            userPreferencesRepository.setVisualTheme(theme)
+            val themeKey = when (theme) {
+                com.diniy.duit.domain.model.VisualTheme.LIQUID_GLASS -> "liquid_glass"
+                com.diniy.duit.domain.model.VisualTheme.CANDY_BUBBLE -> "candy_bubble"
+            }
+            com.diniy.duit.analytics.UsageAnalytics.logThemeSelected(themeKey)
+        }
     }
 
     fun setGlassIntensity(intensity: GlassIntensity) {

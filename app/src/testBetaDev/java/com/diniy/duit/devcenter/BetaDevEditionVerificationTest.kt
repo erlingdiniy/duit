@@ -50,7 +50,7 @@ class BetaDevEditionVerificationTest {
         assertTrue(com.diniy.duit.analytics.UsageAnalytics.isSupported)
 
         assertTrue(DeveloperCenterEntryPoint.isAvailable)
-        assertFalse(EXPERIMENTAL_GA4_API_ENABLED)
+        assertTrue(EXPERIMENTAL_GA4_API_ENABLED)
         assertNotNull(DeveloperCenterEntryPoint.privacySummaryOrNull(fcmEnabled = true))
 
         // Core Developer Center classes must exist on betaDev classpath

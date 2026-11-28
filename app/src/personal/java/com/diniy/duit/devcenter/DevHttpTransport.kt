@@ -22,6 +22,8 @@ interface DevHttpTransport {
         headers: Map<String, String> = emptyMap(),
         body: String? = null
     ): DevHttpResponse
+
+    suspend fun probeGet(url: String): DevHttpResponse = DevHttpResponse(404, "")
 }
 
 /**
@@ -29,6 +31,44 @@ interface DevHttpTransport {
  * Blocks HTTP, custom ports, embedded credentials, and redirects outside the allowlist.
  */
 class HttpsUrlConnectionTransport : DevHttpTransport {
+
+    override suspend fun probeGet(url: String): DevHttpResponse = withContext(Dispatchers.IO) {
+        validateFeedbackHealthUri(URI(url), isRedirect = false)
+        var current = url
+        var redirects = 0
+        while (true) {
+            val parsed = URL(current)
+            val conn = (parsed.openConnection() as? HttpsURLConnection)
+                ?: throw SecurityException("HTTPS connection required.")
+            try {
+                conn.instanceFollowRedirects = false
+                conn.connectTimeout = 8_000
+                conn.readTimeout = 10_000
+                conn.requestMethod = "GET"
+                conn.useCaches = false
+                conn.setRequestProperty("Accept", "application/json")
+                val code = conn.responseCode
+                if (code in 300..399 && redirects == 0) {
+                    val location = conn.getHeaderField("Location")
+                        ?: throw SecurityException("Missing feedback redirect target.")
+                    val resolved = URI(current).resolve(location)
+                    validateFeedbackHealthUri(resolved, isRedirect = true)
+                    current = resolved.toString()
+                    redirects += 1
+                } else {
+                    if (code in 300..399) {
+                        throw SecurityException("Blocked extra redirect (HTTP $code) on feedback probe.")
+                    }
+                    val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                    val responseBody = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                    return@withContext DevHttpResponse(statusCode = code, body = responseBody)
+                }
+            } finally {
+                conn.disconnect()
+            }
+        }
+        DevHttpResponse(500, "")
+    }
 
     override suspend fun request(
         method: String,
@@ -85,8 +125,25 @@ class HttpsUrlConnectionTransport : DevHttpTransport {
             "api.github.com",
             "sheets.googleapis.com",
             "analyticsdata.googleapis.com",
-            "oauth2.googleapis.com"
+            "oauth2.googleapis.com",
+            "firebaseremoteconfig.googleapis.com",
+            "fcm.googleapis.com",
+            "fcmdata.googleapis.com"
         )
+
+        fun validateFeedbackHealthUri(uri: URI, isRedirect: Boolean) {
+            if (!uri.scheme.equals("https", ignoreCase = true) ||
+                !uri.userInfo.isNullOrEmpty() ||
+                (uri.port != -1 && uri.port != 443)
+            ) {
+                throw SecurityException("Feedback health probe requires clean HTTPS URL.")
+            }
+            val host = uri.host?.lowercase().orEmpty()
+            val expectedHost = if (isRedirect) "script.googleusercontent.com" else "script.google.com"
+            if (host != expectedHost) {
+                throw SecurityException("Host \"$host\" is outside the feedback health allowlist.")
+            }
+        }
 
         fun validateAllowlistedHttpsUrl(rawUrl: String) {
             val uri = runCatching { URI(rawUrl) }.getOrElse {

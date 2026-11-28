@@ -412,7 +412,25 @@ val verifyBetaReleaseIsolation by tasks.registering {
             "oauth2.googleapis.com",
             "analytics.readonly",
             "com.googleusercontent.apps.",
-            "oauth2redirect"
+            "oauth2redirect",
+            "remoteConfig:listVersions",
+            "remoteConfig:rollback",
+            "fcmdata.googleapis.com",
+            "fcm.googleapis.com/v1/projects",
+            "DevCenterRemoteConfigClient",
+            "DevCenterInfraMonitor",
+            "DevCenterGitHubManager",
+            "DevFeedbackTriageEngine",
+            "DevCenterSingleDeviceFcmClient",
+            "DevCenterThemeTokens",
+            "DevCrashReportsScreen",
+            "DevRemoteConfigScreen",
+            "DevGitHubScreen",
+            "DevInfrastructureScreen",
+            "DevAuditLogsScreen",
+            "duit_dev_alerts",
+            "https://www.googleapis.com/auth/firebase.remoteconfig",
+            "spreadsheets.readonly"
         )
         val allowedBetaPermissions = setOf(
             "android.permission.INTERNET",
@@ -528,10 +546,12 @@ dependencies {
     "betaImplementation"(libs.firebase.analytics)
     "betaImplementation"(libs.firebase.messaging)
     "betaImplementation"(libs.firebase.crashlytics)
+    "betaImplementation"(libs.firebase.config)
     "betaDevImplementation"(platform(libs.firebase.bom))
     "betaDevImplementation"(libs.firebase.analytics)
     "betaDevImplementation"(libs.firebase.messaging)
     "betaDevImplementation"(libs.firebase.crashlytics)
+    "betaDevImplementation"(libs.firebase.config)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

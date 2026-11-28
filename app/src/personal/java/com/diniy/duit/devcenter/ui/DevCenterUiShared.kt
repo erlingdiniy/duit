@@ -1,7 +1,11 @@
 package com.diniy.duit.devcenter.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -135,11 +139,13 @@ internal fun DevToneBadge(
 ) {
     val colors = SpatialTheme.colors
     val (bg, fg) = when (tone.lowercase()) {
-        "success", "ok", "healthy", "sent", "accepted_by_fcm", "done", "reviewed", "enabled" ->
+        "success", "ok", "healthy", "sent", "accepted_by_fcm", "done", "reviewed",
+        "enabled", "resolved", "open", "private", "verified", "verified_remote" ->
             colors.successContainer to colors.onSuccessContainer
-        "warning", "partial", "ambiguous", "paused", "preseeded_skip", "blocked", "planned" ->
+        "warning", "partial", "ambiguous", "paused", "preseeded_skip", "blocked",
+        "planned", "degraded", "pending", "in_progress", "high", "unconfigured", "cached" ->
             colors.warningContainer to colors.onWarningContainer
-        "error", "failed", "failure" ->
+        "error", "failed", "failure", "offline", "critical", "public", "mismatch" ->
             colors.errorContainer to colors.onErrorContainer
         else ->
             colors.savingsContainer to colors.onSavingsContainer
@@ -255,6 +261,27 @@ internal fun android.content.Context.openHttpsUrl(url: String) {
     runCatching {
         startActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
+
+internal fun Context.copyToClipboard(label: String, value: String) {
+    if (value.isBlank()) return
+    runCatching {
+        val mgr = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        mgr.setPrimaryClip(ClipData.newPlainText(label, value))
+        Toast.makeText(this, "Copied $label", Toast.LENGTH_SHORT).show()
+    }
+}
+
+internal fun Context.openMailto(email: String, subject: String) {
+    val cleanEmail = email.trim()
+    if (cleanEmail.isBlank() || !cleanEmail.contains("@")) return
+    runCatching {
+        val uri = Uri.parse("mailto:${Uri.encode(cleanEmail)}?subject=${Uri.encode(subject)}")
+        startActivity(
+            Intent(Intent.ACTION_SENDTO, uri)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }

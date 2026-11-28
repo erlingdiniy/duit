@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,6 +53,7 @@ import com.diniy.duit.core.ui.components.candySwitchColors
 import com.diniy.duit.core.ui.theme.SpatialTheme
 import com.diniy.duit.devcenter.DevAuthUiState
 import com.diniy.duit.devcenter.DevAutoLockTimeout
+import com.diniy.duit.devcenter.DevCenterAnalyticsOAuth
 import com.diniy.duit.devcenter.DevCenterUiState
 import com.diniy.duit.devcenter.DevCenterViewModel
 import com.diniy.duit.devcenter.EXPERIMENTAL_GA4_API_ENABLED
@@ -70,9 +73,11 @@ fun DevSettingsScreen(
 
     // Sensitive fields use remember (never rememberSaveable) so Binder saved state never stores credentials.
     var patInput by remember { mutableStateOf("") }
+    var sourceRepoInput by remember(vault.sourceRepo) { mutableStateOf(vault.sourceRepo) }
     var distRepoInput by remember(vault.distributionRepo) { mutableStateOf(vault.distributionRepo) }
     var consoleRepoInput by remember(vault.consoleRepo) { mutableStateOf(vault.consoleRepo) }
     var privateUpdateRepoInput by remember(vault.privateUpdateRepo) { mutableStateOf(vault.privateUpdateRepo) }
+    var firebaseProjectInput by remember(vault.firebaseProjectId) { mutableStateOf(vault.firebaseProjectId) }
     var sheetIdInput by remember(vault.feedbackSheetId) { mutableStateOf(vault.feedbackSheetId) }
     var sheetRangeInput by remember(vault.feedbackSheetRange) { mutableStateOf(vault.feedbackSheetRange) }
     var sheetsTokenInput by remember { mutableStateOf("") }
@@ -81,8 +86,19 @@ fun DevSettingsScreen(
     var ga4OAuthClientIdInput by remember(effectiveOAuthClientId) { mutableStateOf(effectiveOAuthClientId) }
     var analyticsTokenInput by remember { mutableStateOf("") }
 
-    var githubExpanded by remember { mutableStateOf(vault.encryptedGithubPat.isNullOrBlank()) }
-    var analyticsExpanded by remember { mutableStateOf(false) }
+    val selectedScopes = remember(vault.googleGrantedScopes) {
+        mutableStateListOf<String>().apply {
+            val base = if (vault.googleGrantedScopes.isNotEmpty()) {
+                vault.googleGrantedScopes
+            } else {
+                DevCenterAnalyticsOAuth.DEFAULT_MISSION_CONTROL_SCOPES.toSet()
+            }
+            addAll(base)
+        }
+    }
+
+    var githubExpanded by remember { mutableStateOf(false) }
+    var googleExpanded by remember { mutableStateOf(false) }
     var showManualAnalyticsToken by remember { mutableStateOf(false) }
     var feedbackExpanded by remember { mutableStateOf(false) }
     var showChangePinDialog by remember { mutableStateOf(false) }
@@ -106,7 +122,7 @@ fun DevSettingsScreen(
             title = { Text("Clear Credentials") },
             text = {
                 Text(
-                    "Removes saved GitHub key, Analytics token, and Sheets access from Developer Center storage. Financial data stays untouched.",
+                    "Removes saved GitHub key, Google OAuth tokens, and Sheets access from Developer Center storage. Financial records stay untouched.",
                     style = MaterialTheme.typography.bodySmall
                 )
             },
@@ -139,32 +155,160 @@ fun DevSettingsScreen(
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item(key = "kill_switches") {
+        item(key = "google_mission_oauth") {
+            val hasGoogleAuth = !vault.encryptedAnalyticsToken.isNullOrBlank() ||
+                !vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
+            val autoRefreshReady = vault.analyticsAuthMode == "oauth" &&
+                !vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
+
             SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                DevSectionTitle("Emergency Switches")
-                Spacer(Modifier.height(8.dp))
-
-                KillSwitchRow(
-                    title = "Custom Broadcasts",
-                    variableName = KillSwitchTarget.CUSTOM_BROADCAST.variableName,
-                    enabled = ks.customBroadcastEnabled,
-                    canMutate = hasPat && !uiState.isUpdatingKillSwitch,
-                    onToggleRequest = { next ->
-                        viewModel.requestKillSwitchToggle(KillSwitchTarget.CUSTOM_BROADCAST, next)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .candyPressable(
+                            onClick = { googleExpanded = !googleExpanded },
+                            onClickLabel = "Toggle Google OAuth settings"
+                        )
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        DevSectionTitle("Google OAuth & GA4")
+                        Text(
+                            text = when {
+                                autoRefreshReady -> "Property ${vault.ga4PropertyId.ifBlank { "Unset" }}, Auto-refresh active"
+                                hasGoogleAuth -> "Property ${vault.ga4PropertyId.ifBlank { "Unset" }}, ${vault.analyticsTokenHint}"
+                                else -> "GA4, Sheets & Remote Config OAuth"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.secondaryText
+                        )
                     }
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                KillSwitchRow(
-                    title = "Release Automation",
-                    variableName = KillSwitchTarget.RELEASE_AUTOMATION.variableName,
-                    enabled = ks.releaseAutomationEnabled,
-                    canMutate = hasPat && !uiState.isUpdatingKillSwitch,
-                    onToggleRequest = { next ->
-                        viewModel.requestKillSwitchToggle(KillSwitchTarget.RELEASE_AUTOMATION, next)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        DevToneBadge(
+                            label = if (hasGoogleAuth) "Connected" else "Unset",
+                            tone = if (hasGoogleAuth) "ok" else "warning"
+                        )
+                        Icon(
+                            imageVector = if (googleExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = colors.secondaryText
+                        )
                     }
-                )
+                }
+
+                AnimatedVisibility(visible = googleExpanded) {
+                    Column {
+                        Spacer(Modifier.height(8.dp))
+                        PrismaticTextField(
+                            value = ga4PropertyInput,
+                            onValueChange = { if (it.length <= 15 && it.all(Char::isDigit)) ga4PropertyInput = it },
+                            label = "GA4 Property ID",
+                            placeholder = "565972794"
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        PrismaticTextField(
+                            value = firebaseProjectInput,
+                            onValueChange = { firebaseProjectInput = it.trim().take(64) },
+                            label = "Firebase Project ID",
+                            placeholder = "duit-beta"
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        PrismaticTextField(
+                            value = ga4OAuthClientIdInput,
+                            onValueChange = { ga4OAuthClientIdInput = it },
+                            label = "Android OAuth Client ID",
+                            placeholder = "digits-id.apps.googleusercontent.com"
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text("Requested OAuth Scopes", style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
+                        val scopeOptions = listOf(
+                            DevCenterAnalyticsOAuth.ANALYTICS_READONLY_SCOPE to "GA4 Analytics (Read-Only)",
+                            DevCenterAnalyticsOAuth.SHEETS_READONLY_SCOPE to "Google Sheets Feedback (Read-Only)",
+                            DevCenterAnalyticsOAuth.REMOTE_CONFIG_SCOPE to "Firebase Remote Config",
+                            DevCenterAnalyticsOAuth.SHEETS_READWRITE_SCOPE to "Google Sheets Triage Sync (Read/Write)"
+                        )
+                        scopeOptions.forEach { (scopeUri, label) ->
+                            val checked = scopeUri in selectedScopes
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .toggleable(
+                                        value = checked,
+                                        role = Role.Checkbox,
+                                        onValueChange = { on ->
+                                            if (on && scopeUri !in selectedScopes) selectedScopes.add(scopeUri)
+                                            else if (!on) selectedScopes.remove(scopeUri)
+                                        }
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(checked = checked, onCheckedChange = null)
+                                Text(label, style = MaterialTheme.typography.bodySmall, color = colors.primaryText)
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PrismaticButton(
+                                text = "Google Sign-In",
+                                onClick = {
+                                    viewModel.startAnalyticsGoogleSignIn(
+                                        propertyId = ga4PropertyInput,
+                                        oauthClientId = ga4OAuthClientIdInput,
+                                        scopes = selectedScopes.toList()
+                                    ) { url -> context.openHttpsUrl(url) }
+                                },
+                                enabled = EXPERIMENTAL_GA4_API_ENABLED && selectedScopes.isNotEmpty(),
+                                variant = PrismaticButtonVariant.Primary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            PrismaticButton(
+                                text = "Sign Out",
+                                onClick = viewModel::clearAnalyticsSource,
+                                variant = PrismaticButtonVariant.Ghost,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        TextButton(
+                            onClick = { showManualAnalyticsToken = !showManualAnalyticsToken },
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Text(
+                                text = if (showManualAnalyticsToken) "Hide Manual Key" else "Manual Key Fallback",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                        AnimatedVisibility(visible = showManualAnalyticsToken) {
+                            Column {
+                                SecretInputField(
+                                    value = analyticsTokenInput,
+                                    onValueChange = { analyticsTokenInput = it },
+                                    label = "Read-Only Access Key",
+                                    placeholder = "Optional ya29... token"
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                PrismaticButton(
+                                    text = "Save Key",
+                                    onClick = {
+                                        viewModel.saveAnalyticsConfig(
+                                            propertyId = ga4PropertyInput,
+                                            rawAnalyticsToken = analyticsTokenInput,
+                                            oauthClientId = ga4OAuthClientIdInput
+                                        )
+                                        analyticsTokenInput = ""
+                                    },
+                                    variant = PrismaticButtonVariant.Secondary,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -184,21 +328,11 @@ fun DevSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        DevSectionTitle("GitHub Connection")
-                        Text(
-                            text = vault.githubPatHint,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.secondaryText
-                        )
+                        DevSectionTitle("GitHub Multi-Repo & PAT")
+                        Text(vault.githubPatHint, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        DevToneBadge(
-                            label = if (hasPat) "Saved" else "Unset",
-                            tone = if (hasPat) "ok" else "warning"
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        DevToneBadge(label = if (hasPat) "Saved" else "Unset", tone = if (hasPat) "ok" else "warning")
                         Icon(
                             imageVector = if (githubExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                             contentDescription = null,
@@ -211,7 +345,7 @@ fun DevSettingsScreen(
                     Column {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "Keystore-encrypted GitHub key with Actions read/write and Contents read access.",
+                            text = "Least-privilege fine-grained PAT: Contents (Read), Actions (Read/Write), Variables (Read/Write), Issues (Read/Write). Zero admin/delete access.",
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.secondaryText
                         )
@@ -221,6 +355,13 @@ fun DevSettingsScreen(
                             onValueChange = { patInput = it },
                             label = "GitHub PAT",
                             placeholder = if (hasPat) "Configured (${vault.githubPatHint})" else "github_pat_..."
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        PrismaticTextField(
+                            value = sourceRepoInput,
+                            onValueChange = { sourceRepoInput = it },
+                            label = "Source Repo",
+                            placeholder = "erlingdiniy/duit"
                         )
                         Spacer(Modifier.height(8.dp))
                         PrismaticTextField(
@@ -246,13 +387,15 @@ fun DevSettingsScreen(
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PrismaticButton(
-                                text = "Save PAT",
+                                text = "Save",
                                 onClick = {
                                     viewModel.saveGithubCredentials(
-                                        patInput,
-                                        distRepoInput,
-                                        consoleRepoInput,
-                                        privateUpdateRepoInput
+                                        rawPat = patInput,
+                                        distributionRepo = distRepoInput,
+                                        consoleRepo = consoleRepoInput,
+                                        privateUpdateRepo = privateUpdateRepoInput,
+                                        sourceRepo = sourceRepoInput,
+                                        firebaseProjectId = firebaseProjectInput
                                     )
                                     patInput = ""
                                 },
@@ -260,7 +403,7 @@ fun DevSettingsScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             PrismaticButton(
-                                text = "Test Link",
+                                text = "Test",
                                 onClick = viewModel::runConnectionHealthCheck,
                                 enabled = hasPat && !uiState.isRefreshing,
                                 variant = PrismaticButtonVariant.Secondary,
@@ -289,154 +432,6 @@ fun DevSettingsScreen(
             }
         }
 
-        item(key = "analytics_source") {
-            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .candyPressable(
-                            onClick = { analyticsExpanded = !analyticsExpanded },
-                            onClickLabel = "Toggle Analytics API settings"
-                        )
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val hasAnalyticsAuth = !vault.encryptedAnalyticsToken.isNullOrBlank() ||
-                        !vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
-                    val isAutoRefreshOAuth = vault.analyticsAuthMode == "oauth" &&
-                        !vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
-                    Column(modifier = Modifier.weight(1f)) {
-                        DevSectionTitle("Analytics Source (GA4)")
-                        Text(
-                            text = when {
-                                !EXPERIMENTAL_GA4_API_ENABLED ->
-                                    "Unavailable for production use"
-                                isAutoRefreshOAuth ->
-                                    "Property ${vault.ga4PropertyId.ifBlank { "Unset" }} · Auto-refresh active"
-                                vault.ga4PropertyId.isBlank() ->
-                                    "Read-only Google sign-in · Auto-refresh"
-                                else ->
-                                    "Property ${vault.ga4PropertyId} · ${vault.analyticsTokenHint}"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.secondaryText
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        DevToneBadge(
-                            label = when {
-                                !EXPERIMENTAL_GA4_API_ENABLED -> "Experimental"
-                                hasAnalyticsAuth -> "Connected"
-                                else -> "Unset"
-                            },
-                            tone = when {
-                                !EXPERIMENTAL_GA4_API_ENABLED -> "warning"
-                                hasAnalyticsAuth -> "ok"
-                                else -> "warning"
-                            }
-                        )
-                        Icon(
-                            imageVector = if (analyticsExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                            contentDescription = null,
-                            tint = colors.secondaryText
-                        )
-                    }
-                }
-
-                AnimatedVisibility(visible = analyticsExpanded) {
-                    Column {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = if (EXPERIMENTAL_GA4_API_ENABLED) {
-                                "Reads aggregate usage reports with your Google account. Secret keys never ship inside this app."
-                            } else {
-                                "Experimental GA4 sync is unverified and unavailable for production use. Use Firebase Console in Analytics instead."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.secondaryText
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        PrismaticTextField(
-                            value = ga4PropertyInput,
-                            onValueChange = { if (it.length <= 15 && it.all(Char::isDigit)) ga4PropertyInput = it },
-                            label = "GA4 Property ID",
-                            placeholder = "565972794"
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        PrismaticTextField(
-                            value = ga4OAuthClientIdInput,
-                            onValueChange = { ga4OAuthClientIdInput = it },
-                            label = "Google Client ID",
-                            placeholder = "digits-id.apps.googleusercontent.com"
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PrismaticButton(
-                                text = "Google Sign-In",
-                                onClick = {
-                                    viewModel.startAnalyticsGoogleSignIn(
-                                        propertyId = ga4PropertyInput,
-                                        oauthClientId = ga4OAuthClientIdInput
-                                    ) { url -> context.openHttpsUrl(url) }
-                                },
-                                enabled = EXPERIMENTAL_GA4_API_ENABLED,
-                                variant = PrismaticButtonVariant.Primary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            PrismaticButton(
-                                text = "Disconnect",
-                                onClick = viewModel::clearAnalyticsSource,
-                                variant = PrismaticButtonVariant.Ghost,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        TextButton(
-                            onClick = { showManualAnalyticsToken = !showManualAnalyticsToken },
-                            modifier = Modifier.heightIn(min = 48.dp)
-                        ) {
-                            Text(
-                                text = if (showManualAnalyticsToken) "Hide Manual Key" else "Manual Key",
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
-                        AnimatedVisibility(visible = showManualAnalyticsToken) {
-                            Column {
-                                Spacer(Modifier.height(6.dp))
-                                SecretInputField(
-                                    value = analyticsTokenInput,
-                                    onValueChange = { analyticsTokenInput = it },
-                                    label = "Read-Only Access Key",
-                                    placeholder = "Optional ya29... analytics.readonly"
-                                )
-                                Spacer(Modifier.height(10.dp))
-                                PrismaticButton(
-                                    text = "Save Key",
-                                    onClick = {
-                                        viewModel.saveAnalyticsConfig(
-                                            propertyId = ga4PropertyInput,
-                                            rawAnalyticsToken = analyticsTokenInput,
-                                            oauthClientId = ga4OAuthClientIdInput
-                                        )
-                                        analyticsTokenInput = ""
-                                    },
-                                    enabled = EXPERIMENTAL_GA4_API_ENABLED,
-                                    variant = PrismaticButtonVariant.Secondary,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         item(key = "feedback_source") {
             SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
                 Row(
@@ -455,7 +450,7 @@ fun DevSettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         DevSectionTitle("Feedback Source")
                         Text(
-                            text = if (vault.feedbackSheetId.isBlank()) "CSV import or Sheets read-only" else vault.sheetsTokenHint,
+                            text = if (vault.feedbackSheetId.isBlank()) "CSV import or Google Sheets OAuth" else vault.sheetsTokenHint,
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.secondaryText
                         )
@@ -487,9 +482,25 @@ fun DevSettingsScreen(
                         SecretInputField(
                             value = sheetsTokenInput,
                             onValueChange = { sheetsTokenInput = it },
-                            label = "Read-Only Sheets Access Key",
-                            placeholder = "Optional ya29... bearer key"
+                            label = "Optional Sheets Token Override",
+                            placeholder = "Uses Google OAuth when blank"
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .toggleable(
+                                    value = vault.feedbackAlertsEnabled,
+                                    role = Role.Switch,
+                                    onValueChange = viewModel::setFeedbackAlertsEnabled
+                                ),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("New Feedback Alerts (6h)", style = MaterialTheme.typography.bodyMedium, color = colors.primaryText)
+                            Switch(checked = vault.feedbackAlertsEnabled, onCheckedChange = null)
+                        }
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PrismaticButton(
@@ -513,11 +524,36 @@ fun DevSettingsScreen(
             }
         }
 
+        item(key = "kill_switches") {
+            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+                DevSectionTitle("Emergency Switches")
+                Spacer(Modifier.height(8.dp))
+                KillSwitchRow(
+                    title = "Custom Broadcasts",
+                    variableName = KillSwitchTarget.CUSTOM_BROADCAST.variableName,
+                    enabled = ks.customBroadcastEnabled,
+                    canMutate = hasPat && !uiState.isUpdatingKillSwitch,
+                    onToggleRequest = { next ->
+                        viewModel.requestKillSwitchToggle(KillSwitchTarget.CUSTOM_BROADCAST, next)
+                    }
+                )
+                Spacer(Modifier.height(10.dp))
+                KillSwitchRow(
+                    title = "Release Automation",
+                    variableName = KillSwitchTarget.RELEASE_AUTOMATION.variableName,
+                    enabled = ks.releaseAutomationEnabled,
+                    canMutate = hasPat && !uiState.isUpdatingKillSwitch,
+                    onToggleRequest = { next ->
+                        viewModel.requestKillSwitchToggle(KillSwitchTarget.RELEASE_AUTOMATION, next)
+                    }
+                )
+            }
+        }
+
         item(key = "dev_auth_settings") {
             SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
                 DevSectionTitle("Developer Security")
                 Spacer(Modifier.height(8.dp))
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -562,12 +598,26 @@ fun DevSettingsScreen(
                 )
 
                 Spacer(Modifier.height(10.dp))
-                PrismaticButton(
-                    text = "Change PIN",
-                    onClick = { showChangePinDialog = true },
-                    variant = PrismaticButtonVariant.Secondary,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrismaticButton(
+                        text = "Change PIN",
+                        onClick = { showChangePinDialog = true },
+                        variant = PrismaticButtonVariant.Secondary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    PrismaticButton(
+                        text = "Wipe Keys",
+                        onClick = { showWipeCredsDialog = true },
+                        variant = PrismaticButtonVariant.Ghost,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        if (BuildConfig.PRIVATE_DEV_EDITION) {
+            item(key = "dev_private_updates_shortcut") {
+                com.diniy.duit.update.EditionUpdateSettingsCard()
             }
         }
     }

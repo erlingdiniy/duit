@@ -16,7 +16,8 @@ data class PkceOAuthSession(
     val codeVerifier: String,
     val codeChallenge: String,
     val state: String,
-    val createdAtMs: Long
+    val createdAtMs: Long,
+    val scopes: List<String> = listOf(DevCenterAnalyticsOAuth.ANALYTICS_READONLY_SCOPE)
 )
 
 data class OAuthTokenExchangeResult(
@@ -68,6 +69,7 @@ class DevCenterAnalyticsOAuth(
 ) {
     fun generatePkceSession(
         clientId: String,
+        scopes: List<String> = listOf(ANALYTICS_READONLY_SCOPE),
         nowMs: Long = System.currentTimeMillis()
     ): PkceOAuthSession {
         val cleanClientId = clientId.trim()
@@ -80,6 +82,8 @@ class DevCenterAnalyticsOAuth(
         val challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(challengeDigest)
         val stateBytes = ByteArray(24).also { random.nextBytes(it) }
         val state = Base64.getUrlEncoder().withoutPadding().encodeToString(stateBytes)
+        val cleanScopes = scopes.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            .ifEmpty { listOf(ANALYTICS_READONLY_SCOPE) }
 
         return PkceOAuthSession(
             clientId = cleanClientId,
@@ -87,16 +91,18 @@ class DevCenterAnalyticsOAuth(
             codeVerifier = verifier,
             codeChallenge = challenge,
             state = state,
-            createdAtMs = nowMs
+            createdAtMs = nowMs,
+            scopes = cleanScopes
         )
     }
 
     fun buildAuthorizationUrl(session: PkceOAuthSession): String {
+        val scopeParam = session.scopes.distinct().joinToString(" ").ifBlank { ANALYTICS_READONLY_SCOPE }
         val params = listOf(
             "client_id" to session.clientId,
             "redirect_uri" to session.redirectUri,
             "response_type" to "code",
-            "scope" to ANALYTICS_READONLY_SCOPE,
+            "scope" to scopeParam,
             "code_challenge" to session.codeChallenge,
             "code_challenge_method" to "S256",
             "state" to session.state,
@@ -206,10 +212,33 @@ class DevCenterAnalyticsOAuth(
         )
     }
 
+    suspend fun revokeToken(token: String): Boolean {
+        val clean = token.trim()
+        if (clean.isEmpty()) return true
+        val res = runCatching {
+            transport.request(
+                method = "POST",
+                url = GOOGLE_REVOKE_ENDPOINT,
+                headers = mapOf("Content-Type" to "application/x-www-form-urlencoded"),
+                body = buildFormBody("token" to clean)
+            )
+        }.getOrNull() ?: return false
+        return res.isSuccess
+    }
+
     companion object {
         const val ANALYTICS_READONLY_SCOPE = "https://www.googleapis.com/auth/analytics.readonly"
+        const val SHEETS_READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
+        const val SHEETS_READWRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+        const val REMOTE_CONFIG_SCOPE = "https://www.googleapis.com/auth/firebase.remoteconfig"
+        val DEFAULT_MISSION_CONTROL_SCOPES = listOf(
+            ANALYTICS_READONLY_SCOPE,
+            SHEETS_READONLY_SCOPE,
+            REMOTE_CONFIG_SCOPE
+        )
         const val GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
         const val GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+        const val GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
         const val OAUTH_REDIRECT_PATH = "/oauth2redirect"
 
         fun schemeForClientId(clientId: String): String {

@@ -10,216 +10,283 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.diniy.duit.BuildConfig
 import com.diniy.duit.core.ui.components.PrismaticButton
 import com.diniy.duit.core.ui.components.PrismaticButtonVariant
 import com.diniy.duit.core.ui.components.SpatialGlassCard
 import com.diniy.duit.core.ui.components.SpatialGlassTier
+import com.diniy.duit.core.ui.components.candyPressable
 import com.diniy.duit.core.ui.theme.SpatialTheme
+import com.diniy.duit.devcenter.AnalyticsDateRange
+import com.diniy.duit.devcenter.AnalyticsSourceState
+import com.diniy.duit.devcenter.DevCenterSection
 import com.diniy.duit.devcenter.DevCenterUiState
-import com.diniy.duit.diagnostics.CrashReporting
-
-private const val CRASHLYTICS_CONSOLE_URL =
-    "https://console.firebase.google.com/project/duit-beta/crashlytics/app/android:com.diniy.duit.beta/issues"
+import java.util.Locale
 
 @Composable
 fun DevOverviewScreen(
     uiState: DevCenterUiState,
-    onOpenNotifications: () -> Unit,
-    onOpenHistory: () -> Unit,
-    onOpenReleases: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onSelectSection: (DevCenterSection) -> Unit,
+    onSelectDateRange: (AnalyticsDateRange) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = SpatialTheme.colors
-    val typography = SpatialTheme.typography
+    val tokens = rememberDevThemeTokens()
     val dash = uiState.dashboard
     val health = dash.health
+    val gaReady = (uiState.analyticsState as? AnalyticsSourceState.Ready)?.snapshot
+    val hasOAuth = !uiState.vault.encryptedAnalyticsToken.isNullOrBlank() ||
+        !uiState.vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item(key = "health_card") {
+        item(key = "ov_sync_status") {
             SpatialGlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 tier = SpatialGlassTier.Elevated,
-                accentTint = if (health.connected) colors.success else colors.warning
+                accentTint = if (health.connected) tokens.healthyTint else tokens.warningTint
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "System Health",
-                        style = typography.cardTitle,
-                        color = colors.primaryText
-                    )
-                    DevToneBadge(
-                        label = if (health.connected) "Live" else "Setup Needed",
-                        tone = if (health.connected) "healthy" else "warning"
-                    )
+                    DevSectionTitle("Overview")
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        DevToneBadge(
+                            label = if (health.connected) "GitHub Live" else "GitHub Unset",
+                            tone = if (health.connected) "healthy" else "warning"
+                        )
+                        DevToneBadge(
+                            label = if (hasOAuth) "Google Linked" else "Google Unset",
+                            tone = if (hasOAuth) "healthy" else "warning"
+                        )
+                        if (gaReady?.isCached == true) {
+                            DevToneBadge(label = "Cached", tone = "cached")
+                        }
+                    }
                 }
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    text = health.statusSummary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.secondaryText
+                DevKeyValueRow(
+                    label = "Updated",
+                    value = formatIsoShort(uiState.vault.lastFullSyncIso ?: health.checkedAtIso)
+                )
+                Spacer(Modifier.height(6.dp))
+                DevChoiceChipRow(
+                    items = AnalyticsDateRange.entries,
+                    selected = uiState.analyticsDateRange,
+                    labelOf = { it.label },
+                    onSelect = onSelectDateRange
                 )
                 Spacer(Modifier.height(8.dp))
-                DevKeyValueRow(
-                    label = "GitHub PAT",
-                    value = uiState.vault.githubPatHint
+                PrismaticButton(
+                    text = if (!health.connected || !hasOAuth) "Sign In" else "Broadcast",
+                    onClick = {
+                        onSelectSection(
+                            if (!health.connected || !hasOAuth) DevCenterSection.SETTINGS
+                            else DevCenterSection.NOTIFICATIONS
+                        )
+                    },
+                    variant = PrismaticButtonVariant.Primary,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                health.rateLimitRemaining?.let { limit ->
-                    DevKeyValueRow(label = "API Quota Left", value = "$limit req/hr")
-                }
-                if (!health.connected) {
-                    Spacer(Modifier.height(10.dp))
-                    PrismaticButton(
-                        text = "Connect GitHub",
-                        onClick = onOpenSettings,
-                        variant = PrismaticButtonVariant.Primary,
-                        modifier = Modifier.fillMaxWidth()
+            }
+        }
+
+        item(key = "ov_users_kpis") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                DevMetricTile(
+                    title = "Observed Users",
+                    value = gaReady?.totalUsers?.toString() ?: "—",
+                    sub = gaReady?.let { "Daily ${it.dau}, Weekly ${it.wau}, Monthly ${it.mau}" } ?: "Opted-in analytics",
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(24.dp))
+                        .candyPressable(
+                            onClick = { onSelectSection(DevCenterSection.ANALYTICS) },
+                            onClickLabel = "Open Analytics"
+                        )
+                )
+                DevMetricTile(
+                    title = "New Users",
+                    value = gaReady?.newUsers?.toString() ?: "—",
+                    sub = gaReady?.let { "${it.returningRatePercent}% returning" } ?: "Awaiting Google sign-in",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item(key = "ov_quality_kpis") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                DevMetricTile(
+                    title = "Crash-Free Users",
+                    value = gaReady?.crashFreeUsersPercent?.let {
+                        String.format(Locale.US, "%.2f%%", it)
+                    } ?: "—",
+                    sub = gaReady?.let { "${it.crashAffectedUsers} affected" } ?: "Not measured yet",
+                    accentTint = tokens.healthyTint,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(24.dp))
+                        .candyPressable(
+                            onClick = { onSelectSection(DevCenterSection.CRASH_REPORTS) },
+                            onClickLabel = "Open Crash Reports"
+                        )
+                )
+                val unread = uiState.unreadFeedbackCount
+                val openBugs = uiState.openBugReportCount
+                DevMetricTile(
+                    title = "Unread Feedback",
+                    value = unread.toString(),
+                    sub = if (openBugs == 1) "1 open bug" else "$openBugs open bugs",
+                    accentTint = if (unread > 0) tokens.warningTint else null,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(24.dp))
+                        .candyPressable(
+                            onClick = { onSelectSection(DevCenterSection.FEEDBACK) },
+                            onClickLabel = "Open Feedback"
+                        )
+                )
+            }
+        }
+
+        item(key = "ov_growth_chart") {
+            if (gaReady != null && gaReady.growthTrend.isNotEmpty()) {
+                SpatialGlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .candyPressable(
+                            onClick = { onSelectSection(DevCenterSection.ANALYTICS) },
+                            onClickLabel = "Open Analytics"
+                        ),
+                    tier = SpatialGlassTier.Standard
+                ) {
+                    DevSectionTitle("User Growth (${gaReady.dateRange.label})")
+                    Spacer(Modifier.height(6.dp))
+                    DevSparklineChart(
+                        labels = gaReady.growthTrend.map { it.dateLabel },
+                        values = gaReady.growthTrend.map { it.activeUsers.toFloat() },
+                        unitSuffix = " users"
                     )
                 }
-            }
-        }
-
-        item(key = "metrics_row_1") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                MetricTile(
-                    title = "Latest Stable",
-                    value = dash.latestStable?.version ?: "—",
-                    sub = "${dash.latestStable?.downloadCount ?: 0} downloads",
-                    modifier = Modifier.weight(1f)
-                )
-                MetricTile(
-                    title = "Latest Beta",
-                    value = dash.latestBeta?.version ?: "—",
-                    sub = "${dash.latestBeta?.downloadCount ?: 0} downloads",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        item(key = "metrics_row_2") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                MetricTile(
-                    title = "APK Downloads",
-                    value = dash.totalApkDownloads.toString(),
-                    sub = "${dash.releases.size} tracked releases",
-                    modifier = Modifier.weight(1f)
-                )
-                val autoLabel = when (dash.killSwitches.releaseAutomationEnabled) {
-                    true -> "Auto: ON"
-                    false -> "Auto: PAUSED"
-                    null -> "Auto: Unknown"
-                }
-                val customLabel = when (dash.killSwitches.customBroadcastEnabled) {
-                    true -> "Custom: ON"
-                    false -> "Custom: PAUSED"
-                    null -> "Custom: Sign In"
-                }
-                MetricTile(
-                    title = "Automation",
-                    value = autoLabel,
-                    sub = customLabel,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        item(key = "quick_compose") {
-            PrismaticButton(
-                text = "Compose Broadcast",
-                onClick = onOpenNotifications,
-                variant = PrismaticButtonVariant.Primary,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        if (BuildConfig.CRASHLYTICS_ENABLED) {
-            item(key = "crash_monitoring") {
-                val context = LocalContext.current
-                val optInEnabled = CrashReporting.isCollectionEnabled()
-                SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
+            } else {
+                SpatialGlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .candyPressable(
+                            onClick = { onSelectSection(DevCenterSection.ANALYTICS) },
+                            onClickLabel = "Open Analytics"
+                        ),
+                    tier = SpatialGlassTier.Standard,
+                    accentTint = colors.warning
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DevSectionTitle("Crash Monitoring")
-                        DevToneBadge(
-                            label = if (optInEnabled) "Opt-In ON" else "Opt-In OFF",
-                            tone = if (optInEnabled) "healthy" else "paused"
-                        )
+                        DevSectionTitle("User Growth")
+                        DevToneBadge(label = "Unavailable", tone = "warning")
                     }
-                    Spacer(Modifier.height(6.dp))
-                    DevKeyValueRow(label = "Channel", value = BuildConfig.RELEASE_CHANNEL)
-                    DevKeyValueRow(label = "Version", value = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                    DevKeyValueRow(
-                        label = "Analytics",
-                        value = if (com.diniy.duit.analytics.UsageAnalytics.isCollectionEnabled()) "Opt-In ON" else "Opt-In OFF"
-                    )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Firebase Console shows crash-free users, issue lists, affected versions, and recent trends without extra billing.",
+                        text = "Connect Google Analytics in Settings.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.secondaryText
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    PrismaticButton(
-                        text = "Open Console",
-                        onClick = { context.openHttpsUrl(CRASHLYTICS_CONSOLE_URL) },
-                        variant = PrismaticButtonVariant.Secondary,
-                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
         }
 
-        item(key = "workflows_section") {
-            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    DevSectionTitle("Recent Workflows")
-                    PrismaticButton(
-                        text = "Releases",
-                        onClick = onOpenReleases,
-                        variant = PrismaticButtonVariant.Ghost
-                    )
-                }
+        item(key = "ov_releases_summary") {
+            SpatialGlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .candyPressable(
+                        onClick = { onSelectSection(DevCenterSection.RELEASES) },
+                        onClickLabel = "Open Releases"
+                    ),
+                tier = SpatialGlassTier.Standard
+            ) {
+                DevSectionTitle("Releases")
                 Spacer(Modifier.height(6.dp))
-                val runs = dash.workflowRuns.take(4)
-                if (runs.isEmpty()) {
+                DevKeyValueRow(label = "Latest Stable", value = dash.latestStable?.version ?: "—")
+                DevKeyValueRow(label = "Latest Beta", value = dash.latestBeta?.version ?: "—")
+                DevKeyValueRow(label = "Private Build", value = dash.latestPrivateDev?.version ?: "—")
+                DevKeyValueRow(label = "App Downloads", value = dash.totalApkDownloads.toString())
+                val topVer = gaReady?.appVersions?.firstOrNull()
+                if (topVer != null && gaReady.totalUsers > 0L) {
+                    val share = ((topVer.users * 100L) / gaReady.totalUsers).coerceIn(0L, 100L)
+                    DevKeyValueRow(label = "Top Version Share", value = "${topVer.label} ($share%)")
+                }
+            }
+        }
+
+        item(key = "ov_infra_summary") {
+            val services = uiState.infraSnapshot.services
+            val healthy = services.count { it.state == "healthy" }
+            val warnOrErr = services.count { it.state == "warning" || it.state == "error" }
+            SpatialGlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .candyPressable(
+                        onClick = { onSelectSection(DevCenterSection.INFRASTRUCTURE) },
+                        onClickLabel = "Open Infrastructure"
+                    ),
+                tier = SpatialGlassTier.Standard
+            ) {
+                DevSectionTitle("Service Status")
+                Spacer(Modifier.height(4.dp))
+                DevKeyValueRow(label = "Healthy Checks", value = "$healthy / ${services.size}")
+                DevKeyValueRow(label = "Alerts", value = warnOrErr.toString())
+            }
+        }
+
+        item(key = "ov_recent_activity") {
+            SpatialGlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .candyPressable(
+                        onClick = { onSelectSection(DevCenterSection.AUDIT_LOGS) },
+                        onClickLabel = "Open Audit Logs"
+                    ),
+                tier = SpatialGlassTier.Standard
+            ) {
+                DevSectionTitle("Recent Activity")
+                Spacer(Modifier.height(6.dp))
+                val recents = uiState.vault.auditLog.take(4)
+                if (recents.isEmpty()) {
                     Text(
-                        text = "No workflow runs loaded.",
+                        text = "No activity recorded yet.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.secondaryText
                     )
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        runs.forEach { run ->
+                        recents.forEach { entry ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -227,117 +294,26 @@ fun DevOverviewScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                     Text(
-                                        text = run.workflowName,
+                                        text = entry.action,
                                         style = MaterialTheme.typography.labelLarge,
                                         color = colors.primaryText,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "${run.repo.substringAfter('/')}, ${formatIsoShort(run.createdAt)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = colors.secondaryText,
-                                        maxLines = 1
-                                    )
-                                }
-                                DevToneBadge(label = run.conclusion, tone = run.conclusion)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item(key = "broadcasts_section") {
-            SpatialGlassCard(modifier = Modifier.fillMaxWidth(), tier = SpatialGlassTier.Standard) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    DevSectionTitle("Recent Broadcasts")
-                    PrismaticButton(
-                        text = "History",
-                        onClick = onOpenHistory,
-                        variant = PrismaticButtonVariant.Ghost
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                val items = uiState.combinedBroadcastHistory.take(4)
-                if (items.isEmpty()) {
-                    Text(
-                        text = "No broadcast records loaded.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.secondaryText
-                    )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items.forEach { entry ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                    Text(
-                                        text = entry.title,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colors.primaryText,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "${entry.audience}, ${entry.broadcastId}",
+                                        text = "${entry.summary}, ${formatIsoShort(entry.timestampIso)}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = colors.secondaryText,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                                DevToneBadge(label = entry.statusLabel, tone = entry.status)
+                                DevToneBadge(label = entry.status, tone = entry.status)
                             }
                         }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun MetricTile(
-    title: String,
-    value: String,
-    sub: String,
-    modifier: Modifier = Modifier
-) {
-    val colors = SpatialTheme.colors
-    SpatialGlassCard(
-        modifier = modifier,
-        tier = SpatialGlassTier.Standard,
-        contentPadding = PaddingValues(14.dp)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelMedium,
-            color = colors.secondaryText,
-            maxLines = 1
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.primaryText,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = sub,
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.secondaryText,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }

@@ -34,14 +34,14 @@ class DevCenterAnalyticsOAuthTest {
 
     private class FakeProtector : SecretProtector {
         override fun seal(plaintext: String): String = "ENC[$plaintext]"
-        override fun unseal(envelope: String): String? =
-            envelope.takeIf { it.startsWith("ENC[") && it.endsWith("]") }
+        override fun unseal(ciphertext: String): String? =
+            ciphertext.takeIf { it.startsWith("ENC[") && it.endsWith("]") }
                 ?.removePrefix("ENC[")
                 ?.removeSuffix("]")
     }
 
     @Test
-    fun generatesValidPkceS256SessionAndCustomSchemeRedirect() {
+    fun generatesValidPkceS256SessionMultiScopeAndCustomSchemeRedirect() {
         val oauth = DevCenterAnalyticsOAuth(object : DevHttpTransport {
             override suspend fun request(
                 method: String,
@@ -69,6 +69,38 @@ class DevCenterAnalyticsOAuthTest {
         assertEquals("offline", authUri.getQueryParameter("access_type"))
         assertEquals("consent", authUri.getQueryParameter("prompt"))
         assertNull(authUri.getQueryParameter("client_secret"))
+
+        val multiSession = oauth.generatePkceSession(
+            sampleClientId,
+            scopes = DevCenterAnalyticsOAuth.DEFAULT_MISSION_CONTROL_SCOPES,
+            nowMs = 1_700_000_000_000L
+        )
+        val multiUri = Uri.parse(oauth.buildAuthorizationUrl(multiSession))
+        val scopeStr = multiUri.getQueryParameter("scope").orEmpty()
+        assertTrue(scopeStr.contains(DevCenterAnalyticsOAuth.ANALYTICS_READONLY_SCOPE))
+        assertTrue(scopeStr.contains(DevCenterAnalyticsOAuth.SHEETS_READONLY_SCOPE))
+        assertTrue(scopeStr.contains(DevCenterAnalyticsOAuth.REMOTE_CONFIG_SCOPE))
+    }
+
+    @Test
+    fun revokesActiveOAuthToken() = runBlocking {
+        var calledUrl = ""
+        var calledBody = ""
+        val oauth = DevCenterAnalyticsOAuth(object : DevHttpTransport {
+            override suspend fun request(
+                method: String,
+                url: String,
+                headers: Map<String, String>,
+                body: String?
+            ): DevHttpResponse {
+                calledUrl = url
+                calledBody = body.orEmpty()
+                return DevHttpResponse(200, "{}")
+            }
+        })
+        assertTrue(oauth.revokeToken("ya29.tokenToRevoke"))
+        assertEquals(DevCenterAnalyticsOAuth.GOOGLE_REVOKE_ENDPOINT, calledUrl)
+        assertTrue(calledBody.contains("token="))
     }
 
     @Test
@@ -131,10 +163,12 @@ class DevCenterAnalyticsOAuthTest {
                 if (auth == "Bearer ya29.expiredToken") {
                     return DevHttpResponse(401, """{"error":"UNAUTHENTICATED"}""")
                 }
-                return if (url.endsWith(":runRealtimeReport")) {
-                    DevHttpResponse(200, """{"rows":[{"dimensionValues":[{"value":"feature_used"}],"metricValues":[{"value":"3"}]}]}""")
-                } else {
-                    DevHttpResponse(200, "{}")
+                return when {
+                    url.endsWith(":runRealtimeReport") ->
+                        DevHttpResponse(200, """{"rows":[{"dimensionValues":[{"value":"feature_used"}],"metricValues":[{"value":"3"}]}]}""")
+                    url.endsWith(":batchRunReports") ->
+                        DevHttpResponse(200, """{"reports":[{},{"rows":[{"metricValues":[{"value":"5"},{"value":"5"},{"value":"1"},{"value":"8"}]}]},{},{},{}]}""")
+                    else -> DevHttpResponse(200, "{}")
                 }
             }
         }
@@ -157,7 +191,6 @@ class DevCenterAnalyticsOAuthTest {
             assertFalse("Token request must never contain client_secret", form.contains("client_secret"))
         }
 
-        // Verify DevCenterAnalyticsClient retries 401 via tokenResolver(forceRefresh = true) and surfaces realtime data
         var refreshInvocations = 0
         val analyticsClient = DevCenterAnalyticsClient(transport)
         val result = analyticsClient.loadAnalytics(
@@ -192,12 +225,14 @@ class DevCenterAnalyticsOAuthTest {
             accessToken = "ya29.accessSecretValue",
             refreshToken = "1//refreshSecretValue",
             expiresAtMs = 1_800_000_000_000L,
-            propertyId = "565972794"
+            propertyId = "565972794",
+            grantedScopes = DevCenterAnalyticsOAuth.DEFAULT_MISSION_CONTROL_SCOPES.toSet()
         )
         val saved = vault.getState()
         assertEquals("oauth", saved.analyticsAuthMode)
         assertEquals("565972794", saved.ga4PropertyId)
         assertEquals(sampleClientId, saved.ga4OAuthClientId)
+        assertEquals(3, saved.googleGrantedScopes.size)
         assertEquals("ya29.accessSecretValue", vault.readAnalyticsToken())
         assertEquals("1//refreshSecretValue", vault.readAnalyticsRefreshToken())
         assertNotNull(saved.encryptedAnalyticsRefreshToken)
@@ -210,11 +245,12 @@ class DevCenterAnalyticsOAuthTest {
         vault.clearAnalyticsSource()
         assertNull(vault.readAnalyticsToken())
         assertNull(vault.readAnalyticsRefreshToken())
+        assertTrue(vault.getState().googleGrantedScopes.isEmpty())
         assertEquals("none", vault.getState().analyticsAuthMode)
     }
 
     @Test
-    fun experimentalGa4ApiIsDisabledForProductionByDefault() {
-        assertFalse(EXPERIMENTAL_GA4_API_ENABLED)
+    fun ga4ApiIsEnabledForMissionControl() {
+        assertTrue(EXPERIMENTAL_GA4_API_ENABLED)
     }
 }

@@ -65,6 +65,10 @@ internal class DevCenterRuntime(
     val feedbackClient = DevCenterFeedbackClient(transport)
     val analyticsClient = DevCenterAnalyticsClient(transport)
     val analyticsOAuth = DevCenterAnalyticsOAuth(transport)
+    val remoteConfigClient = DevCenterRemoteConfigClient(transport)
+    val githubManager = DevCenterGitHubManager(transport, githubClient)
+    val singleDeviceFcmClient = DevCenterSingleDeviceFcmClient(transport)
+    val infraMonitor = DevCenterInfraMonitor(transport)
     val authManager = DevCenterAuthManager(
         vault = vault,
         biometricGateway = biometricGateway,
@@ -77,7 +81,23 @@ internal class DevCenterRuntime(
         analyticsClient = analyticsClient,
         analyticsOAuth = analyticsOAuth,
         authManager = authManager,
-        scope = scope
+        scope = scope,
+        remoteConfigClient = remoteConfigClient,
+        githubManager = githubManager,
+        singleDeviceFcmClient = singleDeviceFcmClient,
+        infraMonitor = infraMonitor,
+        apkIntegrityProvider = { DevApkIntegrityChecker.inspectInstalled(context) },
+        onScheduleBroadcast = { item -> DevScheduledBroadcastWorker.scheduleReminder(context, item) },
+        onCancelScheduledBroadcast = { id -> DevScheduledBroadcastWorker.cancelReminder(context, id) },
+        onSyncFeedbackAlertsWorker = { enabled -> DevFeedbackAlertWorker.syncSchedule(context, enabled) },
+        onPostUnseenFeedbackAlert = { count ->
+            DevAlertsNotifier.postDeveloperAlert(
+                context = context,
+                notificationId = 810_002,
+                title = if (count == 1) "1 new feedback item" else "$count new feedback items",
+                body = "Open Developer Center Feedback Inbox to review."
+            )
+        }
     )
 }
 

@@ -146,8 +146,8 @@ class DevCenterAuthManager(
         }
     }
 
-    fun suppressNextBackgroundLockForPicker() {
-        ignoreNextBackgroundUntilMs = currentTimeMs() + 30_000L
+    fun suppressNextBackgroundLockForPicker(durationMs: Long = 30_000L) {
+        ignoreNextBackgroundUntilMs = currentTimeMs() + durationMs.coerceIn(5_000L, 180_000L)
     }
 
     fun clearPickerBackgroundSuppression() {

@@ -162,4 +162,24 @@ object DevCenterValidators {
         }
         return if (errors.isNotEmpty()) ValidationResult.Invalid(errors) else ValidationResult.Valid(cleanReason)
     }
+
+    const val REMOTE_CONFIG_PUBLISH_PHRASE = "PUBLISH REMOTE CONFIG"
+    const val REMOTE_CONFIG_ROLLBACK_PHRASE = "ROLLBACK REMOTE CONFIG"
+
+    fun validateRemoteConfigConfirmation(
+        isRollback: Boolean,
+        confirmationPhrase: String,
+        rawReason: String
+    ): ValidationResult<String> {
+        val expected = if (isRollback) REMOTE_CONFIG_ROLLBACK_PHRASE else REMOTE_CONFIG_PUBLISH_PHRASE
+        val errors = mutableListOf<String>()
+        if (confirmationPhrase.trim() != expected) {
+            errors += "Type exact phrase \"$expected\"."
+        }
+        val cleanReason = cleanInputText(rawReason, 160)
+        if (cleanReason.length !in 5..140) {
+            errors += "Change summary must be 5 to 140 characters."
+        }
+        return if (errors.isNotEmpty()) ValidationResult.Invalid(errors) else ValidationResult.Valid(cleanReason)
+    }
 }

@@ -327,6 +327,7 @@ class DuitApplication : Application() {
         super.onCreate()
         container = DuitContainer(this)
         container.initializeNotificationsAndObservers()
+        com.diniy.duit.config.RemoteAppConfig.initialize(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(
             object : DefaultLifecycleObserver {
                 override fun onStart(owner: LifecycleOwner) {

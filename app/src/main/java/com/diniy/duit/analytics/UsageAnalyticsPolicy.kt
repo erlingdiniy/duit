@@ -39,7 +39,8 @@ enum class AnalyticsEventName(val wireName: String) {
     FEATURE_USED("feature_used"),
     ONBOARDING_COMPLETED("onboarding_completed"),
     APP_UPDATED("app_updated"),
-    UPDATE_PROMPT_ACTION("update_prompt_action")
+    UPDATE_PROMPT_ACTION("update_prompt_action"),
+    THEME_SELECTED("theme_selected")
 }
 
 /**
@@ -52,14 +53,17 @@ object UsageAnalyticsPolicy {
         "release_channel",
         "app_version",
         "traffic_type",
-        "result"
+        "result",
+        "theme"
     )
     val ALLOWED_USER_PROPERTIES: Set<String> = setOf(
         "release_channel",
-        "edition_type"
+        "edition_type",
+        "visual_theme"
     )
     val ALLOWED_CHANNELS: Set<String> = setOf("stable", "beta", "private_dev")
     val ALLOWED_RESULTS: Set<String> = setOf("completed", "skipped", "started", "installed", "dismissed", "available")
+    val ALLOWED_THEMES: Set<String> = setOf("liquid_glass", "candy_bubble", "mono")
 
     private val APP_VERSION_REGEX = Regex("""^\d+\.\d+\.\d+(?:-(?:beta|dev)(?:\.\d+)?)?$""")
     private val SENSITIVE_VALUE_REGEX = Regex(
@@ -89,6 +93,7 @@ object UsageAnalyticsPolicy {
                 "feature" -> clean in AnalyticsFeature.ALL_KEYS
                 "release_channel" -> clean in ALLOWED_CHANNELS
                 "result" -> clean in ALLOWED_RESULTS
+                "theme" -> clean in ALLOWED_THEMES
                 "traffic_type" -> clean == "internal"
                 "app_version" -> APP_VERSION_REGEX.matches(clean)
                 else -> false
@@ -154,6 +159,19 @@ object UsageAnalyticsPolicy {
         isQaTest: Boolean
     ): Map<String, String> = sanitizeParams(
         buildMap {
+            put("release_channel", resolveReleaseChannel(versionName, isPrivateDev))
+            resolveTrafficType(isPrivateDev, isQaTest)?.let { put("traffic_type", it) }
+        }
+    )
+
+    fun buildThemeSelectedParams(
+        themeKey: String,
+        versionName: String,
+        isPrivateDev: Boolean,
+        isQaTest: Boolean
+    ): Map<String, String> = sanitizeParams(
+        buildMap {
+            put("theme", themeKey)
             put("release_channel", resolveReleaseChannel(versionName, isPrivateDev))
             resolveTrafficType(isPrivateDev, isQaTest)?.let { put("traffic_type", it) }
         }

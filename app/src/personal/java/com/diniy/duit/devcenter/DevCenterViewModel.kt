@@ -1,9 +1,13 @@
 package com.diniy.duit.devcenter
 
 import com.diniy.duit.BuildConfig
+import com.diniy.duit.analytics.UsageAnalytics
+import com.diniy.duit.diagnostics.CrashReporting
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +26,8 @@ enum class HistoryFilter(val label: String) {
 enum class ReleaseChannelFilter(val label: String) {
     ALL("All"),
     STABLE("Stable"),
-    BETA("Beta")
+    BETA("Beta"),
+    PRIVATE_DEV("Private Dev")
 }
 
 data class PendingKillSwitchModal(
@@ -55,27 +60,78 @@ data class DevCenterUiState(
     val historyFilter: HistoryFilter = HistoryFilter.ALL,
     val releaseFilter: ReleaseChannelFilter = ReleaseChannelFilter.ALL,
     val feedbackState: FeedbackSourceState = FeedbackSourceState.Unconfigured(
-        "Import a CSV export or configure Google Sheets read-only access in Settings."
+        "Import a CSV export or configure Google Sheets access in Settings."
     ),
     val feedbackSearchQuery: String = "",
     val feedbackCategoryFilter: String = "All",
+    val feedbackStatusFilter: FeedbackTriageStatus? = null,
+    val feedbackPriorityFilter: FeedbackPriority? = null,
+    val feedbackUnreadOnly: Boolean = false,
+    val feedbackSortOrder: FeedbackSortOrder = FeedbackSortOrder.NEWEST,
+    val isFeedbackMutating: Boolean = false,
     val analyticsDateRange: AnalyticsDateRange = AnalyticsDateRange.THIRTY_DAYS,
     val analyticsState: AnalyticsSourceState = AnalyticsSourceState.Unavailable(
-        summary = "In-app GA4 reporting is experimental and unavailable for production use. Open Firebase Console for verified metrics.",
+        summary = "Connect Google Analytics read-only access in Settings or view charts in Firebase.",
         hasPropertyId = false,
         hasToken = false
     ),
     val isRefreshingAnalytics: Boolean = false,
+    val remoteConfigState: RemoteConfigSourceState = RemoteConfigSourceState.Unavailable(
+        reason = "Sign in with Google Remote Config access in Settings to manage flags.",
+        canSignInWithGoogle = false
+    ),
+    val editedRemoteParams: Map<String, String> = emptyMap(),
+    val isPublishingRemoteConfig: Boolean = false,
+    val selectedGitHubRepo: String = DEFAULT_DISTRIBUTION_REPO,
+    val gitHubRepoSnapshot: GitHubRepoSnapshot = GitHubRepoSnapshot(repoSlug = DEFAULT_DISTRIBUTION_REPO),
+    val inspectedWorkflowJobs: Map<String, List<WorkflowJobInfo>> = emptyMap(),
+    val isGitHubMutating: Boolean = false,
+    val apkIntegrity: InstalledApkIntegrity? = null,
+    val infraSnapshot: InfraMonitorSnapshot = InfraMonitorSnapshot(),
     val pendingKillSwitchModal: PendingKillSwitchModal? = null
 ) {
     val combinedBroadcastHistory: List<BroadcastHistoryEntry>
         get() = (vault.customHistory + dashboard.releaseBroadcasts)
             .sortedByDescending { it.timestampIso }
+
+    val triagedFeedback: List<TriagedFeedbackItem>
+        get() = when (val fb = feedbackState) {
+            is FeedbackSourceState.Ready -> DevFeedbackTriageEngine.mergeAndCluster(fb.items, vault.feedbackTriageMap)
+            else -> emptyList()
+        }
+
+    val filteredFeedback: List<TriagedFeedbackItem>
+        get() = DevFeedbackTriageEngine.filterAndSort(
+            items = triagedFeedback,
+            searchQuery = feedbackSearchQuery,
+            categoryFilter = feedbackCategoryFilter,
+            statusFilter = feedbackStatusFilter,
+            priorityFilter = feedbackPriorityFilter,
+            unreadOnly = feedbackUnreadOnly,
+            sortOrder = feedbackSortOrder
+        )
+
+    val unreadFeedbackCount: Int get() = triagedFeedback.count { it.isUnread }
+    val openBugReportCount: Int get() = triagedFeedback.count { it.isOpenBug }
+
+    val tokenExpirationNotice: String?
+        get() {
+            val exp = vault.analyticsTokenExpiresAtMs
+            if (exp <= 0L || vault.encryptedAnalyticsToken.isNullOrBlank()) return null
+            val hasRefresh = !vault.encryptedAnalyticsRefreshToken.isNullOrBlank()
+            val remainingMs = exp - System.currentTimeMillis()
+            return when {
+                remainingMs <= 0L && !hasRefresh -> "Google OAuth access token expired. Re-sign in under Developer Settings."
+                remainingMs in 1L..600_000L && !hasRefresh -> "Google OAuth access token expires soon."
+                else -> null
+            }
+        }
 }
 
 /**
- * Coordinates Developer Center remote telemetry, custom FCM workflow dispatches,
- * release monitoring, analytics insights, feedback viewing, kill switches, and security settings.
+ * Coordinates Developer Center 2.0 Mission Control telemetry, analytics, feedback triage,
+ * Remote Config, multi-repo GitHub management, notification 2.0 composer, APK integrity,
+ * infrastructure probes, and security vault controls.
  */
 class DevCenterViewModel(
     private val vault: DevCenterVault,
@@ -85,7 +141,17 @@ class DevCenterViewModel(
     private val analyticsOAuth: DevCenterAnalyticsOAuth = DevCenterAnalyticsOAuth(HttpsUrlConnectionTransport()),
     val authManager: DevCenterAuthManager,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-    private val nowMs: () -> Long = System::currentTimeMillis
+    private val nowMs: () -> Long = System::currentTimeMillis,
+    private val remoteConfigClient: DevCenterRemoteConfigClient = DevCenterRemoteConfigClient(HttpsUrlConnectionTransport()),
+    private val githubManager: DevCenterGitHubManager = DevCenterGitHubManager(HttpsUrlConnectionTransport(), githubClient),
+    private val singleDeviceFcmClient: DevCenterSingleDeviceFcmClient = DevCenterSingleDeviceFcmClient(HttpsUrlConnectionTransport()),
+    private val infraMonitor: DevCenterInfraMonitor = DevCenterInfraMonitor(HttpsUrlConnectionTransport()),
+    private val apkIntegrityProvider: () -> InstalledApkIntegrity? = { null },
+    private val feedbackUrlProvider: () -> String = { BuildConfig.FEEDBACK_URL },
+    private val onScheduleBroadcast: (ScheduledBroadcast) -> Unit = {},
+    private val onCancelScheduledBroadcast: (String) -> Unit = {},
+    private val onSyncFeedbackAlertsWorker: (Boolean) -> Unit = {},
+    private val onPostUnseenFeedbackAlert: (Int) -> Unit = {}
 ) {
     private val _uiState = MutableStateFlow(DevCenterUiState())
     val uiState: StateFlow<DevCenterUiState> = _uiState.asStateFlow()
@@ -94,8 +160,14 @@ class DevCenterViewModel(
         scope.launch {
             vault.observeState().collectLatest { v ->
                 _uiState.update { cur ->
+                    val hydratedAnalytics = if (cur.analyticsState is AnalyticsSourceState.Unavailable && !v.cachedAnalyticsJson.isNullOrBlank()) {
+                        DevCenterAnalyticsClient.decodeCachedSnapshot(v.cachedAnalyticsJson)?.let {
+                            AnalyticsSourceState.Ready(it)
+                        } ?: cur.analyticsState
+                    } else cur.analyticsState
                     cur.copy(
                         vault = v,
+                        analyticsState = hydratedAnalytics,
                         cooldownRemainingSeconds = DevCenterValidators.cooldownRemainingSeconds(
                             v.lastLiveDispatchMs,
                             nowMs()
@@ -134,41 +206,120 @@ class DevCenterViewModel(
         scope.launch {
             val v = vault.getState()
             val pat = vault.readGithubPat().orEmpty()
-            val snapshot = githubClient.fetchDashboardSnapshot(
-                pat = pat,
-                distributionRepo = v.distributionRepo,
-                consoleRepo = v.consoleRepo
-            )
-            val customRun = if (pat.isNotEmpty()) {
-                githubClient.fetchLatestCustomWorkflowRun(pat, v.consoleRepo)
-            } else null
-            val sheetsToken = vault.readSheetsToken()
-            val fbState = feedbackClient.loadFeedback(
-                sheetId = v.feedbackSheetId,
-                range = v.feedbackSheetRange,
-                sheetsAccessToken = sheetsToken,
-                importedCsvRaw = v.importedCsvRaw,
-                importedCsvLabel = v.importedCsvLabel
-            )
-            val gaState = loadAnalyticsWithAutoRefresh(v)
-            _uiState.update {
-                it.copy(
-                    isRefreshing = false,
-                    dashboard = snapshot,
-                    latestCustomRun = customRun,
-                    feedbackState = fbState,
-                    analyticsState = gaState,
-                    errorBanner = snapshot.degradedNotice
+            val syncIso = isoUtcNow(nowMs())
+            val integrity = runCatching { apkIntegrityProvider() }.getOrNull()
+
+            coroutineScope {
+                val snapDef = async {
+                    githubClient.fetchDashboardSnapshot(
+                        pat = pat,
+                        distributionRepo = v.distributionRepo,
+                        consoleRepo = v.consoleRepo,
+                        privateUpdateRepo = v.privateUpdateRepo
+                    )
+                }
+                val customRunDef = async {
+                    if (pat.isNotEmpty()) githubClient.fetchLatestCustomWorkflowRun(pat, v.consoleRepo) else null
+                }
+                val fbDef = async {
+                    val sheetsToken = vault.readSheetsToken()
+                    feedbackClient.loadFeedback(
+                        sheetId = v.feedbackSheetId,
+                        range = v.feedbackSheetRange,
+                        sheetsAccessToken = sheetsToken,
+                        importedCsvRaw = v.importedCsvRaw,
+                        importedCsvLabel = v.importedCsvLabel,
+                        tokenResolver = { force -> resolveValidAnalyticsToken(force) }
+                    )
+                }
+                val gaDef = async { loadAnalyticsWithAutoRefresh(v) }
+                val rcDef = async { loadRemoteConfigInternal(v, syncIso) }
+                val repoSnapDef = async {
+                    githubManager.fetchRepoSnapshot(pat, _uiState.value.selectedGitHubRepo)
+                }
+
+                val snapshot = snapDef.await()
+                val customRun = customRunDef.await()
+                val fbState = fbDef.await()
+                val rawGaState = gaDef.await()
+                val rcState = rcDef.await()
+                val repoSnap = repoSnapDef.await()
+
+                val gaState = resolveAnalyticsWithCache(v, rawGaState, syncIso)
+                if (gaState is AnalyticsSourceState.Ready && !gaState.snapshot.isCached) {
+                    vault.saveCachedAnalyticsJson(
+                        DevCenterAnalyticsClient.encodeSnapshot(gaState.snapshot),
+                        syncIso
+                    )
+                } else {
+                    vault.saveLastFullSyncIso(syncIso)
+                }
+
+                if (fbState is FeedbackSourceState.Ready) {
+                    val unseen = fbState.items.filter { it.id !in v.seenFeedbackIds }
+                    if (unseen.isNotEmpty() && v.seenFeedbackIds.isNotEmpty()) {
+                        runCatching { onPostUnseenFeedbackAlert(unseen.size) }
+                    }
+                    vault.markFeedbackSeen(fbState.items.map { it.id })
+                }
+
+                val infra = infraMonitor.checkInfrastructure(
+                    vaultState = v,
+                    pat = pat,
+                    feedbackUrl = feedbackUrlProvider(),
+                    ga4State = gaState,
+                    remoteConfigState = rcState,
+                    integrity = integrity,
+                    fcmInitialized = BuildConfig.FCM_ENABLED,
+                    crashlyticsOptedIn = CrashReporting.isCollectionEnabled(),
+                    analyticsOptedIn = UsageAnalytics.isCollectionEnabled(),
+                    nowMs = nowMs()
                 )
+
+                val editedMap = if (rcState is RemoteConfigSourceState.Ready) {
+                    rcState.parameters.associate { it.key to it.defaultValue }
+                } else _uiState.value.editedRemoteParams
+
+                _uiState.update {
+                    it.copy(
+                        isRefreshing = false,
+                        dashboard = snapshot,
+                        latestCustomRun = customRun,
+                        feedbackState = fbState,
+                        analyticsState = gaState,
+                        remoteConfigState = rcState,
+                        editedRemoteParams = editedMap,
+                        gitHubRepoSnapshot = repoSnap,
+                        apkIntegrity = integrity,
+                        infraSnapshot = infra,
+                        errorBanner = snapshot.degradedNotice
+                    )
+                }
             }
         }
     }
+
+    private fun resolveAnalyticsWithCache(
+        v: DevCenterVaultState,
+        live: AnalyticsSourceState,
+        syncIso: String
+    ): AnalyticsSourceState {
+        if (live is AnalyticsSourceState.Error) {
+            val cached = DevCenterAnalyticsClient.decodeCachedSnapshot(v.cachedAnalyticsJson)
+            if (cached != null) return AnalyticsSourceState.Ready(cached)
+        }
+        return live
+    }
+
+    // --- GitHub & Infrastructure ---
 
     fun saveGithubCredentials(
         rawPat: String,
         distributionRepo: String,
         consoleRepo: String,
-        privateUpdateRepo: String = _uiState.value.vault.privateUpdateRepo
+        privateUpdateRepo: String = _uiState.value.vault.privateUpdateRepo,
+        sourceRepo: String = _uiState.value.vault.sourceRepo,
+        firebaseProjectId: String = _uiState.value.vault.firebaseProjectId
     ) {
         authManager.recordUserActivity()
         val cleanPat = rawPat.trim()
@@ -189,6 +340,7 @@ class DevCenterViewModel(
             val currentSecrets = buildList { if (cleanPat.isNotEmpty()) add(cleanPat) }
             runCatching {
                 vault.saveRepositories(distributionRepo, consoleRepo, privateUpdateRepo)
+                vault.saveSourceAndFirebaseConfig(sourceRepo, firebaseProjectId)
                 if (cleanPat.isNotEmpty()) vault.saveGithubPat(cleanPat)
                 vault.appendAuditEvent(
                     AuditLogEntry(
@@ -201,7 +353,7 @@ class DevCenterViewModel(
                         summary = if (cleanPat.isNotEmpty()) {
                             "Saved Keystore-sealed GitHub PAT (${DevCenterRedactor.maskToken(cleanPat)})."
                         } else {
-                            "Updated GitHub repository configuration."
+                            "Updated GitHub & Firebase repository configuration."
                         }
                     ),
                     extraSecrets = currentSecrets
@@ -225,6 +377,18 @@ class DevCenterViewModel(
             val v = vault.getState()
             val pat = vault.readGithubPat().orEmpty()
             val health = githubClient.checkConnectionHealth(pat, v.distributionRepo, v.consoleRepo)
+            val infra = infraMonitor.checkInfrastructure(
+                vaultState = v,
+                pat = pat,
+                feedbackUrl = feedbackUrlProvider(),
+                ga4State = _uiState.value.analyticsState,
+                remoteConfigState = _uiState.value.remoteConfigState,
+                integrity = runCatching { apkIntegrityProvider() }.getOrNull(),
+                fcmInitialized = BuildConfig.FCM_ENABLED,
+                crashlyticsOptedIn = CrashReporting.isCollectionEnabled(),
+                analyticsOptedIn = UsageAnalytics.isCollectionEnabled(),
+                nowMs = nowMs()
+            )
             vault.appendAuditEvent(
                 AuditLogEntry(
                     id = "aud-${nowMs()}",
@@ -240,6 +404,7 @@ class DevCenterViewModel(
                 it.copy(
                     isRefreshing = false,
                     dashboard = it.dashboard.copy(health = health),
+                    infraSnapshot = infra,
                     statusBanner = if (health.connected) health.statusSummary else null,
                     errorBanner = if (!health.connected) health.statusSummary else null
                 )
@@ -278,6 +443,10 @@ class DevCenterViewModel(
     fun clearAllCredentials() {
         authManager.recordUserActivity()
         scope.launch {
+            val activeAccess = vault.readAnalyticsToken()
+            if (!activeAccess.isNullOrBlank()) {
+                runCatching { analyticsOAuth.revokeToken(activeAccess) }
+            }
             vault.clearAllCredentials()
             vault.appendAuditEvent(
                 AuditLogEntry(
@@ -287,22 +456,25 @@ class DevCenterViewModel(
                     action = "credentials.cleared_all",
                     target = "vault",
                     status = "ok",
-                    summary = "Cleared all GitHub & Sheets credentials from Developer Center vault."
+                    summary = "Cleared and revoked Developer Center credentials (financial data untouched)."
                 )
             )
             _uiState.update {
                 it.copy(
-                    statusBanner = "Developer credentials wiped (financial data untouched).",
+                    statusBanner = "Developer credentials wiped & Google session revoked (financial data untouched).",
                     errorBanner = null,
                     dashboard = it.dashboard.copy(
                         health = ConnectionHealth(connected = false),
                         killSwitches = AutomationKillSwitches()
-                    )
+                    ),
+                    remoteConfigState = RemoteConfigSourceState.Unavailable("Credentials cleared.", false)
                 )
             }
             refreshAll()
         }
     }
+
+    // --- Notifications 2.0 ---
 
     fun updateComposerCategory(cat: BroadcastCategory) {
         authManager.recordUserActivity()
@@ -338,6 +510,215 @@ class DevCenterViewModel(
         authManager.recordUserActivity()
         _uiState.update {
             it.copy(composer = it.composer.copy(broadcastId = DevCenterValidators.generateBroadcastId(nowMs())))
+        }
+    }
+
+    fun applyBroadcastTemplate(template: BroadcastTemplate) {
+        authManager.recordUserActivity()
+        _uiState.update {
+            it.copy(
+                composer = it.composer.copy(
+                    category = template.category,
+                    audience = template.audience,
+                    route = template.route,
+                    title = template.title,
+                    body = template.body,
+                    broadcastId = DevCenterValidators.generateBroadcastId(nowMs())
+                ),
+                statusBanner = "Loaded template \"${template.name}\"."
+            )
+        }
+    }
+
+    fun saveCurrentAsTemplate(templateName: String) {
+        authManager.recordUserActivity()
+        val cleanName = DevCenterValidators.cleanInputText(templateName, 40)
+        val c = _uiState.value.composer
+        if (cleanName.length < 2 || c.title.isBlank() || c.body.isBlank()) {
+            _uiState.update { it.copy(errorBanner = "Enter template name, title, and message.") }
+            return
+        }
+        scope.launch {
+            vault.saveBroadcastTemplate(
+                BroadcastTemplate(
+                    id = "tpl-${nowMs()}",
+                    name = cleanName,
+                    category = c.category,
+                    audience = c.audience,
+                    route = c.route,
+                    title = c.title.trim(),
+                    body = c.body.trim()
+                )
+            )
+            _uiState.update { it.copy(statusBanner = "Saved template \"$cleanName\".") }
+        }
+    }
+
+    fun deleteTemplate(id: String) {
+        authManager.recordUserActivity()
+        scope.launch { vault.deleteBroadcastTemplate(id) }
+    }
+
+    fun saveCurrentAsDraft() {
+        authManager.recordUserActivity()
+        val c = _uiState.value.composer
+        if (c.title.isBlank() && c.body.isBlank()) {
+            _uiState.update { it.copy(errorBanner = "Enter a title or message before saving draft.") }
+            return
+        }
+        scope.launch {
+            vault.saveBroadcastDraft(
+                BroadcastDraft(
+                    id = "draft-${nowMs()}",
+                    category = c.category,
+                    audience = c.audience,
+                    route = c.route,
+                    title = c.title.trim(),
+                    body = c.body.trim(),
+                    updatedAtIso = isoUtcNow(nowMs())
+                )
+            )
+            _uiState.update { it.copy(statusBanner = "Saved announcement draft locally.") }
+        }
+    }
+
+    fun loadDraftIntoComposer(draft: BroadcastDraft) {
+        authManager.recordUserActivity()
+        _uiState.update {
+            it.copy(
+                composer = it.composer.copy(
+                    category = draft.category,
+                    audience = draft.audience,
+                    route = draft.route,
+                    title = draft.title,
+                    body = draft.body,
+                    broadcastId = DevCenterValidators.generateBroadcastId(nowMs())
+                ),
+                statusBanner = "Loaded draft into composer."
+            )
+        }
+    }
+
+    fun deleteDraft(id: String) {
+        authManager.recordUserActivity()
+        scope.launch { vault.deleteBroadcastDraft(id) }
+    }
+
+    fun scheduleAnnouncement(delayMinutes: Int) {
+        authManager.recordUserActivity()
+        val c = _uiState.value.composer
+        if (c.title.trim().length < 3 || c.body.trim().length < 8) {
+            _uiState.update { it.copy(errorBanner = "Title (3+ chars) and message (8+ chars) required to schedule.") }
+            return
+        }
+        val mins = delayMinutes.coerceIn(5, 10_080)
+        val now = nowMs()
+        val targetMs = now + mins * 60_000L
+        val item = ScheduledBroadcast(
+            id = "sched-$now",
+            category = c.category,
+            audience = c.audience,
+            route = c.route,
+            title = c.title.trim(),
+            body = c.body.trim(),
+            scheduledEpochMs = targetMs,
+            status = "scheduled",
+            createdAtIso = isoUtcNow(now)
+        )
+        scope.launch {
+            vault.saveScheduledBroadcast(item)
+            runCatching { onScheduleBroadcast(item) }
+            vault.appendAuditEvent(
+                AuditLogEntry(
+                    id = "aud-$now",
+                    timestampIso = isoUtcNow(now),
+                    actor = "operator",
+                    action = "broadcast.scheduled",
+                    target = item.id,
+                    status = "ok",
+                    summary = "Scheduled \"${item.title}\" reminder in ${mins}m (explicit confirmation required to send live)."
+                )
+            )
+            _uiState.update { it.copy(statusBanner = "Scheduled reminder in ${mins}m. Live confirmation will be requested when ready.") }
+        }
+    }
+
+    fun loadScheduledIntoComposer(item: ScheduledBroadcast) {
+        authManager.recordUserActivity()
+        _uiState.update {
+            it.copy(
+                composer = it.composer.copy(
+                    category = item.category,
+                    audience = item.audience,
+                    route = item.route,
+                    title = item.title,
+                    body = item.body,
+                    broadcastId = DevCenterValidators.generateBroadcastId(nowMs())
+                ),
+                statusBanner = "Loaded scheduled announcement. Review & send cleanly."
+            )
+        }
+    }
+
+    fun cancelScheduledAnnouncement(id: String) {
+        authManager.recordUserActivity()
+        scope.launch {
+            vault.updateScheduledBroadcastStatus(id, "cancelled")
+            runCatching { onCancelScheduledBroadcast(id) }
+            _uiState.update { it.copy(statusBanner = "Cancelled scheduled announcement.") }
+        }
+    }
+
+    fun sendSingleDeviceTest(deviceToken: String, ephemeralBearerToken: String, validateOnly: Boolean) {
+        authManager.recordUserActivity()
+        if (_uiState.value.isDispatching) return
+        val c = _uiState.value.composer
+        val secrets = listOf(deviceToken, ephemeralBearerToken)
+        _uiState.update { it.copy(isDispatching = true, statusBanner = null, errorBanner = null) }
+        scope.launch {
+            val v = vault.getState()
+            val res = singleDeviceFcmClient.sendSingleDeviceTest(
+                projectId = v.firebaseProjectId,
+                deviceToken = deviceToken,
+                ephemeralAccessToken = ephemeralBearerToken,
+                title = c.title,
+                body = c.body,
+                category = c.category,
+                route = c.route,
+                broadcastId = c.broadcastId,
+                validateOnly = validateOnly
+            )
+            val ts = isoUtcNow(nowMs())
+            res.onSuccess { summary ->
+                vault.appendAuditEvent(
+                    AuditLogEntry(
+                        id = "aud-${nowMs()}",
+                        timestampIso = ts,
+                        actor = "operator",
+                        action = "broadcast.single_device_test",
+                        target = c.broadcastId,
+                        status = "ok",
+                        summary = summary
+                    ),
+                    extraSecrets = secrets
+                )
+                _uiState.update { it.copy(isDispatching = false, statusBanner = summary, errorBanner = null) }
+            }.onFailure { err ->
+                val clean = DevCenterRedactor.redact(err.message ?: "Single-device test failed.", secrets)
+                vault.appendAuditEvent(
+                    AuditLogEntry(
+                        id = "aud-${nowMs()}",
+                        timestampIso = ts,
+                        actor = "operator",
+                        action = "broadcast.single_device_test",
+                        target = c.broadcastId,
+                        status = "error",
+                        summary = clean
+                    ),
+                    extraSecrets = secrets
+                )
+                _uiState.update { it.copy(isDispatching = false, errorBanner = clean) }
+            }
         }
     }
 
@@ -432,7 +813,7 @@ class DevCenterViewModel(
                     note = if (req.validateOnly) {
                         "Workflow custom-broadcast.yml requested (validate_only=true). No public notification sent."
                     } else {
-                        "Workflow custom-broadcast.yml requested (${req.reason}). Check workflow run status; FCM acceptance does not confirm device delivery."
+                        "Workflow custom-broadcast.yml requested (${req.reason}). Verify outcome in workflow runs."
                     },
                     workflowUrl = workflowUrl
                 )
@@ -452,21 +833,17 @@ class DevCenterViewModel(
                     it.copy(
                         isDispatching = false,
                         statusBanner = if (req.validateOnly) {
-                            "Dry-run dispatched to GitHub Actions (validate_only=true). Polling workflow status..."
+                            "Dry-run dispatched to GitHub Actions (validate_only=true). Polling status..."
                         } else {
-                            "Live broadcast request sent to GitHub Actions relay. Verify workflow outcome in History."
+                            "Live broadcast requested via GitHub Actions relay. Confirm workflow run status."
                         },
-                        composer = it.composer.copy(
-                            broadcastId = DevCenterValidators.generateBroadcastId(nowMs())
-                        )
+                        composer = it.composer.copy(broadcastId = DevCenterValidators.generateBroadcastId(nowMs()))
                     )
                 }
                 delay(2_500L)
                 val latestRun = githubClient.fetchLatestCustomWorkflowRun(pat, v.consoleRepo)
-                val updatedSnapshot = githubClient.fetchDashboardSnapshot(pat, v.distributionRepo, v.consoleRepo)
-                _uiState.update {
-                    it.copy(latestCustomRun = latestRun, dashboard = updatedSnapshot)
-                }
+                val updatedSnapshot = githubClient.fetchDashboardSnapshot(pat, v.distributionRepo, v.consoleRepo, v.privateUpdateRepo)
+                _uiState.update { it.copy(latestCustomRun = latestRun, dashboard = updatedSnapshot) }
             }.onFailure { err ->
                 val cleanErr = DevCenterRedactor.redact(err.message ?: "Broadcast request failed.", listOf(pat))
                 vault.appendAuditEvent(
@@ -586,6 +963,8 @@ class DevCenterViewModel(
         _uiState.update { it.copy(releaseFilter = filter) }
     }
 
+    // --- Feedback 2.0 Triage & Actions ---
+
     fun updateFeedbackSearch(query: String) {
         authManager.recordUserActivity()
         _uiState.update { it.copy(feedbackSearchQuery = query) }
@@ -594,6 +973,145 @@ class DevCenterViewModel(
     fun updateFeedbackCategoryFilter(category: String) {
         authManager.recordUserActivity()
         _uiState.update { it.copy(feedbackCategoryFilter = category) }
+    }
+
+    fun updateFeedbackStatusFilter(status: FeedbackTriageStatus?) {
+        authManager.recordUserActivity()
+        _uiState.update { it.copy(feedbackStatusFilter = status) }
+    }
+
+    fun updateFeedbackPriorityFilter(priority: FeedbackPriority?) {
+        authManager.recordUserActivity()
+        _uiState.update { it.copy(feedbackPriorityFilter = priority) }
+    }
+
+    fun toggleFeedbackUnreadOnly(unreadOnly: Boolean) {
+        authManager.recordUserActivity()
+        _uiState.update { it.copy(feedbackUnreadOnly = unreadOnly) }
+    }
+
+    fun updateFeedbackSortOrder(order: FeedbackSortOrder) {
+        authManager.recordUserActivity()
+        _uiState.update { it.copy(feedbackSortOrder = order) }
+    }
+
+    fun updateFeedbackTriage(
+        item: TriagedFeedbackItem,
+        isRead: Boolean = item.triage.isRead,
+        priority: FeedbackPriority = item.triage.priority,
+        status: FeedbackTriageStatus = item.triage.status,
+        notes: String = item.triage.notes,
+        syncToSheetIfPermitted: Boolean = false
+    ) {
+        authManager.recordUserActivity()
+        val nowIso = isoUtcNow(nowMs())
+        val updated = item.triage.copy(
+            isRead = isRead,
+            priority = priority,
+            status = status,
+            notes = notes.take(600),
+            updatedAtIso = nowIso
+        )
+        scope.launch {
+            vault.saveFeedbackTriage(updated)
+            val v = vault.getState()
+            var note = "Updated feedback triage (${status.label}, ${priority.label})."
+            if (syncToSheetIfPermitted && item.entry.sheetRowNumber != null && v.feedbackSheetId.isNotBlank() &&
+                DevCenterAnalyticsOAuth.SHEETS_READWRITE_SCOPE in v.googleGrantedScopes
+            ) {
+                val res = feedbackClient.updateSheetRowStatus(
+                    sheetId = v.feedbackSheetId,
+                    range = v.feedbackSheetRange,
+                    rowNumber = item.entry.sheetRowNumber,
+                    newSheetStatus = status.sheetStatus,
+                    tokenResolver = { force -> resolveValidAnalyticsToken(force) }
+                )
+                res.onSuccess { note = "Updated local & Google Sheet status to ${status.label}." }
+                    .onFailure { note = "Updated locally (${it.message})." }
+            }
+            vault.appendAuditEvent(
+                AuditLogEntry(
+                    id = "aud-${nowMs()}",
+                    timestampIso = nowIso,
+                    actor = "operator",
+                    action = "feedback.triage",
+                    target = item.entry.id,
+                    status = "ok",
+                    summary = note
+                )
+            )
+            _uiState.update { it.copy(statusBanner = note) }
+        }
+    }
+
+    fun createGitHubIssueFromFeedback(item: TriagedFeedbackItem, targetRepo: String? = null) {
+        authManager.recordUserActivity()
+        if (_uiState.value.isFeedbackMutating) return
+        _uiState.update { it.copy(isFeedbackMutating = true, errorBanner = null) }
+        scope.launch {
+            val v = vault.getState()
+            val pat = vault.readGithubPat().orEmpty()
+            val repo = targetRepo?.trim()?.takeIf { it.isNotBlank() } ?: v.sourceRepo
+            val (title, body, labels) = DevFeedbackTriageEngine.buildSanitizedGitHubIssue(item)
+            val res = githubManager.createIssue(pat, repo, title, body, labels)
+            res.onSuccess { created ->
+                vault.saveFeedbackTriage(
+                    item.triage.copy(
+                        isRead = true,
+                        status = if (item.triage.status == FeedbackTriageStatus.PENDING) FeedbackTriageStatus.IN_PROGRESS else item.triage.status,
+                        linkedIssueNumber = created.number,
+                        linkedIssueUrl = created.htmlUrl,
+                        updatedAtIso = isoUtcNow(nowMs())
+                    )
+                )
+                vault.appendAuditEvent(
+                    AuditLogEntry(
+                        id = "aud-${nowMs()}",
+                        timestampIso = isoUtcNow(nowMs()),
+                        actor = _uiState.value.dashboard.health.authenticatedUser ?: "operator",
+                        action = "feedback.issue_created",
+                        target = "$repo#${created.number}",
+                        status = "ok",
+                        summary = "Created sanitized GitHub issue #${created.number} on $repo."
+                    )
+                )
+                _uiState.update {
+                    it.copy(
+                        isFeedbackMutating = false,
+                        statusBanner = "Created $repo #${created.number} (contact email excluded)."
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isFeedbackMutating = false,
+                        errorBanner = err.message ?: "Failed to create GitHub issue."
+                    )
+                }
+            }
+        }
+    }
+
+    fun setFeedbackAlertsEnabled(enabled: Boolean) {
+        authManager.recordUserActivity()
+        scope.launch {
+            vault.setFeedbackAlertsEnabled(enabled)
+            runCatching { onSyncFeedbackAlertsWorker(enabled) }
+            vault.appendAuditEvent(
+                AuditLogEntry(
+                    id = "aud-${nowMs()}",
+                    timestampIso = isoUtcNow(nowMs()),
+                    actor = "operator",
+                    action = "feedback.alerts_toggled",
+                    target = "feedback_alerts",
+                    status = "ok",
+                    summary = "New feedback background alerts ${if (enabled) "enabled (6h)" else "disabled"}."
+                )
+            )
+            _uiState.update {
+                it.copy(statusBanner = if (enabled) "Background feedback alerts enabled (every 6h on network)." else "Background feedback alerts disabled.")
+            }
+        }
     }
 
     fun saveFeedbackSheetConfig(sheetId: String, range: String, rawSheetsToken: String?) {
@@ -638,13 +1156,15 @@ class DevCenterViewModel(
             _uiState.update {
                 it.copy(
                     feedbackState = FeedbackSourceState.Unconfigured(
-                        "Feedback source cleared. Import a CSV or configure read-only Sheets in Settings."
+                        "Feedback source cleared. Import a CSV or configure Sheets access in Settings."
                     ),
                     statusBanner = "Feedback source cleared."
                 )
             }
         }
     }
+
+    // --- Analytics & Unified Google OAuth 2.0 PKCE ---
 
     fun selectAnalyticsDateRange(range: AnalyticsDateRange) {
         authManager.recordUserActivity()
@@ -659,11 +1179,19 @@ class DevCenterViewModel(
         _uiState.update { it.copy(isRefreshingAnalytics = true, analyticsState = AnalyticsSourceState.Loading) }
         scope.launch {
             val v = vault.getState()
-            val gaState = loadAnalyticsWithAutoRefresh(v)
+            val syncIso = isoUtcNow(nowMs())
+            val live = loadAnalyticsWithAutoRefresh(v)
+            val finalState = resolveAnalyticsWithCache(v, live, syncIso)
+            if (finalState is AnalyticsSourceState.Ready && !finalState.snapshot.isCached) {
+                vault.saveCachedAnalyticsJson(
+                    DevCenterAnalyticsClient.encodeSnapshot(finalState.snapshot),
+                    syncIso
+                )
+            }
             _uiState.update {
                 it.copy(
                     isRefreshingAnalytics = false,
-                    analyticsState = gaState
+                    analyticsState = finalState
                 )
             }
         }
@@ -672,7 +1200,7 @@ class DevCenterViewModel(
     private suspend fun loadAnalyticsWithAutoRefresh(v: DevCenterVaultState): AnalyticsSourceState {
         if (!EXPERIMENTAL_GA4_API_ENABLED) {
             return AnalyticsSourceState.Unavailable(
-                summary = "In-app GA4 reporting is experimental and unavailable for production use. Open Firebase Console for live metrics.",
+                summary = "In-app GA4 reporting is unavailable. Open Firebase Console for live metrics.",
                 hasPropertyId = v.ga4PropertyId.isNotBlank(),
                 hasToken = !v.encryptedAnalyticsToken.isNullOrBlank() || !v.encryptedAnalyticsRefreshToken.isNullOrBlank(),
                 canSignInWithGoogle = false
@@ -706,7 +1234,9 @@ class DevCenterViewModel(
             DevCenterValidators.isValidGoogleOAuthClientId(clientId) &&
             (forceRefresh || accessToken.isNullOrBlank() || isExpiring)
         ) {
-            val refreshed = analyticsOAuth.refreshAccessToken(clientId = clientId, refreshToken = refreshToken)
+            val refreshed = runCatching {
+                analyticsOAuth.refreshAccessToken(clientId = clientId, refreshToken = refreshToken)
+            }.getOrNull() ?: return accessToken
             val newExpiry = now + refreshed.expiresInSeconds * 1_000L
             vault.updateRefreshedAnalyticsToken(
                 accessToken = refreshed.accessToken,
@@ -719,9 +1249,9 @@ class DevCenterViewModel(
                     timestampIso = isoUtcNow(now),
                     actor = "oauth_refresh",
                     action = "analytics.token_refreshed",
-                    target = v.ga4PropertyId.ifBlank { "ga4_oauth" },
+                    target = v.ga4PropertyId.ifBlank { "google_oauth" },
                     status = "ok",
-                    summary = "Refreshed short-lived Google Analytics access token silently."
+                    summary = "Refreshed short-lived Google OAuth access token silently."
                 ),
                 extraSecrets = listOfNotNull(refreshed.accessToken, refreshed.refreshToken, refreshToken)
             )
@@ -733,13 +1263,13 @@ class DevCenterViewModel(
     fun startAnalyticsGoogleSignIn(
         propertyId: String? = null,
         oauthClientId: String? = null,
+        scopes: List<String> = DevCenterAnalyticsOAuth.DEFAULT_MISSION_CONTROL_SCOPES,
         onLaunchBrowser: (String) -> Unit
     ) {
         authManager.recordUserActivity()
+        authManager.suppressNextBackgroundLockForPicker(120_000L)
         if (!EXPERIMENTAL_GA4_API_ENABLED) {
-            _uiState.update {
-                it.copy(errorBanner = "In-app GA4 sign-in is experimental and unavailable for production use. Open Firebase Console instead.")
-            }
+            _uiState.update { it.copy(errorBanner = "Google OAuth integration is disabled.") }
             return
         }
         scope.launch {
@@ -761,7 +1291,11 @@ class DevCenterViewModel(
                 rawAnalyticsToken = null,
                 oauthClientId = cleanClientId
             )
-            val session = analyticsOAuth.generatePkceSession(clientId = cleanClientId, nowMs = nowMs())
+            val session = analyticsOAuth.generatePkceSession(
+                clientId = cleanClientId,
+                scopes = scopes,
+                nowMs = nowMs()
+            )
             DevAnalyticsOAuthBus.pendingSession = session
             val authUrl = analyticsOAuth.buildAuthorizationUrl(session)
             vault.appendAuditEvent(
@@ -769,10 +1303,10 @@ class DevCenterViewModel(
                     id = "aud-${nowMs()}",
                     timestampIso = isoUtcNow(nowMs()),
                     actor = "operator",
-                    action = "analytics.oauth_started",
-                    target = (cleanProp ?: v.ga4PropertyId).ifBlank { "ga4_oauth" },
+                    action = "google.oauth_started",
+                    target = (cleanProp ?: v.ga4PropertyId).ifBlank { "google_oauth" },
                     status = "ok",
-                    summary = "Opened read-only Google Analytics OAuth PKCE authorization."
+                    summary = "Started Google OAuth PKCE authorization (${session.scopes.size} scopes)."
                 ),
                 extraSecrets = listOf(session.codeVerifier, session.state)
             )
@@ -789,7 +1323,7 @@ class DevCenterViewModel(
         val session = DevAnalyticsOAuthBus.pendingSession
         DevAnalyticsOAuthBus.pendingSession = null
         if (session == null) {
-            _uiState.update { it.copy(errorBanner = "No active Google Analytics sign-in request was found.") }
+            _uiState.update { it.copy(errorBanner = "No active Google sign-in request was found.") }
             return
         }
         val secrets = mutableListOf(session.codeVerifier, session.state)
@@ -815,21 +1349,18 @@ class DevCenterViewModel(
                             oauthClientId = session.clientId,
                             accessToken = tokenRes.accessToken,
                             refreshToken = tokenRes.refreshToken,
-                            expiresAtMs = expiry
+                            expiresAtMs = expiry,
+                            grantedScopes = session.scopes.toSet()
                         )
                         vault.appendAuditEvent(
                             AuditLogEntry(
                                 id = "aud-${nowMs()}",
                                 timestampIso = isoUtcNow(nowMs()),
                                 actor = "operator",
-                                action = "analytics.oauth_connected",
-                                target = vault.getState().ga4PropertyId.ifBlank { "ga4_oauth" },
+                                action = "google.oauth_connected",
+                                target = vault.getState().ga4PropertyId.ifBlank { "google_oauth" },
                                 status = "ok",
-                                summary = if (tokenRes.refreshToken != null) {
-                                    "Connected read-only Google Analytics OAuth with automatic refresh."
-                                } else {
-                                    "Connected read-only Google Analytics OAuth session."
-                                }
+                                summary = "Connected Google OAuth PKCE (${session.scopes.size} scopes, refresh=${tokenRes.refreshToken != null})."
                             ),
                             extraSecrets = secrets
                         )
@@ -837,11 +1368,11 @@ class DevCenterViewModel(
                         _uiState.update {
                             it.copy(
                                 isRefreshingAnalytics = false,
-                                statusBanner = "Google Analytics read-only connected.",
+                                statusBanner = "Google Mission Control access connected.",
                                 errorBanner = null
                             )
                         }
-                        refreshAnalytics()
+                        refreshAll()
                     }.onFailure { err ->
                         _uiState.update {
                             it.copy(
@@ -884,12 +1415,12 @@ class DevCenterViewModel(
                         action = "credentials.analytics_saved",
                         target = cleanId.ifBlank { "ga4_property" },
                         status = "ok",
-                        summary = "Saved Keystore-sealed GA4 read-only config."
+                        summary = "Saved Keystore-sealed GA4 config."
                     ),
                     extraSecrets = secretList
                 )
             }.onSuccess {
-                _uiState.update { it.copy(statusBanner = "Analytics source updated.", errorBanner = null) }
+                _uiState.update { it.copy(statusBanner = "Analytics configuration updated.", errorBanner = null) }
                 refreshAnalytics()
             }.onFailure { err ->
                 _uiState.update {
@@ -903,6 +1434,10 @@ class DevCenterViewModel(
         authManager.recordUserActivity()
         DevAnalyticsOAuthBus.clear()
         scope.launch {
+            val active = vault.readAnalyticsToken()
+            if (!active.isNullOrBlank()) {
+                runCatching { analyticsOAuth.revokeToken(active) }
+            }
             vault.clearAnalyticsSource()
             vault.appendAuditEvent(
                 AuditLogEntry(
@@ -910,20 +1445,314 @@ class DevCenterViewModel(
                     timestampIso = isoUtcNow(nowMs()),
                     actor = "operator",
                     action = "credentials.analytics_cleared",
-                    target = "ga4_property",
+                    target = "google_oauth",
                     status = "ok",
-                    summary = "Cleared GA4 Property ID and read-only Analytics token."
+                    summary = "Cleared and revoked Google OAuth & GA4 configuration."
                 )
             )
             _uiState.update {
                 it.copy(
                     analyticsState = AnalyticsSourceState.Unavailable(
-                        summary = "Analytics credentials cleared. Add Property ID and read-only token in Settings to reload.",
+                        summary = "Google credentials cleared. Sign in again in Settings to reload.",
                         hasPropertyId = false,
                         hasToken = false
                     ),
-                    statusBanner = "Analytics source cleared."
+                    remoteConfigState = RemoteConfigSourceState.Unavailable("Google session cleared.", false),
+                    statusBanner = "Google OAuth & Analytics cleared."
                 )
+            }
+        }
+    }
+
+    // --- Remote Config Management ---
+
+    fun refreshRemoteConfig() {
+        authManager.recordUserActivity()
+        _uiState.update { it.copy(remoteConfigState = RemoteConfigSourceState.Loading) }
+        scope.launch {
+            val v = vault.getState()
+            val syncIso = isoUtcNow(nowMs())
+            val state = loadRemoteConfigInternal(v, syncIso)
+            val edited = if (state is RemoteConfigSourceState.Ready) {
+                state.parameters.associate { it.key to it.defaultValue }
+            } else _uiState.value.editedRemoteParams
+            _uiState.update { it.copy(remoteConfigState = state, editedRemoteParams = edited) }
+        }
+    }
+
+    private suspend fun loadRemoteConfigInternal(v: DevCenterVaultState, syncIso: String): RemoteConfigSourceState {
+        val clientId = effectiveOAuthClientId(v)
+        return remoteConfigClient.fetchTemplateAndVersions(
+            projectId = v.firebaseProjectId,
+            syncedAtIso = syncIso,
+            canSignInWithGoogle = DevCenterValidators.isValidGoogleOAuthClientId(clientId),
+            tokenResolver = { force -> resolveValidAnalyticsToken(force) }
+        )
+    }
+
+    fun updatePendingRemoteParam(key: String, newValue: String) {
+        authManager.recordUserActivity()
+        _uiState.update {
+            it.copy(editedRemoteParams = it.editedRemoteParams + (key to newValue))
+        }
+    }
+
+    fun publishRemoteConfig(confirmationPhrase: String, description: String) {
+        authManager.recordUserActivity()
+        val ready = _uiState.value.remoteConfigState as? RemoteConfigSourceState.Ready ?: return
+        val check = DevCenterValidators.validateRemoteConfigConfirmation(
+            isRollback = false,
+            confirmationPhrase = confirmationPhrase,
+            rawReason = description
+        )
+        if (check is ValidationResult.Invalid) {
+            _uiState.update { it.copy(errorBanner = check.errors.first()) }
+            return
+        }
+        val cleanDesc = (check as ValidationResult.Valid).value
+        if (_uiState.value.isPublishingRemoteConfig) return
+
+        val pendingMap = _uiState.value.editedRemoteParams
+        val nextParams = buildList {
+            val seen = mutableSetOf<String>()
+            for (p in ready.parameters) {
+                seen += p.key
+                add(p.copy(defaultValue = pendingMap[p.key] ?: p.defaultValue))
+            }
+            for ((k, v) in pendingMap) {
+                if (k !in seen) {
+                    val vType = when {
+                        v.equals("true", true) || v.equals("false", true) -> "BOOLEAN"
+                        v.toLongOrNull() != null -> "NUMBER"
+                        else -> "STRING"
+                    }
+                    add(RemoteConfigParam(key = k, valueType = vType, defaultValue = v))
+                }
+            }
+        }
+
+        _uiState.update { it.copy(isPublishingRemoteConfig = true, errorBanner = null) }
+        scope.launch {
+            val v = vault.getState()
+            val res = remoteConfigClient.publishTemplate(
+                projectId = v.firebaseProjectId,
+                etag = ready.etag,
+                parameters = nextParams,
+                conditions = ready.conditions,
+                description = cleanDesc,
+                syncedAtIso = isoUtcNow(nowMs()),
+                tokenResolver = { force -> resolveValidAnalyticsToken(force) }
+            )
+            res.onSuccess { updated ->
+                vault.appendAuditEvent(
+                    AuditLogEntry(
+                        id = "aud-${nowMs()}",
+                        timestampIso = updated.syncedAtIso,
+                        actor = "operator",
+                        action = "remote_config.published",
+                        target = "v${updated.versionNumber}",
+                        status = "ok",
+                        summary = "Published Remote Config template v${updated.versionNumber}: $cleanDesc"
+                    )
+                )
+                _uiState.update {
+                    it.copy(
+                        isPublishingRemoteConfig = false,
+                        remoteConfigState = updated,
+                        editedRemoteParams = updated.parameters.associate { p -> p.key to p.defaultValue },
+                        statusBanner = "Published Remote Config v${updated.versionNumber}."
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isPublishingRemoteConfig = false,
+                        errorBanner = err.message ?: "Remote Config publish failed."
+                    )
+                }
+            }
+        }
+    }
+
+    fun emergencyDisableRemoteConfig(confirmationPhrase: String) {
+        authManager.recordUserActivity()
+        val ready = _uiState.value.remoteConfigState as? RemoteConfigSourceState.Ready ?: return
+        val disabledParams = remoteConfigClient.buildEmergencyDisableParameters(ready.parameters)
+        _uiState.update {
+            it.copy(editedRemoteParams = disabledParams.associate { p -> p.key to p.defaultValue })
+        }
+        publishRemoteConfig(confirmationPhrase, "Emergency disable of non-essential remote flags")
+    }
+
+    fun rollbackRemoteConfig(versionNumber: String, confirmationPhrase: String) {
+        authManager.recordUserActivity()
+        val ready = _uiState.value.remoteConfigState as? RemoteConfigSourceState.Ready ?: return
+        val check = DevCenterValidators.validateRemoteConfigConfirmation(
+            isRollback = true,
+            confirmationPhrase = confirmationPhrase,
+            rawReason = "Rollback to v$versionNumber"
+        )
+        if (check is ValidationResult.Invalid) {
+            _uiState.update { it.copy(errorBanner = check.errors.first()) }
+            return
+        }
+        if (_uiState.value.isPublishingRemoteConfig) return
+        _uiState.update { it.copy(isPublishingRemoteConfig = true, errorBanner = null) }
+        scope.launch {
+            val v = vault.getState()
+            val res = remoteConfigClient.rollbackToVersion(
+                projectId = v.firebaseProjectId,
+                versionNumber = versionNumber,
+                etag = ready.etag,
+                syncedAtIso = isoUtcNow(nowMs()),
+                tokenResolver = { force -> resolveValidAnalyticsToken(force) }
+            )
+            res.onSuccess { updated ->
+                vault.appendAuditEvent(
+                    AuditLogEntry(
+                        id = "aud-${nowMs()}",
+                        timestampIso = updated.syncedAtIso,
+                        actor = "operator",
+                        action = "remote_config.rollback",
+                        target = "v$versionNumber",
+                        status = "ok",
+                        summary = "Rolled back Firebase Remote Config to version v$versionNumber."
+                    )
+                )
+                _uiState.update {
+                    it.copy(
+                        isPublishingRemoteConfig = false,
+                        remoteConfigState = updated,
+                        editedRemoteParams = updated.parameters.associate { p -> p.key to p.defaultValue },
+                        statusBanner = "Rolled back Remote Config to v$versionNumber."
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isPublishingRemoteConfig = false,
+                        errorBanner = err.message ?: "Remote Config rollback failed."
+                    )
+                }
+            }
+        }
+    }
+
+    // --- GitHub Management ---
+
+    fun selectGitHubRepo(repoSlug: String) {
+        authManager.recordUserActivity()
+        if (_uiState.value.selectedGitHubRepo == repoSlug) return
+        _uiState.update { it.copy(selectedGitHubRepo = repoSlug) }
+        refreshGitHubRepo()
+    }
+
+    fun refreshGitHubRepo() {
+        authManager.recordUserActivity()
+        _uiState.update { it.copy(isGitHubMutating = true) }
+        scope.launch {
+            val pat = vault.readGithubPat().orEmpty()
+            val repo = _uiState.value.selectedGitHubRepo
+            val snap = githubManager.fetchRepoSnapshot(pat, repo)
+            _uiState.update {
+                it.copy(isGitHubMutating = false, gitHubRepoSnapshot = snap)
+            }
+        }
+    }
+
+    fun inspectWorkflowJobs(repoSlug: String, runId: String) {
+        authManager.recordUserActivity()
+        scope.launch {
+            val pat = vault.readGithubPat().orEmpty()
+            val res = githubManager.fetchWorkflowJobs(pat, repoSlug, runId)
+            res.onSuccess { jobs ->
+                _uiState.update {
+                    it.copy(inspectedWorkflowJobs = it.inspectedWorkflowJobs + (runId to jobs))
+                }
+            }.onFailure { err ->
+                _uiState.update { it.copy(errorBanner = err.message) }
+            }
+        }
+    }
+
+    fun createGitHubIssue(repoSlug: String, title: String, body: String, labels: List<String>) {
+        authManager.recordUserActivity()
+        if (_uiState.value.isGitHubMutating) return
+        _uiState.update { it.copy(isGitHubMutating = true, errorBanner = null) }
+        scope.launch {
+            val pat = vault.readGithubPat().orEmpty()
+            val res = githubManager.createIssue(pat, repoSlug, title, body, labels)
+            res.onSuccess { created ->
+                vault.appendAuditEvent(
+                    AuditLogEntry(
+                        id = "aud-${nowMs()}",
+                        timestampIso = isoUtcNow(nowMs()),
+                        actor = _uiState.value.dashboard.health.authenticatedUser ?: "operator",
+                        action = "github.issue_created",
+                        target = "$repoSlug#${created.number}",
+                        status = "ok",
+                        summary = "Created issue #${created.number}: ${created.title}"
+                    )
+                )
+                _uiState.update {
+                    it.copy(
+                        isGitHubMutating = false,
+                        statusBanner = "Created $repoSlug #${created.number}."
+                    )
+                }
+                refreshGitHubRepo()
+            }.onFailure { err ->
+                _uiState.update { it.copy(isGitHubMutating = false, errorBanner = err.message) }
+            }
+        }
+    }
+
+    fun toggleGitHubIssueState(repoSlug: String, issueNumber: Int, open: Boolean) {
+        authManager.recordUserActivity()
+        if (_uiState.value.isGitHubMutating) return
+        _uiState.update { it.copy(isGitHubMutating = true, errorBanner = null) }
+        scope.launch {
+            val pat = vault.readGithubPat().orEmpty()
+            val res = githubManager.updateIssueState(pat, repoSlug, issueNumber, open)
+            res.onSuccess { updated ->
+                vault.appendAuditEvent(
+                    AuditLogEntry(
+                        id = "aud-${nowMs()}",
+                        timestampIso = isoUtcNow(nowMs()),
+                        actor = _uiState.value.dashboard.health.authenticatedUser ?: "operator",
+                        action = if (open) "github.issue_reopened" else "github.issue_closed",
+                        target = "$repoSlug#${updated.number}",
+                        status = "ok",
+                        summary = "Set issue #${updated.number} state=${updated.state}."
+                    )
+                )
+                _uiState.update {
+                    it.copy(
+                        isGitHubMutating = false,
+                        statusBanner = "Issue #$issueNumber ${if (open) "reopened" else "closed"}."
+                    )
+                }
+                refreshGitHubRepo()
+            }.onFailure { err ->
+                _uiState.update { it.copy(isGitHubMutating = false, errorBanner = err.message) }
+            }
+        }
+    }
+
+    fun commentOnGitHubIssue(repoSlug: String, issueNumber: Int, commentBody: String) {
+        authManager.recordUserActivity()
+        if (_uiState.value.isGitHubMutating) return
+        _uiState.update { it.copy(isGitHubMutating = true, errorBanner = null) }
+        scope.launch {
+            val pat = vault.readGithubPat().orEmpty()
+            val res = githubManager.addIssueComment(pat, repoSlug, issueNumber, commentBody)
+            res.onSuccess {
+                _uiState.update {
+                    it.copy(isGitHubMutating = false, statusBanner = "Added comment to $repoSlug #$issueNumber.")
+                }
+                refreshGitHubRepo()
+            }.onFailure { err ->
+                _uiState.update { it.copy(isGitHubMutating = false, errorBanner = err.message) }
             }
         }
     }

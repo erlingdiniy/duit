@@ -6,10 +6,14 @@ package com.diniy.duit.devcenter
 enum class DevCenterSection(val label: String) {
     OVERVIEW("Overview"),
     ANALYTICS("Analytics"),
-    NOTIFICATIONS("Notifications"),
-    HISTORY("History"),
-    RELEASES("Releases"),
     FEEDBACK("Feedback"),
+    CRASH_REPORTS("Crash Reports"),
+    NOTIFICATIONS("Notifications"),
+    RELEASES("Releases"),
+    REMOTE_CONFIG("Remote Config"),
+    GITHUB("GitHub"),
+    INFRASTRUCTURE("Infrastructure"),
+    AUDIT_LOGS("Audit Logs"),
     SETTINGS("Settings")
 }
 
@@ -44,7 +48,32 @@ data class AnalyticsDashboardSnapshot(
     val syncedAtIso: String,
     val realtimeActiveUsers: Long = 0L,
     val realtimeEventCount: Long = 0L,
-    val realtimeEvents: List<AnalyticsRankedItem> = emptyList()
+    val realtimeEvents: List<AnalyticsRankedItem> = emptyList(),
+    val totalUsers: Long = activeUsers,
+    val dau: Long = growthTrend.lastOrNull()?.activeUsers ?: 0L,
+    val wau: Long = 0L,
+    val mau: Long = activeUsers,
+    val sessions: Long = 0L,
+    val returningUsers: Long = (activeUsers - newUsers).coerceAtLeast(0L),
+    val dauPerMauPercent: Int = 0,
+    val wauPerMauPercent: Int = 0,
+    val countries: List<AnalyticsRankedItem> = emptyList(),
+    val androidVersions: List<AnalyticsRankedItem> = emptyList(),
+    val deviceModels: List<AnalyticsRankedItem> = emptyList(),
+    val themePopularity: List<AnalyticsRankedItem> = emptyList(),
+    val widgetUsageCount: Long = 0L,
+    val widgetUsers: Long = 0L,
+    val releaseChannels: List<AnalyticsRankedItem> = emptyList(),
+    val crashFreeUsersPercent: Double? = null,
+    val crashFreeSessionsPercent: Double? = null,
+    val crashAffectedUsers: Long = 0L,
+    val crashEventCount: Long = 0L,
+    val crashesByAppVersion: List<AnalyticsRankedItem> = emptyList(),
+    val crashesByOsVersion: List<AnalyticsRankedItem> = emptyList(),
+    val crashesByDevice: List<AnalyticsRankedItem> = emptyList(),
+    val quotaHourlyRemaining: Int? = null,
+    val quotaDailyRemaining: Int? = null,
+    val isCached: Boolean = false
 )
 
 sealed interface AnalyticsSourceState {
@@ -164,7 +193,10 @@ data class ReleaseInfo(
     val assetDownloadUrl: String?,
     val sha256: String?,
     val notificationStatus: String,
-    val changelogBullets: List<String>
+    val changelogBullets: List<String>,
+    val repoSlug: String = DEFAULT_DISTRIBUTION_REPO,
+    val isPrivate: Boolean = false,
+    val rawBody: String = ""
 )
 
 data class WorkflowRunInfo(
@@ -213,7 +245,8 @@ data class FeedbackEntry(
     val message: String,
     val email: String,
     val appVersion: String,
-    val status: String
+    val status: String,
+    val sheetRowNumber: Int? = null
 )
 
 sealed interface FeedbackSourceState {
@@ -251,20 +284,22 @@ data class DashboardSnapshot(
     val minExclusiveVersionCode: Long? = null,
     val degradedNotice: String? = null
 ) {
-    val latestStable: ReleaseInfo? get() = releases.firstOrNull { !it.prerelease }
-    val latestBeta: ReleaseInfo? get() = releases.firstOrNull { it.prerelease }
+    val latestStable: ReleaseInfo? get() = releases.firstOrNull { !it.isPrivate && !it.prerelease }
+    val latestBeta: ReleaseInfo? get() = releases.firstOrNull { !it.isPrivate && it.prerelease }
+    val latestPrivateDev: ReleaseInfo? get() = releases.firstOrNull { it.isPrivate }
     val totalApkDownloads: Int get() = releases.sumOf { it.downloadCount }
 }
 
 const val DEFAULT_DISTRIBUTION_REPO = "erlingdiniy/duit-beta"
 const val DEFAULT_CONSOLE_REPO = "erlingdiniy/duit-developer-console"
 const val DEFAULT_PRIVATE_UPDATE_REPO = "erlingdiniy/duit-developer-console"
+const val DEFAULT_SOURCE_REPO = "erlingdiniy/duit"
+const val DEFAULT_FIREBASE_PROJECT_ID = "duit-beta"
 const val DEFAULT_FEEDBACK_RANGE = "Feedback!A1:F200"
 const val ANDROID_BROADCAST_CHANNEL_ID = "duit_developer_broadcasts"
+const val DEV_ALERTS_CHANNEL_ID = "duit_dev_alerts"
 
 /**
- * In-app GA4 Data API + OAuth 2.0 PKCE integration is preserved as experimental and disabled
- * for production use pending future live end-to-end verification.
- * Use the official Firebase Analytics Console shortcut in Developer Center for production metrics.
+ * Unified Google OAuth 2.0 PKCE + GA4 Data API integration enabled for Developer Center 2.0 Mission Control.
  */
-const val EXPERIMENTAL_GA4_API_ENABLED: Boolean = false
+const val EXPERIMENTAL_GA4_API_ENABLED: Boolean = true

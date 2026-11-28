@@ -211,12 +211,20 @@ class DevCenterThemeScreenshotsTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val auth = DevCenterAuthManager(vault = vault, biometricGateway = TestBiometric(), scope = scope)
         val transport = SanitizedMockTransport()
+        val githubClient = DevCenterGitHubClient(transport)
         val vm = DevCenterViewModel(
             vault = vault,
-            githubClient = DevCenterGitHubClient(transport),
+            githubClient = githubClient,
             feedbackClient = DevCenterFeedbackClient(transport),
+            analyticsClient = DevCenterAnalyticsClient(transport),
+            analyticsOAuth = DevCenterAnalyticsOAuth(transport),
             authManager = auth,
-            scope = scope
+            scope = scope,
+            remoteConfigClient = DevCenterRemoteConfigClient(transport),
+            githubManager = DevCenterGitHubManager(transport, githubClient),
+            singleDeviceFcmClient = DevCenterSingleDeviceFcmClient(transport),
+            infraMonitor = DevCenterInfraMonitor(transport),
+            feedbackUrlProvider = { "https://example.invalid/feedback" }
         )
 
         runBlocking {
@@ -327,30 +335,55 @@ class DevCenterThemeScreenshotsTest {
         themeMode = ThemeMode.DARK
         snap("05_overview_candy_dark.png")
 
-        // 6-10. Remaining Developer Center sections
+        // 6-12. Remaining Developer Center sections
+        vm.selectSection(DevCenterSection.ANALYTICS)
+        visualTheme = VisualTheme.LIQUID_GLASS
+        themeMode = ThemeMode.LIGHT
+        snap("06_analytics_liquid_light.png")
+
+        vm.selectSection(DevCenterSection.CRASH_REPORTS)
+        visualTheme = VisualTheme.LIQUID_GLASS
+        themeMode = ThemeMode.DARK
+        snap("07_crash_reports_liquid_dark.png")
+
         vm.selectSection(DevCenterSection.NOTIFICATIONS)
         visualTheme = VisualTheme.LIQUID_GLASS
         themeMode = ThemeMode.DARK
-        snap("06_notifications_liquid_dark.png")
+        snap("08_notifications_liquid_dark.png")
 
-        vm.selectSection(DevCenterSection.HISTORY)
+        vm.selectSection(DevCenterSection.REMOTE_CONFIG)
         visualTheme = VisualTheme.CANDY_BUBBLE
         themeMode = ThemeMode.LIGHT
-        snap("07_history_candy_light.png")
+        snap("09_remote_config_candy_light.png")
+
+        vm.selectSection(DevCenterSection.GITHUB)
+        visualTheme = VisualTheme.LIQUID_GLASS
+        themeMode = ThemeMode.LIGHT
+        snap("10_github_liquid_light.png")
+
+        vm.selectSection(DevCenterSection.INFRASTRUCTURE)
+        visualTheme = VisualTheme.CANDY_BUBBLE
+        themeMode = ThemeMode.DARK
+        snap("11_infrastructure_candy_dark.png")
+
+        vm.selectSection(DevCenterSection.AUDIT_LOGS)
+        visualTheme = VisualTheme.CANDY_BUBBLE
+        themeMode = ThemeMode.LIGHT
+        snap("12_audit_logs_candy_light.png")
 
         vm.selectSection(DevCenterSection.RELEASES)
         visualTheme = VisualTheme.LIQUID_GLASS
         themeMode = ThemeMode.LIGHT
-        snap("08_releases_liquid_light.png")
+        snap("13_releases_liquid_light.png")
 
         vm.selectSection(DevCenterSection.FEEDBACK)
         visualTheme = VisualTheme.LIQUID_GLASS
         themeMode = ThemeMode.DARK
-        snap("09_feedback_liquid_dark.png")
+        snap("14_feedback_liquid_dark.png")
 
         vm.selectSection(DevCenterSection.SETTINGS)
         visualTheme = VisualTheme.CANDY_BUBBLE
         themeMode = ThemeMode.DARK
-        snap("10_settings_candy_dark.png")
+        snap("15_settings_candy_dark.png")
     }
 }

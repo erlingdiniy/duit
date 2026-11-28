@@ -85,8 +85,11 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -189,6 +192,8 @@ fun HomeScreen(
     var showThemeSheet by rememberSaveable { mutableStateOf(false) }
     var showAddWalletSheet by rememberSaveable { mutableStateOf(false) }
     var showAllWalletsSheet by rememberSaveable { mutableStateOf(false) }
+    var dismissedRemoteNoticeMsg by rememberSaveable { mutableStateOf<String?>(null) }
+    val remoteConfig by com.diniy.duit.config.RemoteAppConfig.snapshot.collectAsStateWithLifecycle()
     val performHaptic = rememberDuitHaptic()
     val spacing = SpatialTheme.spacing
     val walletsById = remember(uiState.wallets, uiState.archivedWallets) {
@@ -240,6 +245,46 @@ fun HomeScreen(
             item(key = "preview_banner", contentType = "banner") {
                 AnimatedVisibility(visible = uiState.isSamplePreview) {
                     SamplePreviewBanner(onExitPreview = { onToggleSamplePreview(false) })
+                }
+            }
+
+            if (remoteConfig.maintenanceBannerEnabled &&
+                remoteConfig.maintenanceBannerMessage.isNotBlank() &&
+                dismissedRemoteNoticeMsg != remoteConfig.maintenanceBannerMessage
+            ) {
+                item(key = "remote_maintenance_banner", contentType = "banner") {
+                    val noticeColors = SpatialTheme.colors
+                    SpatialGlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        tier = SpatialGlassTier.Standard,
+                        accentTint = noticeColors.warning,
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = remoteConfig.maintenanceBannerTitle.ifBlank { "Service Notice" },
+                                    style = SpatialTheme.typography.cardTitle,
+                                    color = noticeColors.primaryText
+                                )
+                                Text(
+                                    text = remoteConfig.maintenanceBannerMessage,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = noticeColors.secondaryText
+                                )
+                            }
+                            TextButton(
+                                onClick = { dismissedRemoteNoticeMsg = remoteConfig.maintenanceBannerMessage },
+                                modifier = Modifier.heightIn(min = 48.dp)
+                            ) {
+                                Text("Dismiss")
+                            }
+                        }
+                    }
                 }
             }
 
